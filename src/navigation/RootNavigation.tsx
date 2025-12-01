@@ -1,23 +1,33 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import MainTabs from './MainTabs';
-import LoginScreen from '../screens/Auth/LoginScreen';
-import RegisterScreen from '../screens/Auth/RegisterScreen';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { RootStackParamList } from "./types";
 
-export type RootStackParamList = {
-  Login: undefined;
-  Register: undefined;
-  Main: undefined;
-};
+import LoginScreen from "../screens/Auth/LoginScreen";
+import RegisterScreen from "../screens/Auth/RegisterScreen";
+import MainTabs from "./MainTabs";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Register" component={RegisterScreen} />
-      <Stack.Screen name="Main" component={MainTabs} />
+      {/* AUTH STACK */}
+      <Stack.Screen name="Auth" component={AuthNavigator} />
+
+      {/* MAIN TABS */}
+      <Stack.Screen name="MainTabs" component={MainTabs} />
     </Stack.Navigator>
+  );
+}
+
+/** AUTH STACK */
+const AuthStack = createNativeStackNavigator();
+
+function AuthNavigator() {
+  return (
+    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
+      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="Register" component={RegisterScreen} />
+    </AuthStack.Navigator>
   );
 }

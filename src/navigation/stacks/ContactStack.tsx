@@ -1,17 +1,19 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import ChatListScreen from '../../screens/Chat/ChatListScreen';
-import ChatRoomScreen from '../../screens/Chat/ChatRoomScreen';
-import ChatSettingsScreen from '../../screens/Chat/ChatSettingScreen';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { ContactsStackParamList } from "../types";
 
-const Stack = createNativeStackNavigator();
+import ContactsScreen from "../../screens/Contacts/ContactsScreen";
+import AddFriendScreen from "../../screens/Contacts/AddFriendScreen";
+import UserProfileScreen from "../../screens/Contacts/UserProfileScreen";
 
-export default function ChatStack() {
+const Stack = createNativeStackNavigator<ContactsStackParamList>();
+
+export default function ContactsStack() {
   return (
     <Stack.Navigator>
-      <Stack.Screen name="ChatList" component={ChatListScreen} />
-      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} />
-      <Stack.Screen name="ChatSettings" component={ChatSettingsScreen} />
+      <Stack.Screen name="Contacts" component={ContactsScreen} options={{ title: "Contacts" }} />
+      <Stack.Screen name="AddFriend" component={AddFriendScreen} options={{ title: "Add Friend" }} />
+      <Stack.Screen name="UserProfile" component={UserProfileScreen} options={{ title: "Profile" }} />
     </Stack.Navigator>
   );
 }
