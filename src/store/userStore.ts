@@ -1,12 +1,13 @@
+// userStore.ts
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type User = {
-  email: string;
-  name: string;
   id: string;
   username: string;
+  phone: string;
+  email?: string;
   avatar?: string;
 };
 
@@ -15,7 +16,6 @@ type UserStore = {
   token: string | null;
   isLoggedIn: boolean;
 
-  // actions
   setUser: (user: User, token: string) => void;
   logout: () => void;
 };
@@ -41,9 +41,8 @@ export const useUserStore = create<UserStore>()(
           isLoggedIn: false,
         }),
     }),
-
     {
-      name: 'user-storage',
+      name: "user-storage", // storage key
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

@@ -10,9 +10,9 @@ const Stack = createNativeStackNavigator<ChatStackParamList>();
 
 export default function ChatStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="ChatList" component={ChatListScreen} options={{ title: "Chats" }} />
-      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} options={{ title: "Chat Room" }} />
+      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} options={{ title: "Chat Room"}} />
       <Stack.Screen name="ChatSettingScreen" component={ChatSettingScreen} options={{ title: "Chat Setting" }} />
     </Stack.Navigator>
   );

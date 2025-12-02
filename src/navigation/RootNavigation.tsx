@@ -5,6 +5,7 @@ import { RootStackParamList } from "./types";
 import LoginScreen from "../screens/Auth/LoginScreen";
 import RegisterScreen from "../screens/Auth/RegisterScreen";
 import MainTabs from "./MainTabs";
+import ForgetPassword from "../screens/Auth/ForgetPassword"
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -28,6 +29,7 @@ function AuthNavigator() {
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="Forget" component={ForgetPassword} />
     </AuthStack.Navigator>
   );
 }

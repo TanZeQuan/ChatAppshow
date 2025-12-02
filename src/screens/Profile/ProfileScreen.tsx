@@ -1,106 +1,371 @@
-import React from "react";
-import { View, Text, StyleSheet, Image, TouchableOpacity, ScrollView } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { useUserStore } from "../../store/userStore"; // your zustand store
+import React, { useState, useEffect } from 'react';
+import {
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Dimensions
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native';
+import { useUserStore } from '../../store/userStore';
+
+const { width, height } = Dimensions.get("window");
+
+const scaleWidth = (size: number) => (width / 375) * size;
+const scaleHeight = (size: number) => (height / 812) * size;
+const scaleFont = (size: number) => (width / 375) * size;
+
+interface MenuItem {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  navigateTo?: string;
+  onPress?: () => void;
+}
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
-  const { user, logout } = useUserStore(); // get user and logout action
+  const { user, logout } = useUserStore();
 
-  if (!user) return null; // in case user is null
+  const [avatarUri, setAvatarUri] = useState<string | null>(user?.avatar || null);
+
+  useEffect(() => {
+    if (user?.avatar) {
+      setAvatarUri(user.avatar);
+    }
+  }, [user?.avatar]);
+
+  const menuItems: MenuItem[] = [
+    {
+      icon: 'star-outline',
+      label: '我的收藏',
+      navigateTo: 'Favorites'
+    },
+    {
+      icon: 'person-outline',
+      label: '联系客服',
+      navigateTo: 'HelpSupport'
+    },
+    {
+      icon: 'help-circle-outline',
+      label: '帮助中心',
+      navigateTo: 'HelpCenter'
+    },
+    {
+      icon: 'settings-outline',
+      label: '设置',
+      navigateTo: 'SettingScreen'
+    },
+    {
+      icon: 'people-outline',
+      label: '会议',
+      navigateTo: 'MeetingScreen'
+    },
+  ];
+
+  const pickImage = async () => {
+    try {
+      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!granted) {
+        Alert.alert('Permission Denied', 'Cannot access photo library');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        setAvatarUri(result.assets[0].uri);
+        Alert.alert('Success', 'Avatar updated!');
+      }
+    } catch (err) {
+      console.warn('Failed to pick image', err);
+    }
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { granted } = await ImagePicker.requestCameraPermissionsAsync();
+      if (!granted) {
+        Alert.alert('Permission Denied', 'Cannot access camera');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        setAvatarUri(result.assets[0].uri);
+        Alert.alert('Success', 'Avatar updated!');
+      }
+    } catch (err) {
+      console.warn('Failed to take photo', err);
+    }
+  };
+
+  const handleAvatarPress = () => {
+    Alert.alert('Change Avatar', 'Choose an option', [
+      { text: 'Take Photo', onPress: takePhoto },
+      { text: 'Choose from Library', onPress: pickImage },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const handleLogout = () => {
+    Alert.alert('确认登出', '您确定要退出登录吗？', [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '退出登录',
+        style: 'destructive',
+        onPress: () => {
+          logout();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'Auth' }],
+          });
+        },
+      },
+    ]);
+  };
+
+  if (!user) return null;
 
   return (
-    <ScrollView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Image source={{ uri: user.avatar || "https://i.pravatar.cc/150" }} style={styles.avatar} />
-        <Text style={styles.name}>{user.name}</Text>
-        <Text style={styles.email}>{user.email}</Text>
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#FFD966', '#FFB84D']}
+        style={styles.gradientHeader}
+      >
+        <SafeAreaView edges={['top']}>
+          {/* Profile Header */}
+          <TouchableOpacity
+            style={styles.profileHeader}
+            onPress={() => navigation.navigate('EditProfile')}
+          >
+            <TouchableOpacity
+              style={styles.avatarContainer}
+              onPress={handleAvatarPress}
+            >
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={36} color="#fff" />
+                </View>
+              )}
+              {/* Camera Icon Badge */}
+              <View style={styles.cameraBadge}>
+                <Ionicons name="camera" size={14} color="#fff" />
+              </View>
+            </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.editBtn}
-          onPress={() => navigation.navigate("EditProfile")}
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{user.username}</Text>
+              <Text style={styles.profileId}>账号ID：{user.id}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.qrButton}
+              onPress={() => navigation.navigate('QRcode')}
+            >
+              <Ionicons name="qr-code-outline" size={24} color="#666" />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </LinearGradient>
+
+      {/* White Background Section */}
+      <View style={styles.whiteSection}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
         >
-          <Text style={styles.editBtnText}>Edit Profile</Text>
-        </TouchableOpacity>
-      </View>
+          {/* Menu Items */}
+          <View style={styles.menuContainer}>
+            {menuItems.map((item, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.menuItem}
+                onPress={() => {
+                  if (item.onPress) {
+                    item.onPress();
+                  } else if (item.navigateTo) {
+                    navigation.navigate(item.navigateTo);
+                  }
+                }}
+              >
+                <View style={styles.menuLeft}>
+                  <View style={styles.menuIconContainer}>
+                    <Ionicons
+                      name={item.icon}
+                      size={20}
+                      color="#666"
+                    />
+                  </View>
+                  <Text style={styles.menuLabel}>{item.label}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#999" />
+              </TouchableOpacity>
+            ))}
+          </View>
 
-      {/* Options */}
-      <View style={styles.card}>
-        <Option text="Change Password" onPress={() => navigation.navigate("ChangePassword")} />
-        <Option
-          text="Log Out"
-          onPress={() => {
-            logout(); // clear user & token from zustand
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "Auth" }],
-            });
-          }}
-          color="red"
-        />
+          {/* Logout Button */}
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleLogout}
+          >
+            <Text style={styles.logoutText}>退出</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
-    </ScrollView>
-  );
-}
-
-function Option({ text, onPress, color = "#000" }: any) {
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.option}>
-      <Text style={[styles.optionText, { color }]}>{text}</Text>
-    </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: '#FFFFFF',
   },
-  header: {
-    alignItems: "center",
-    paddingVertical: 30,
-    backgroundColor: "#fff",
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+  gradientHeader: {
+    paddingBottom: scaleHeight(20),
+  },
+  whiteSection: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  scrollContent: {
+    paddingBottom: scaleHeight(40),
+  },
+
+  /** PROFILE HEADER */
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scaleWidth(16),
+    paddingVertical: scaleHeight(16),
+  },
+  avatarContainer: {
+    width: scaleWidth(80),
+    height: scaleWidth(80),
+    marginRight: scaleWidth(12),
+    position: 'relative',
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 12,
+    width: scaleWidth(80),
+    height: scaleWidth(80),
+    borderRadius: scaleWidth(8),
   },
-  name: {
-    fontSize: 22,
-    fontWeight: "600",
+  avatarPlaceholder: {
+    width: scaleWidth(64),
+    height: scaleWidth(64),
+    backgroundColor: '#666',
+    borderRadius: scaleWidth(8),
+    justifyContent: 'center',
+    alignItems: 'center'
   },
-  email: {
-    fontSize: 14,
-    color: "#666",
-    marginTop: 4,
-    marginBottom: 18,
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: scaleWidth(24),
+    height: scaleWidth(24),
+    borderRadius: scaleWidth(12),
+    backgroundColor: '#0a0a0aff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#ffffffff',
   },
-  editBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    backgroundColor: "#2F80ED",
-    borderRadius: 20,
+  profileInfo: {
+    flex: 1,
   },
-  editBtnText: {
-    color: "#fff",
-    fontWeight: "600",
+  profileName: {
+    fontSize: scaleFont(18),
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: scaleHeight(4)
   },
-  card: {
-    backgroundColor: "#fff",
-    paddingHorizontal: 20,
+  profileId: {
+    fontSize: scaleFont(13),
+    color: '#999',
   },
-  option: {
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+  qrButton: {
+    width: scaleWidth(36),
+    height: scaleWidth(36),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scaleWidth(4),
   },
-  optionText: {
-    fontSize: 16,
+
+  /** MENU */
+  menuContainer: {
+    paddingHorizontal: scaleWidth(16),
+    paddingTop: scaleHeight(20),
+  },
+  menuItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: scaleHeight(16),
+    paddingHorizontal: scaleWidth(16),
+    marginBottom: scaleHeight(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 5, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  menuIconContainer: {
+    width: scaleWidth(32),
+    height: scaleHeight(32),
+    backgroundColor: '#F8F9FA',
+    borderRadius: scaleWidth(16),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scaleWidth(12),
+  },
+  menuLabel: {
+    fontSize: scaleFont(15),
+    color: '#333',
+    fontWeight: '400',
+  },
+
+  /** LOGOUT */
+  logoutButton: {
+    backgroundColor: '#FFD966',
+    borderRadius: 25,
+    paddingVertical: scaleHeight(14),
+    marginHorizontal: scaleWidth(32),
+    marginTop: scaleHeight(30),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFB84D',
+  },
+  logoutText: {
+    fontSize: scaleFont(16),
+    fontWeight: '500',
+    color: '#333',
   },
 });

@@ -14,6 +14,7 @@ export type RootStackParamList = {
 export type AuthStackParamList = {
   Login: undefined;
   Register: undefined;
+  ForgetPassword: undefined;
 };
 
 /**
@@ -41,6 +42,9 @@ export type ContactsStackParamList = {
   Contacts: undefined;
   AddFriend: undefined;
   UserProfile: { userId: string };
+  AddGroup: undefined;
+  JoinGroup: undefined;
+  FriendRequest: undefined;
 };
 
 /**
@@ -50,4 +54,12 @@ export type ProfileStackParamList = {
   Profile: undefined;
   EditProfile: undefined;
   ChangePassword: undefined;
+  SettingScreen: undefined;
+  EditName: undefined;
+  MeetingScreen: undefined;
+  QRcode: undefined;
+  JoinMeeting: undefined;
+  CreateMeeting: undefined;
+  EditEmail: undefined;
+  Notification: undefined;
 };
