@@ -21,7 +21,7 @@ type UserStore = {
 };
 
 export const useUserStore = create<UserStore>()(
-  persist(
+    persist(
     (set) => ({
       user: null,
       token: null,
@@ -42,7 +42,7 @@ export const useUserStore = create<UserStore>()(
         }),
     }),
     {
-      name: "user-storage", // storage key
+      name: "user-storage",
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

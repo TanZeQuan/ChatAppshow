@@ -15,6 +15,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
 import { useUserStore } from '../../store/userStore';
+import { updateUserInfo } from '../../api/User';
+
 
 const { width, height } = Dimensions.get("window");
 
@@ -32,6 +34,7 @@ interface MenuItem {
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout } = useUserStore();
+  console.log('user from store', user);
 
   const [avatarUri, setAvatarUri] = useState<string | null>(user?.avatar || null);
 
@@ -40,6 +43,14 @@ export default function ProfileScreen() {
       setAvatarUri(user.avatar);
     }
   }, [user?.avatar]);
+
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text>未登录</Text>
+      </View>
+    );
+  }
 
   const menuItems: MenuItem[] = [
     {
@@ -70,28 +81,31 @@ export default function ProfileScreen() {
   ];
 
   const pickImage = async () => {
-    try {
-      const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!granted) {
-        Alert.alert('Permission Denied', 'Cannot access photo library');
-        return;
-      }
+    const { granted } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!granted) return Alert.alert('Permission Denied');
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 1,
-      });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 1,
+    });
 
-      if (!result.canceled && result.assets.length > 0) {
-        setAvatarUri(result.assets[0].uri);
-        Alert.alert('Success', 'Avatar updated!');
+    if (!result.canceled && result.assets.length > 0) {
+      const uri = result.assets[0].uri;
+      setAvatarUri(uri);
+
+      const updateResult = await updateUserInfo(user.id, { image: { uri, name: 'avatar.jpg', type: 'image/jpeg' } });
+      if (updateResult.success) {
+        // 更新 store
+        setUser({ ...user, avatar: uri });
+        Alert.alert('更新成功');
+      } else {
+        Alert.alert('更新失败', updateResult.message);
       }
-    } catch (err) {
-      console.warn('Failed to pick image', err);
     }
   };
+
 
   const takePhoto = async () => {
     try {
@@ -125,19 +139,15 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('确认登出', '您确定要退出登录吗？', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert("确认登出", "确定要退出吗？", [
+      { text: "取消", style: "cancel" },
       {
-        text: '退出登录',
-        style: 'destructive',
+        text: "退出登录",
+        style: "destructive",
         onPress: () => {
-          logout();
-          navigation.reset({
-            index: 0,
-            routes: [{ name: 'Auth' }],
-          });
-        },
-      },
+          logout(); // ⭐ 自动跳回 Login
+        }
+      }
     ]);
   };
 
@@ -369,3 +379,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
 });
+
+function setUser(arg0: { avatar: string; id: string; username: string; phone: string; email?: string; }) {
+  throw new Error('Function not implemented.');
+}

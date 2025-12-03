@@ -1,27 +1,28 @@
-import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { RootStackParamList } from "./types";
+import MainTabs from "./MainTabs";
+import { useUserStore } from "../store/userStore";
 
 import LoginScreen from "../screens/Auth/LoginScreen";
 import RegisterScreen from "../screens/Auth/RegisterScreen";
-import MainTabs from "./MainTabs";
-import ForgetPassword from "../screens/Auth/ForgetPassword"
+import ForgetPassword from "../screens/Auth/ForgetPassword";
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
+  const { isLoggedIn } = useUserStore();
+
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {/* AUTH STACK */}
-      <Stack.Screen name="Auth" component={AuthNavigator} />
-
-      {/* MAIN TABS */}
-      <Stack.Screen name="MainTabs" component={MainTabs} />
+      {isLoggedIn ? (
+        <Stack.Screen name="MainTabs" component={MainTabs} />
+      ) : (
+        <Stack.Screen name="Auth" component={AuthNavigator} />
+      )}
     </Stack.Navigator>
   );
 }
 
-/** AUTH STACK */
+/* AUTH STACK */
 const AuthStack = createNativeStackNavigator();
 
 function AuthNavigator() {

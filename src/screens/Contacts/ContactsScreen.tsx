@@ -137,6 +137,7 @@ export default function ContactsScreen() {
           animated: true,
           viewOffset: 0,
         });
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (error) {
         // Fallback if scrollToLocation fails
         console.log('Scroll to letter:', letter);
