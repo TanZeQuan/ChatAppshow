@@ -31,8 +31,29 @@ export type MainTabParamList = {
  */
 export type ChatStackParamList = {
   ChatList: undefined;
-  ChatRoom: { chatId: string; name: string };
-  ChatSettingScreen: { chatId: string};
+  ChatRoom: {
+    chatId: string;
+    chatName: string;
+    isGroup?: boolean;
+  };
+  ChatSettingScreen: {
+    chatId: string;
+    chatName: string;
+    avatar?: string;
+  };
+  GroupRoom: {
+    chatId: string;
+    chatName: string;
+    isGroup: boolean;
+    members?: any[];
+    memberIds?: string[];
+  };
+  GroupSettingScreen: {
+    chatId: string;
+    chatName: string;
+    members?: any[];
+    memberIds?: string[];
+  };
 };
 
 /**
@@ -41,7 +62,6 @@ export type ChatStackParamList = {
 export type ContactsStackParamList = {
   Contacts: undefined;
   AddFriend: undefined;
-  UserProfile: { userId: string };
   AddGroup: undefined;
   JoinGroup: undefined;
   FriendRequest: undefined;

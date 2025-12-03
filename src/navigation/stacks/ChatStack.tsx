@@ -5,15 +5,43 @@ import { ChatStackParamList } from "../types";
 import ChatListScreen from "../../screens/Chat/ChatListScreen";
 import ChatRoomScreen from "../../screens/Chat/ChatRoomScreen";
 import ChatSettingScreen from "../../screens/Chat/ChatSettingScreen";
+import GroupRoomScreen from "../../screens/Chat/GroupRoomScreen";
+import GroupSettingScreen from "../../screens/Chat/GroupSettingScreen";
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
 export default function ChatStack() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="ChatList" component={ChatListScreen} options={{ title: "Chats" }} />
-      <Stack.Screen name="ChatRoom" component={ChatRoomScreen} options={{ title: "Chat Room"}} />
-      <Stack.Screen name="ChatSettingScreen" component={ChatSettingScreen} options={{ title: "Chat Setting" }} />
+      <Stack.Screen 
+        name="ChatList" 
+        component={ChatListScreen} 
+        options={{ title: "Chats" }} 
+      />
+      
+      <Stack.Screen 
+        name="ChatRoom" 
+        component={ChatRoomScreen} 
+        options={{ title: "Chat Room" }} 
+      />
+      
+      <Stack.Screen 
+        name="ChatSettingScreen" 
+        component={ChatSettingScreen} 
+        options={{ title: "Chat Setting" }} 
+      />
+      
+      <Stack.Screen 
+        name="GroupRoom" 
+        component={GroupRoomScreen} 
+        options={{ title: "Group Room" }} 
+      />
+      
+      <Stack.Screen 
+        name="GroupSettingScreen" 
+        component={GroupSettingScreen} 
+        options={{ title: "Group Setting" }} 
+      />
     </Stack.Navigator>
   );
 }

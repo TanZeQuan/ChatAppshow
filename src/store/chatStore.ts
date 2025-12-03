@@ -15,6 +15,19 @@ type Message = {
   avatar?: string;
 };
 
+type ChatListItem = {
+  id: string;
+  name: string;
+  avatar: string | null;
+  isGroup: boolean;
+  members?: any[];
+  memberIds?: string[];
+  lastMessage: string;
+  timestamp: string;
+  unreadCount: number;
+  online: boolean;
+};
+
 type Settings = {
   notifications: boolean;
   soundEnabled: boolean;
@@ -24,20 +37,28 @@ type Settings = {
 
 type ChatStore = {
   chats: Record<string, Message[]>;
+  chatList: ChatListItem[];
   settings: Settings;
 
   addMessage: (chatId: string, text: string) => void;
+  addChat: (chat: ChatListItem) => void;
+  updateChatLastMessage: (chatId: string, message: string, timestamp: string) => void;
+  removeChat: (chatId: string) => void;
+  getChatById: (chatId: string) => ChatListItem | undefined;
   clearChat: (chatId: string) => void;
   clearAllChats: () => void;
   updateSettings: (newSettings: Partial<Settings>) => void;
   getLastMessage: (chatId: string) => Message | null;
   getTotalMessages: () => number;
+  markAsRead: (chatId: string) => void;
+  incrementUnread: (chatId: string) => void;
 };
 
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
       chats: {},
+      chatList: [],
       settings: {
         notifications: true,
         soundEnabled: true,
@@ -67,6 +88,102 @@ export const useChatStore = create<ChatStore>()(
             [chatId]: [...current, newMessage],
           },
         });
+
+        // Update chat list with last message
+        get().updateChatLastMessage(chatId, text, newMessage.createdAt);
+      },
+
+      // ⭐ Add new chat to chat list (for groups or new conversations)
+      addChat: (chat) => {
+        const currentChatList = get().chatList;
+        
+        // Check if chat already exists
+        const existingIndex = currentChatList.findIndex(c => c.id === chat.id);
+        
+        if (existingIndex !== -1) {
+          // Update existing chat
+          const updatedChatList = [...currentChatList];
+          updatedChatList[existingIndex] = {
+            ...updatedChatList[existingIndex],
+            ...chat,
+          };
+          set({ chatList: updatedChatList });
+        } else {
+          // Add new chat to the top of the list
+          set({
+            chatList: [chat, ...currentChatList],
+          });
+        }
+      },
+
+      // ⭐ Update last message in chat list
+      updateChatLastMessage: (chatId, message, timestamp) => {
+        const currentChatList = get().chatList;
+        const chatIndex = currentChatList.findIndex(c => c.id === chatId);
+        
+        if (chatIndex !== -1) {
+          const updatedChatList = [...currentChatList];
+          const chat = updatedChatList[chatIndex];
+          
+          // Update chat
+          updatedChatList[chatIndex] = {
+            ...chat,
+            lastMessage: message,
+            timestamp: timestamp,
+          };
+          
+          // Move to top of list
+          const [movedChat] = updatedChatList.splice(chatIndex, 1);
+          updatedChatList.unshift(movedChat);
+          
+          set({ chatList: updatedChatList });
+        }
+      },
+
+      // ⭐ Remove chat from list
+      removeChat: (chatId) => {
+        const currentChatList = get().chatList;
+        set({
+          chatList: currentChatList.filter(c => c.id !== chatId),
+        });
+        
+        // Also clear messages
+        get().clearChat(chatId);
+      },
+
+      // ⭐ Get chat by ID
+      getChatById: (chatId) => {
+        return get().chatList.find(c => c.id === chatId);
+      },
+
+      // ⭐ Mark chat as read
+      markAsRead: (chatId) => {
+        const currentChatList = get().chatList;
+        const chatIndex = currentChatList.findIndex(c => c.id === chatId);
+        
+        if (chatIndex !== -1) {
+          const updatedChatList = [...currentChatList];
+          updatedChatList[chatIndex] = {
+            ...updatedChatList[chatIndex],
+            unreadCount: 0,
+          };
+          set({ chatList: updatedChatList });
+        }
+      },
+
+      // ⭐ Increment unread count
+      incrementUnread: (chatId) => {
+        const currentChatList = get().chatList;
+        const chatIndex = currentChatList.findIndex(c => c.id === chatId);
+        
+        if (chatIndex !== -1) {
+          const updatedChatList = [...currentChatList];
+          updatedChatList[chatIndex] = {
+            ...updatedChatList[chatIndex],
+            unreadCount: updatedChatList[chatIndex].unreadCount + 1,
+          };
+          set({ chatList: updatedChatList });
+        }
       },
 
       clearChat: (chatId) => {
@@ -75,7 +192,7 @@ export const useChatStore = create<ChatStore>()(
         set({ chats });
       },
 
-      clearAllChats: () => set({ chats: {} }),
+      clearAllChats: () => set({ chats: {}, chatList: [] }),
 
       updateSettings: (newSettings) =>
         set({

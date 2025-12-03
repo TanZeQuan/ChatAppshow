@@ -48,7 +48,7 @@ const responsiveSizes = getResponsiveSize();
 
 // ⭐ 导出原始 tabBar style（让子页面恢复时不变形）
 export const getOriginalTabBarStyle = (insets: any) => ({
-  backgroundColor: "#FFD860",
+  backgroundColor: "#FFD966",
   borderTopWidth: 0,
   height: responsiveSizes.tabBarHeight + insets.bottom,
   paddingBottom: Math.max(insets.bottom, responsiveSizes.paddingBottom),

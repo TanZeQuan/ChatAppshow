@@ -43,6 +43,7 @@ export default function ChatRoomScreen() {
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
   const currentUserId = useUserStore((state) => state.user?.id) || 'me';
+  const { getChatById } = useChatStore();
 
   const { chats, addMessage, clearChat } = useChatStore();
   const storedMessages = chats[chatId] || [];
@@ -94,11 +95,22 @@ export default function ChatRoomScreen() {
   };
 
   const handleOpenSettings = () => {
-    navigation.navigate('ChatSettingScreen', {
-      chatId: chatId,
-      chatName: chatName,
-      avatar: 'https://i.pravatar.cc/150?img=' + chatId
-    });
+    const chat = getChatById(chatId);
+
+    if (chat?.isGroup) {
+      navigation.navigate('GroupSettingScreen', {
+        chatId: chatId,
+        chatName: chatName,
+        members: chat.members || [],
+        memberIds: chat.memberIds || [],
+      });
+    } else {
+      navigation.navigate('ChatSettingScreen', {
+        chatId: chatId,
+        chatName: chatName,
+        avatar: 'https://i.pravatar.cc/150?img=' + chatId
+      });
+    }
   };
 
   const toggleToolbar = () => {

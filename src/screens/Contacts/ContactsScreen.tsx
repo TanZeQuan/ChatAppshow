@@ -9,6 +9,7 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -36,12 +37,13 @@ export default function ContactsScreen() {
   const navigation = useNavigation<any>();
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const sectionListRef = React.useRef<SectionList>(null);
 
   // Get data from Zustand stores
-  const { contacts, getOnlineContacts } = useContactStore();
+  const { contacts } = useContactStore();
   const { token } = useUserStore();
-  const { getLastMessage } = useChatStore();
+  useChatStore();
 
   // Fetch contacts when screen comes into focus
   useFocusEffect(
@@ -80,22 +82,45 @@ export default function ContactsScreen() {
 
     contacts.forEach((contact) => {
       if (!contact.name) return;
-      const firstChar = contact.name[0].toUpperCase();
+      
+      // Remove "用户" prefix before getting first character
+      const cleanName = contact.name.replace(/^用户/, '');
+      const firstChar = cleanName[0]?.toUpperCase() || '#';
       const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
 
       if (!grouped[letter]) grouped[letter] = [];
       grouped[letter].push(contact);
     });
 
+    // Sort each group's contacts by name
+    Object.keys(grouped).forEach(key => {
+      grouped[key].sort((a, b) => {
+        const nameA = a.name.replace(/^用户/, '').toUpperCase();
+        const nameB = b.name.replace(/^用户/, '').toUpperCase();
+        return nameA.localeCompare(nameB);
+      });
+    });
+
+    // Sort sections alphabetically, with # at the end
     return Object.keys(grouped)
-      .sort()
+      .sort((a, b) => {
+        if (a === '#') return 1;
+        if (b === '#') return -1;
+        return a.localeCompare(b);
+      })
       .map((key) => ({ title: key, data: grouped[key] }));
   };
 
   const filteredContacts = contacts.filter((c) => {
+    if (!searchText.trim()) return true;
+    
     const searchLower = searchText.toLowerCase();
+    const cleanName = c.name.replace(/^用户/, '').toLowerCase();
+    const fullName = c.name.toLowerCase();
+    
     return (
-      c.name.toLowerCase().includes(searchLower) ||
+      cleanName.includes(searchLower) ||
+      fullName.includes(searchLower) ||
       c.id.toLowerCase().includes(searchLower)
     );
   });
@@ -105,33 +130,39 @@ export default function ContactsScreen() {
   const handleLetterPress = (letter: string) => {
     const index = sections.findIndex((s) => s.title === letter);
     if (index !== -1 && sectionListRef.current) {
-      sectionListRef.current.scrollToLocation({
-        sectionIndex: index,
-        itemIndex: 0,
-        animated: true,
-      });
+      try {
+        sectionListRef.current.scrollToLocation({
+          sectionIndex: index,
+          itemIndex: 0,
+          animated: true,
+          viewOffset: 0,
+        });
+      } catch (error) {
+        // Fallback if scrollToLocation fails
+        console.log('Scroll to letter:', letter);
+      }
     }
   };
 
   const handleContactPress = (contact: any) => {
-    // Navigate to ChatStack and then to ChatRoom
-    // Since ContactsStack and ChatStack are separate, navigate via parent
     const parentNavigation = navigation.getParent();
 
     if (parentNavigation) {
-      // Navigate to Chat tab first, then to ChatRoom
       parentNavigation.navigate('ChatStack', {
         screen: 'ChatRoom',
         params: {
           chatId: contact.id,
           chatName: contact.name,
+          isGroup: false,
         },
       });
     }
   };
 
-  const handleRefresh = () => {
-    loadContacts();
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadContacts();
+    setRefreshing(false);
   };
 
   if (isLoading && contacts.length === 0) {
@@ -164,27 +195,27 @@ export default function ContactsScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>通讯录</Text>
           </View>
+          
+          {/* Search Bar */}
+          <View style={styles.searchWrapper}>
+            <View style={styles.searchContainer}>
+              <Ionicons name="search" size={18} style={styles.searchIcon} />
+              <TextInput
+                placeholder="搜索"
+                placeholderTextColor="#999"
+                style={styles.searchInput}
+                value={searchText}
+                onChangeText={setSearchText}
+              />
+              {searchText.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchText("")}>
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
         </SafeAreaView>
       </LinearGradient>
-
-      {/* Search Bar */}
-      <View style={styles.searchWrapper}>
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} style={styles.searchIcon} />
-          <TextInput
-            placeholder="搜索"
-            placeholderTextColor="#999"
-            style={styles.searchInput}
-            value={searchText}
-            onChangeText={setSearchText}
-          />
-          {searchText.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchText("")}>
-              <Ionicons name="close-circle" size={18} color="#999" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
 
       {/* Action Buttons */}
       <View style={styles.actionButtons}>
@@ -226,6 +257,16 @@ export default function ContactsScreen() {
           sections={sections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              colors={['#FFD700']}
+              tintColor="#FFD700"
+              title="下拉刷新"
+              titleColor="#666"
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="people-outline" size={60} color="#ccc" />
@@ -262,7 +303,9 @@ export default function ContactsScreen() {
               </View>
 
               <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{item.name}</Text>
+                <Text style={styles.contactName}>
+                  {item.name.replace(/^用户/, '')}
+                </Text>
               </View>
             </TouchableOpacity>
           )}
@@ -271,15 +314,24 @@ export default function ContactsScreen() {
         {/* Alphabet Index */}
         {sections.length > 0 && (
           <View style={styles.alphabetIndex}>
-            {alphabet.map((letter) => (
-              <TouchableOpacity
-                key={letter}
-                style={styles.alphabetItem}
-                onPress={() => handleLetterPress(letter)}
-              >
-                <Text style={styles.alphabetText}>{letter}</Text>
-              </TouchableOpacity>
-            ))}
+            {alphabet.map((letter) => {
+              const hasSection = sections.some(s => s.title === letter);
+              return (
+                <TouchableOpacity
+                  key={letter}
+                  style={styles.alphabetItem}
+                  onPress={() => handleLetterPress(letter)}
+                  disabled={!hasSection}
+                >
+                  <Text style={[
+                    styles.alphabetText,
+                    !hasSection && styles.alphabetTextDisabled
+                  ]}>
+                    {letter}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
       </View>
@@ -297,7 +349,7 @@ const styles = StyleSheet.create({
   },
 
   gradientHeader: {
-    paddingBottom: scaleHeight(12),
+    paddingBottom: scaleHeight(16),
   },
 
   loadingContainer: {
@@ -328,7 +380,6 @@ const styles = StyleSheet.create({
   /** SEARCH */
   searchWrapper: {
     paddingHorizontal: scaleWidth(16),
-    paddingBottom: scaleHeight(12),
     paddingTop: scaleHeight(12),
   },
   searchContainer: {
@@ -483,19 +534,25 @@ const styles = StyleSheet.create({
   /** ALPHABET INDEX */
   alphabetIndex: {
     position: "absolute",
-    right: scaleWidth(4),
+    right: scaleWidth(2),
     top: 0,
     bottom: 0,
     justifyContent: "center",
-    paddingVertical: scaleHeight(8),
+    paddingVertical: scaleHeight(4),
   },
   alphabetItem: {
-    paddingVertical: scaleHeight(2),
-    paddingHorizontal: scaleWidth(6),
+    paddingVertical: scaleHeight(1),
+    paddingHorizontal: scaleWidth(4),
+    alignItems: "center",
+    justifyContent: "center",
   },
   alphabetText: {
-    fontSize: scaleFont(11),
+    fontSize: scaleFont(9),
     color: "#666",
     fontWeight: "600",
+    letterSpacing: -0.5,
+  },
+  alphabetTextDisabled: {
+    color: "#D0D0D0",
   },
 });
