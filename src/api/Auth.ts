@@ -1,6 +1,6 @@
 import api from './service';
 
-export const login = async ({ phone, passcode }: { phone: string; passcode: string }) => {
+export const login = async ({ phone, passcode }: { phone: string; passcode: string}) => {
   try {
     const formData = new FormData();
     formData.append(

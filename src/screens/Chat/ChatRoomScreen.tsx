@@ -42,10 +42,14 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
-  const currentUserId = useUserStore((state) => state.user?.id) || 'me';
-  const { getChatById } = useChatStore();
 
-  const { chats, addMessage, clearChat } = useChatStore();
+  // Get current user info from store
+  const currentUser = useUserStore((state) => state.user);
+  const currentUserId = currentUser?.id || 'me';
+  const currentUserAvatar = currentUser?.avatar || 'https://i.pravatar.cc/150?img=default';
+  const currentUserName = currentUser?.name || '我';
+
+  const { getChatById, chats, addMessage, clearChat } = useChatStore();
   const storedMessages = chats[chatId] || [];
 
   const [inputText, setInputText] = useState('');
@@ -55,17 +59,17 @@ export default function ChatRoomScreen() {
   const messages: DisplayMessage[] = storedMessages.map(msg => ({
     ...msg,
     sender: msg.senderId === currentUserId ? 'me' : 'other',
-    senderName: msg.senderId === currentUserId ? '我' : chatName,
+    senderName: msg.senderId === currentUserId ? currentUserName : (msg.username || chatName),
   }));
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
 
-    // 隐藏 TabBar
+    // Hide TabBar
     parent?.setOptions({ tabBarStyle: { display: "none" } });
 
     return () => {
-      // 恢复正确尺寸的 TabBar
+      // Restore TabBar
       parent?.setOptions({
         tabBarStyle: getOriginalTabBarStyle(insets),
       });
@@ -78,7 +82,6 @@ export default function ChatRoomScreen() {
     addMessage(chatId, inputText); // store handles user info automatically
     setInputText('');
   };
-
 
   const handleClearChat = () => {
     Alert.alert('清除聊天记录', '确定要清除与 ' + chatName + ' 的所有聊天记录吗？', [
@@ -144,7 +147,6 @@ export default function ChatRoomScreen() {
         roomStyles.bubble,
         item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
       ]}>
-        <Text style={roomStyles.senderName}>{item.senderName}</Text>
         <Text style={roomStyles.messageText}>{item.text}</Text>
         <Text style={roomStyles.timestamp}>
           {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
@@ -153,10 +155,11 @@ export default function ChatRoomScreen() {
           })}
         </Text>
       </View>
+
       {item.sender === 'me' && (
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: currentUserId }} // you can replace with user avatar
+            source={{ uri: currentUserAvatar }}
             style={roomStyles.avatarImage}
           />
         </View>

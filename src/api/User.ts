@@ -1,46 +1,34 @@
 import api from './service';
-import type { CreateUserData } from "../api/types";
 
 // ✅ Create user (register)
-export const createUser = async (data: CreateUserData) => {
+export const createUser = async (data: {
+  phone: string;
+  passcode: string;
+  email?: string;
+  name?: string;
+  roles?: string;
+  status?: number;
+}) => {
   try {
     const formData = new FormData();
     formData.append(
-      "data",
+      'data',
       JSON.stringify({
         phone: data.phone,
         passcode: data.passcode,
         email: data.email,
-        username: data.username,
-        roles: data.roles || "user",
-        status: data.status ?? 1,
+        name: data.name,
+        roles: data.roles,
+        status: data.status,
       })
     );
 
-    const response = await api.post("/users/new", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+    const response = await api.post('/users/new', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
 
-    return response.data;
+    return response.data; 
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
-  }
-};
-
-// ✅ Get user profile by userId
-export const getUserProfile = async (userId: string) => {
-  try {
-    const formData = new FormData();
-    formData.append(
-      "data",
-      JSON.stringify({ user_id: userId })
-    );
-
-    const response = await api.post("/users/info", formData);
-    // response.data should contain: username, phone, email, etc.
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    console.error("Get user profile error:", error.response?.data || error.message);
     return { success: false, message: error.response?.data?.message || error.message };
   }
 };
@@ -51,10 +39,16 @@ export const readUsers = async (userId: string) => {
     const formData = new FormData();
     formData.append("data", JSON.stringify({ user_id: userId }));
 
-    const response = await api.post("/users/read", formData);
+    const response = await api.post("/users/read", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    // 返回完整用户资料
     return { success: true, data: response.data };
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
+    return {
+      success: false,
+      message: error.response?.res?.message || error.message,
+    };
   }
 };
 

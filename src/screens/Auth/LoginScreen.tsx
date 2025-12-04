@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { login } from '../../api/Auth';
-import { getUserProfile } from '../../api/User';
+import { readUsers } from '../../api/User';
 import { useUserStore } from '../../store/userStore';
 
 export default function LoginScreen() {
@@ -19,61 +19,41 @@ export default function LoginScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
 
-    const handleLogin = async () => {
+  const handleLogin = async () => {
     try {
       console.log('登录参数:', { phone, passcode: password });
+      const loginResult = await login({ phone, passcode: password });
+      console.log('登录结果:', loginResult);
 
-      // 1️⃣ 调用登录接口
-      const result = await login({ phone, passcode: password });
-      console.log('登录结果:', result);
+      if (!loginResult.error) {
+        const userId = loginResult.response; // this is just the user_id
 
-      if (!result.error) {
-        const userId = result.response;
-
-        // 2️⃣ 登录成功后，调用获取完整用户资料接口
-        const userInfoResult = await getUserProfile(userId);
-
-        if (userInfoResult.success) {
-          const userData = userInfoResult.data;
-
+        // fetch full user info
+        const userResult = await readUsers(userId);
+        if (userResult.success) {
           const fullUser = {
-            id: userId,
-            username: userData.name,   // 注册时的用户名
-            phone: userData.phone,     // 后端返回的手机号
-            email: userData.email,     // 后端返回的邮箱
+            id: userResult.data.response.user_id,
+            name: userResult.data.response.name,
+            phone: userResult.data.response.phone,
+            email: userResult.data.response.email,
+            avatar: userResult.data.response.image,
           };
 
-          // 3️⃣ 保存到 zustand store
-          useUserStore.getState().setUser(fullUser, "FAKE_TOKEN");
+          useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
 
-          // 4️⃣ 打印用户资料
-          console.log('登录时用户资料:', {
-            username: fullUser.username,
-            phone: fullUser.phone,
-            id: fullUser.id,
-            email: fullUser.email,
-          });
-
-          Alert.alert('登录成功');
-
-          // 5️⃣ 可以导航到主页面
-          // navigation.reset({
-          //   index: 0,
-          //   routes: [{ name: 'MainTabs' }],
-          // });
+          console.log("最终保存到 Store 的用户资料:", fullUser);
         } else {
-          console.log('获取用户信息失败:', userInfoResult.message);
-          Alert.alert('获取用户信息失败', userInfoResult.message);
+          console.warn("读取用户信息失败:", userResult.message);
         }
       } else {
-        console.log('登录失败:', result.message);
-        Alert.alert('登录失败', result.message);
+        Alert.alert('登录失败', loginResult.message);
       }
-    } catch (error: any) {
-      console.error('登录异常:', error);
-      Alert.alert('登录异常', error.message || '未知错误');
+    } catch (err: any) {
+      console.error('登录异常:', err);
+      Alert.alert('登录异常', err.message || '未知错误');
     }
   };
+
 
   const isButtonDisabled = !phone || !password || !isChecked;
 

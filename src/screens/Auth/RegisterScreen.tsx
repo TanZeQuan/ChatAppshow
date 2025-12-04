@@ -8,9 +8,9 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
-  Alert,
   Dimensions,
   ScrollView,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,62 +40,110 @@ export default function RegisterScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Changed to useState
 
-  const handleCreateUser = async () => {
-    if (!isChecked) {
-      Alert.alert("请先同意隐私政策与服务条款");
-      return;
-    }
-
-    if (!name || !email || !phone || !password || !confirmPassword) {
-      Alert.alert("请填写完整信息");
-      return;
-    }
-
+  const handleRegister = async () => {
+    // Validation
     if (password !== confirmPassword) {
-      Alert.alert("两次输入的密码不一致");
+      Alert.alert("错误", "两次输入的密码不一致");
+      return;
+    }
+
+    if (password.length < 6) {
+      Alert.alert("错误", "密码长度至少6位");
       return;
     }
 
     setIsLoading(true);
+
+    // Prepare data to send
+    const postData = {
+      phone: phone,
+      passcode: password,
+      name: name,
+      email: email,
+      roles: "user",
+      status: 1,
+    };
+
+    console.log("Data to be sent to backend:", postData);
+
     try {
-      console.log("发送到后端的数据:", { phone: phone, passcode: password, username: name, email: email });
+      // Call API
+      const res = await createUser(postData);
 
-      const result = await createUser({
-        phone: phone,
-        passcode: password,
-        username: name,
-        email: email,
-      });
+      // Log FULL backend response
+      console.log("=== FULL BACKEND RESPONSE ===");
+      console.log(JSON.stringify(res, null, 2));
+      console.log("res.success:", res.success);
+      console.log("res.message:", res.message);
+      console.log("res.error:", res.error);
+      console.log("res.data:", res.data);
+      console.log("res.user_id:", res.user_id);
+      console.log("res.token:", res.token);
 
-      console.log("后端返回:", result);
+      // Check if the message indicates success (case-insensitive)
+      const messageText = (res.message || res.error || "").toUpperCase();
+      const isSuccess = messageText.includes("SUCCESS") ||
+        messageText.includes("SUCCESSFUL") ||
+        res.success === true ||
+        res.data?.success === true;
 
-      if (result.success) {
-        console.log("用户创建成功:", result.response);
+      if (isSuccess) {
+        console.log("✅ Registration successful!");
 
-        // ⭐ 保存到 store（假设 store 有 setUser 方法）
-        useUserStore.getState().setUser(
-          {
-            id: result.response,   // 后端返回的用户ID
-            username: name,
-            phone,
-            email,
-          },
-          "FAKE_TOKEN" // 注册时没有 token，先用占位
+        // Extract user_id from response (check different possible locations)
+        const userId = res.user_id ||
+          res.data?.user_id ||
+          res.data?.response?.user_id ||
+          res.data?.data?.user_id;
+
+        const token = res.token ||
+          res.data?.token ||
+          res.data?.response?.token ||
+          "";
+
+        console.log("Extracted user_id:", userId);
+        console.log("Extracted token:", token);
+
+        // Update store with registered user data
+        if (userId) {
+          useUserStore.getState().setUser(
+            {
+              id: userId,
+              name: name,
+              phone: phone,
+              email: email,
+              avatar: "",
+              about: ""
+            },
+            token
+          );
+          console.log("✅ Store updated with user data");
+        }
+
+        // Show success message and navigate
+        Alert.alert(
+          "注册成功",
+          "您的账号已创建成功，请登录",
+          [
+            {
+              text: "确定",
+              onPress: () => navigation.navigate("Login")
+            }
+          ]
         );
-
-        // 注册成功跳转 Login 页面
-        Alert.alert("注册成功", "请登录账号", [
-          { text: "确定", onPress: () => navigation.navigate("Login") },
-        ]);
       } else {
-        console.log("用户创建失败:", result.message);
-        Alert.alert("注册失败", result.message);
+        // Registration failed
+        console.error("❌ Registration failed:", res.message || res.error);
+        Alert.alert(
+          "注册失败",
+          res.message || res.error || "请检查您的信息后重试"
+        );
       }
-    } catch (err) {
-      console.error("调用 createUser 出错:", err);
-      Alert.alert("注册失败", "创建用户时发生错误");
+    } catch (error) {
+      console.error("❌ Registration error:", error);
+      Alert.alert("错误", "注册失败，请稍后重试");
     } finally {
       setIsLoading(false);
     }
@@ -221,14 +269,14 @@ export default function RegisterScreen() {
               {/* 已有账号 */}
               <View style={styles.linksContainer}>
                 <View />
-                <TouchableOpacity onPress={() => navigation.goBack()}>
+                <TouchableOpacity onPress={() => navigation.navigate("Login")}>
                   <Text style={styles.linkText}>已有账号？</Text>
                 </TouchableOpacity>
               </View>
 
               {/* 注册按钮 */}
               <TouchableOpacity
-                onPress={handleCreateUser}
+                onPress={handleRegister}
                 disabled={isButtonDisabled}
                 style={[styles.registerButtonWrapper, isButtonDisabled && styles.disabledButton]}
               >

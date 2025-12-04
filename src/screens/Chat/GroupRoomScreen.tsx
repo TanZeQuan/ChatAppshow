@@ -70,7 +70,7 @@ export default function GroupRoomScreen() {
             ...msg,
             sender: msg.senderId === currentUserId ? 'me' : 'other',
             senderName: msg.senderId === currentUserId
-                ? (currentUser?.username || '我')
+                ? (currentUser?.name || '我')
                 : (member?.name || msg.username || '未知成员'),
             avatar: msg.senderId === currentUserId
                 ? currentUser?.avatar
