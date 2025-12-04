@@ -6,12 +6,14 @@ import {
     TouchableOpacity,
     View,
     ScrollView,
-    StatusBar
+    StatusBar,
+    Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { sendOtpForPasswordReset, verifyOtpCode, resetPassword } from '../../api/UserForget'; // 引入你的 api 文件
 
 export default function ForgetPasswordScreen() {
     const navigation = useNavigation();
@@ -21,6 +23,65 @@ export default function ForgetPasswordScreen() {
     const [confirmPassword, setConfirmPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [sendingCode, setSendingCode] = useState(false);
+    const [submitting, setSubmitting] = useState(false);
+
+    // 发送验证码
+    const handleSendOtp = async () => {
+        if (!phone) {
+            Alert.alert('提示', '请输入手机号码');
+            return;
+        }
+        setSendingCode(true);
+        try {
+            const res = await sendOtpForPasswordReset(phone);
+            if (res.success) {
+                Alert.alert('成功', res.message || '验证码已发送');
+            } else {
+                Alert.alert('失败', res.message || '发送失败');
+            }
+        } catch (err: any) {
+            Alert.alert('错误', err.message || '发送失败');
+        } finally {
+            setSendingCode(false);
+        }
+    };
+
+    // 提交重置密码
+    const handleSubmit = async () => {
+        if (!phone || !verificationCode || !password || !confirmPassword) {
+            Alert.alert('提示', '请完整填写信息');
+            return;
+        }
+        if (password !== confirmPassword) {
+            Alert.alert('提示', '两次密码输入不一致');
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            // 验证 OTP
+            const verifyRes = await verifyOtpCode(phone, verificationCode);
+            if (!verifyRes.success || !verifyRes.data?.user_id) {
+                Alert.alert('提示', verifyRes.message || '验证码错误');
+                return;
+            }
+
+            // 重置密码
+            const resetRes = await resetPassword(verifyRes.data.user_id, password);
+            if (resetRes.success) {
+                Alert.alert('成功', resetRes.message || '密码重置成功', [
+                    { text: '确定', onPress: () => navigation.goBack() },
+                ]);
+            } else {
+                Alert.alert('失败', resetRes.message || '密码重置失败');
+            }
+        } catch (err: any) {
+            Alert.alert('错误', err.message || '操作失败，请重试');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <LinearGradient
@@ -70,8 +131,14 @@ export default function ForgetPasswordScreen() {
                                     keyboardType="number-pad"
                                 />
                             </View>
-                            <TouchableOpacity style={styles.sendCodeButton}>
-                                <Text style={styles.sendCodeText}>发送验证码</Text>
+                            <TouchableOpacity
+                                style={styles.sendCodeButton}
+                                onPress={handleSendOtp}
+                                disabled={sendingCode}
+                            >
+                                <Text style={styles.sendCodeText}>
+                                    {sendingCode ? '发送中...' : '发送验证码'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
 
@@ -90,7 +157,7 @@ export default function ForgetPasswordScreen() {
                                 onPress={() => setShowPassword(!showPassword)}
                             >
                                 <Ionicons
-                                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
                                     size={20}
                                     color="#9ca3af"
                                 />
@@ -112,7 +179,7 @@ export default function ForgetPasswordScreen() {
                                 onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                             >
                                 <Ionicons
-                                    name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                                    name={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
                                     size={20}
                                     color="#9ca3af"
                                 />
@@ -120,12 +187,18 @@ export default function ForgetPasswordScreen() {
                         </View>
 
                         {/* Submit Button */}
-                        <TouchableOpacity style={styles.submitButton}>
+                        <TouchableOpacity
+                            style={styles.submitButton}
+                            onPress={handleSubmit}
+                            disabled={submitting}
+                        >
                             <LinearGradient
                                 colors={['#fbbf24', '#f59e0b']}
                                 style={styles.submitGradient}
                             >
-                                <Text style={styles.submitText}>提交</Text>
+                                <Text style={styles.submitText}>
+                                    {submitting ? '提交中...' : '提交'}
+                                </Text>
                             </LinearGradient>
                         </TouchableOpacity>
                     </View>

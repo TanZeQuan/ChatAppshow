@@ -1,22 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
-  Image,
   ScrollView,
-  StyleSheet,
+  StyleSheet as RNStyleSheet,
   Text,
   TouchableOpacity,
   View,
   Dimensions,
-  ActivityIndicator
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useUserStore } from '../../store/userStore';
-import { readUsers, updateUserInfo } from '../../api/User'; // Import the API functions
+import { readUsers, updateUserInfo } from '../../api/User';
+import { Avatar } from '../../components/Avatar';
 
 const { width, height } = Dimensions.get("window");
 
@@ -34,62 +34,65 @@ interface MenuItem {
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
   const { user, logout } = useUserStore();
-  const [avatarUri, setAvatarUri] = useState<string | null>(user?.avatar || null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [avatarKey, setAvatarKey] = useState(0); // Force avatar re-render
 
-  // Fetch complete user data on mount
-  useEffect(() => {
+  // Fetch user data function
+  const fetchUserData = async (silent = false) => {
     if (!user?.id) return;
 
-    const fetchUser = async () => {
-      try {
-        const res = await readUsers(user.id);
+    try {
+      const res = await readUsers(user.id);
 
-        // Log the exact API response
-        console.log('=== FULL API RESPONSE ===');
-        console.log('res.data:', JSON.stringify(res.data, null, 2));
-        console.log('res.data.response:', JSON.stringify(res.data?.response, null, 2));
+      console.log('=== FULL API RESPONSE ===');
+      console.log('res.data:', JSON.stringify(res.data, null, 2));
 
-        if (res.success && res.data?.response) {
-          const userData = res.data.response;
+      if (res.success && res.data?.response) {
+        const userData = res.data.response;
 
-          // Log each field individually
-          console.log('=== INDIVIDUAL FIELDS ===');
-          console.log('user_id:', userData.user_id);
-          console.log('name:', userData.name);
-          console.log('username:', userData.username); // Maybe it's called username?
-          console.log('full_name:', userData.full_name); // Or full_name?
-          console.log('display_name:', userData.display_name); // Or display_name?
+        const updatedUser = {
+          id: userData.user_id || user.id,
+          name: userData.name || userData.username || userData.full_name || user.name || 'Unknown',
+          phone: userData.phone || user.phone || '',
+          email: userData.email || user.email || '',
+          avatar: userData.image || user.avatar || '',
+          about: userData.about || user.about || '',
+        };
 
-          // Log all keys in the response
-          console.log('All keys in userData:', Object.keys(userData));
+        console.log('updatedUser:', JSON.stringify(updatedUser, null, 2));
 
-          const updatedUser = {
-            id: userData.user_id || user.id,
-            name: userData.name || userData.username || userData.full_name || user.name || 'Unknown',
-            phone: userData.phone || user.phone || '',
-            email: userData.email || user.email || '',
-            avatar: userData.image || user.avatar || '',
-            about: userData.about || user.about || '',
-          };
-
-          console.log('updatedUser:', JSON.stringify(updatedUser, null, 2));
-
-          useUserStore.getState().setUser(updatedUser, useUserStore.getState().token || "");
-          setAvatarUri(updatedUser.avatar);
-        }
-      } catch (err) {
-        console.error('readUsers 错误:', err);
+        useUserStore.getState().setUser(updatedUser, useUserStore.getState().token || "");
+        
+        // Force avatar component to re-render
+        setAvatarKey(prev => prev + 1);
       }
-    };
+    } catch (err) {
+      console.error('readUsers 错误:', err);
+      if (!silent) {
+        Alert.alert('错误', '获取用户信息失败');
+      }
+    }
+  };
 
-    fetchUser();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  // Fetch user data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserData(true); // Silent fetch when screen focuses
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+  );
+
+  // Handle pull to refresh
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchUserData();
+    setRefreshing(false);
+  };
 
   if (!user) {
     return (
-      <View style={styles.container}>
+      <View style={profileStyles.container}>
         <Text>未登录</Text>
       </View>
     );
@@ -118,10 +121,6 @@ export default function ProfileScreen() {
 
     if (!result.canceled && result.assets.length > 0) {
       const uri = result.assets[0].uri;
-      const previousAvatar = avatarUri;
-
-      // Optimistic update
-      setAvatarUri(uri);
       setIsUpdating(true);
 
       try {
@@ -134,36 +133,14 @@ export default function ProfileScreen() {
         console.log('updateUserInfo 返回:', res);
 
         if (res.success) {
-          // Fetch updated user data
-          const info = await readUsers(user.id);
-
-          if (info.success && info.data?.response) {
-            const userData = info.data.response;
-
-            const updatedUser = {
-              id: userData.user_id || user.id,
-              name: userData.name || user.name,
-              phone: userData.phone || user.phone,
-              email: userData.email || user.email,
-              avatar: userData.image,
-              about: userData.about || user.about || '', // Add this
-            };
-
-            useUserStore.getState().setUser(
-              updatedUser,
-              useUserStore.getState().token || ""
-            );
-
-            setAvatarUri(userData.image);
-            Alert.alert('成功', '头像更新成功');
-          }
+          // Fetch updated user data with server URL
+          await fetchUserData();
+          Alert.alert('成功', '头像更新成功');
         } else {
-          setAvatarUri(previousAvatar);
           Alert.alert('失败', res.message || '头像更新失败');
         }
       } catch (error) {
         console.error('上传头像错误:', error);
-        setAvatarUri(previousAvatar);
         Alert.alert('错误', '上传失败，请重试');
       } finally {
         setIsUpdating(false);
@@ -185,10 +162,6 @@ export default function ProfileScreen() {
 
     if (!result.canceled && result.assets.length > 0) {
       const uri = result.assets[0].uri;
-      const previousAvatar = avatarUri;
-
-      // Optimistic update
-      setAvatarUri(uri);
       setIsUpdating(true);
 
       try {
@@ -201,36 +174,14 @@ export default function ProfileScreen() {
         console.log('updateUserInfo 返回:', res);
 
         if (res.success) {
-          // Fetch updated user data
-          const info = await readUsers(user.id);
-
-          if (info.success && info.data?.response) {
-            const userData = info.data.response;
-
-            const updatedUser = {
-              id: userData.user_id || user.id,
-              name: userData.name || user.name,
-              phone: userData.phone || user.phone,
-              email: userData.email || user.email,
-              avatar: userData.image,
-              about: userData.about || user.about || '', // Add this line
-            };
-
-            useUserStore.getState().setUser(
-              updatedUser,
-              useUserStore.getState().token || ""
-            );
-
-            setAvatarUri(userData.image);
-            Alert.alert('成功', '头像更新成功');
-          }
+          // Fetch updated user data with server URL
+          await fetchUserData();
+          Alert.alert('成功', '头像更新成功');
         } else {
-          setAvatarUri(previousAvatar);
           Alert.alert('失败', res.message || '头像更新失败');
         }
       } catch (error) {
         console.error('拍照上传错误:', error);
-        setAvatarUri(previousAvatar);
         Alert.alert('错误', '上传失败，请重试');
       } finally {
         setIsUpdating(false);
@@ -256,65 +207,78 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <LinearGradient colors={['#FFD966', '#FFB84D']} style={styles.gradientHeader}>
+    <View style={profileStyles.container}>
+      <LinearGradient colors={['#FFD966', '#FFB84D']} style={profileStyles.gradientHeader}>
         <SafeAreaView edges={['top']}>
-          <TouchableOpacity style={styles.profileHeader} onPress={() => navigation.navigate('EditProfile')}>
+          <TouchableOpacity 
+            style={profileStyles.profileHeader} 
+            onPress={() => navigation.navigate('EditProfile')}
+          >
             <TouchableOpacity
-              style={styles.avatarContainer}
               onPress={handleAvatarPress}
               disabled={isUpdating}
+              style={profileStyles.avatarTouchable}
             >
-              {avatarUri ? (
-                <Image source={{ uri: avatarUri }} style={styles.avatar} />
-              ) : (
-                <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person" size={36} color="#fff" />
-                </View>
-              )}
-              <View style={styles.cameraBadge}>
-                {isUpdating ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Ionicons name="camera" size={14} color="#fff" />
-                )}
-              </View>
+              <Avatar
+                key={avatarKey} // Force re-render when key changes
+                uri={user.avatar}
+                size={scaleWidth(80)}
+                borderRadius={scaleWidth(8)}
+                showCameraBadge={true}
+                isUploading={isUpdating}
+              />
             </TouchableOpacity>
 
-            <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{user.name}</Text>
-              <Text style={styles.profileId}>账号ID：{user.id}</Text>
+            <View style={profileStyles.profileInfo}>
+              <Text style={profileStyles.profileName}>{user.name}</Text>
+              <Text style={profileStyles.profileId}>账号ID：{user.id}</Text>
             </View>
 
-            <TouchableOpacity style={styles.qrButton} onPress={() => navigation.navigate('QRcode')}>
+            <TouchableOpacity 
+              style={profileStyles.qrButton} 
+              onPress={() => navigation.navigate('QRcode')}
+            >
               <Ionicons name="qr-code-outline" size={24} color="#666" />
             </TouchableOpacity>
           </TouchableOpacity>
         </SafeAreaView>
       </LinearGradient>
 
-      <View style={styles.whiteSection}>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.menuContainer}>
+      <View style={profileStyles.whiteSection}>
+        <ScrollView 
+          showsVerticalScrollIndicator={false} 
+          contentContainerStyle={profileStyles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#FFD966']}
+              tintColor="#FFD966"
+              title="刷新中..."
+              titleColor="#999"
+            />
+          }
+        >
+          <View style={profileStyles.menuContainer}>
             {menuItems.map((item, index) => (
               <TouchableOpacity
                 key={index}
-                style={styles.menuItem}
+                style={profileStyles.menuItem}
                 onPress={() => item.onPress ? item.onPress() : navigation.navigate(item.navigateTo!)}
               >
-                <View style={styles.menuLeft}>
-                  <View style={styles.menuIconContainer}>
+                <View style={profileStyles.menuLeft}>
+                  <View style={profileStyles.menuIconContainer}>
                     <Ionicons name={item.icon} size={20} color="#666" />
                   </View>
-                  <Text style={styles.menuLabel}>{item.label}</Text>
+                  <Text style={profileStyles.menuLabel}>{item.label}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#999" />
               </TouchableOpacity>
             ))}
           </View>
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Text style={styles.logoutText}>退出</Text>
+          <TouchableOpacity style={profileStyles.logoutButton} onPress={handleLogout}>
+            <Text style={profileStyles.logoutText}>退出</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -322,28 +286,105 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFFFFF' },
-  gradientHeader: { paddingBottom: scaleHeight(20) },
-  whiteSection: { flex: 1, backgroundColor: '#FFFFFF' },
-  scrollContent: { paddingBottom: scaleHeight(40) },
+const profileStyles = RNStyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: '#FFFFFF' 
+  },
+  gradientHeader: { 
+    paddingBottom: scaleHeight(20) 
+  },
+  whiteSection: { 
+    flex: 1, 
+    backgroundColor: '#FFFFFF' 
+  },
+  scrollContent: { 
+    paddingBottom: scaleHeight(40) 
+  },
 
-  profileHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16), paddingVertical: scaleHeight(16) },
-  avatarContainer: { width: scaleWidth(80), height: scaleWidth(80), marginRight: scaleWidth(12), position: 'relative' },
-  avatar: { width: scaleWidth(80), height: scaleWidth(80), borderRadius: scaleWidth(8) },
-  avatarPlaceholder: { width: scaleWidth(80), height: scaleWidth(80), backgroundColor: '#666', borderRadius: scaleWidth(8), justifyContent: 'center', alignItems: 'center' },
-  cameraBadge: { position: 'absolute', bottom: 0, right: 0, width: scaleWidth(24), height: scaleWidth(24), borderRadius: scaleWidth(12), backgroundColor: '#0a0a0aff', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#fff' },
-  profileInfo: { flex: 1 },
-  profileName: { fontSize: scaleFont(18), fontWeight: '600', color: '#333', marginBottom: scaleHeight(4) },
-  profileId: { fontSize: scaleFont(13), color: '#999' },
-  qrButton: { width: scaleWidth(36), height: scaleWidth(36), justifyContent: 'center', alignItems: 'center', marginRight: scaleWidth(4) },
+  profileHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: scaleWidth(16), 
+    paddingVertical: scaleHeight(16) 
+  },
+  avatarTouchable: {
+    marginRight: scaleWidth(12),
+  },
+  profileInfo: { 
+    flex: 1 
+  },
+  profileName: { 
+    fontSize: scaleFont(18), 
+    fontWeight: '600', 
+    color: '#333', 
+    marginBottom: scaleHeight(4) 
+  },
+  profileId: { 
+    fontSize: scaleFont(13), 
+    color: '#999' 
+  },
+  qrButton: { 
+    width: scaleWidth(36), 
+    height: scaleWidth(36), 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: scaleWidth(4) 
+  },
 
-  menuContainer: { paddingHorizontal: scaleWidth(16), paddingTop: scaleHeight(20) },
-  menuItem: { backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: scaleHeight(16), paddingHorizontal: scaleWidth(16), marginBottom: scaleHeight(12), flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 5, height: 8 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  menuLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  menuIconContainer: { width: scaleWidth(32), height: scaleHeight(32), backgroundColor: '#F8F9FA', borderRadius: scaleWidth(16), justifyContent: 'center', alignItems: 'center', marginRight: scaleWidth(12) },
-  menuLabel: { fontSize: scaleFont(15), color: '#333', fontWeight: '400' },
+  menuContainer: { 
+    paddingHorizontal: scaleWidth(16), 
+    paddingTop: scaleHeight(20) 
+  },
+  menuItem: { 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: 12, 
+    paddingVertical: scaleHeight(16), 
+    paddingHorizontal: scaleWidth(16), 
+    marginBottom: scaleHeight(12), 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    shadowColor: '#000', 
+    shadowOffset: { width: 5, height: 8 }, 
+    shadowOpacity: 0.05, 
+    shadowRadius: 2, 
+    elevation: 1 
+  },
+  menuLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    flex: 1 
+  },
+  menuIconContainer: { 
+    width: scaleWidth(32), 
+    height: scaleHeight(32), 
+    backgroundColor: '#F8F9FA', 
+    borderRadius: scaleWidth(16), 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginRight: scaleWidth(12) 
+  },
+  menuLabel: { 
+    fontSize: scaleFont(15), 
+    color: '#333', 
+    fontWeight: '400' 
+  },
 
-  logoutButton: { backgroundColor: '#FFD966', borderRadius: 25, paddingVertical: scaleHeight(14), marginHorizontal: scaleWidth(32), marginTop: scaleHeight(30), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FFB84D' },
-  logoutText: { fontSize: scaleFont(16), fontWeight: '500', color: '#333' },
+  logoutButton: { 
+    backgroundColor: '#FFD966', 
+    borderRadius: 25, 
+    paddingVertical: scaleHeight(14), 
+    marginHorizontal: scaleWidth(32), 
+    marginTop: scaleHeight(30), 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    borderWidth: 1, 
+    borderColor: '#FFB84D' 
+  },
+  logoutText: { 
+    fontSize: scaleFont(16), 
+    fontWeight: '500', 
+    color: '#333' 
+  },
 });

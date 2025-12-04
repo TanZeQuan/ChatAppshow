@@ -27,7 +27,7 @@ export const createUser = async (data: {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
 
-    return response.data; 
+    return response.data;
   } catch (error: any) {
     return { success: false, message: error.response?.data?.message || error.message };
   }
@@ -74,42 +74,120 @@ export const searchUsers = async (query: string, userId?: string) => {
 // ✅ Update user info
 export const updateUserInfo = async (
   userId: string,
-  updateData: { name?: string; about?: string; image?: { uri: string; type?: string; name?: string } }
+  updateData: { 
+    name?: string; 
+    about?: string; 
+    image?: { uri: string; type?: string; name?: string } | null 
+  }
 ) => {
   try {
     const formData = new FormData();
-    formData.append(
-      "data",
-      JSON.stringify({ user_id: userId, name: updateData.name, about: updateData.about })
-    );
+    
+    // Always append the data field with user info
+    const dataPayload: any = { 
+      user_id: userId 
+    };
+    
+    // Only include fields that are provided
+    if (updateData.name !== undefined) {
+      dataPayload.name = updateData.name;
+    }
+    
+    if (updateData.about !== undefined) {
+      dataPayload.about = updateData.about;
+    }
+    
+    formData.append("data", JSON.stringify(dataPayload));
 
-    if (updateData.image) {
+    // Only append image if it exists and has a valid URI
+    if (updateData.image && updateData.image.uri) {
       const { uri, type = "image/jpeg", name = "avatar.jpg" } = updateData.image;
-      formData.append("image", { uri, type, name } as any);
+      
+      // For React Native, the image object structure for FormData
+      formData.append("image", {
+        uri,
+        type,
+        name,
+      } as any);
     }
 
-    const response = await api.post("/users/info/update", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
+    console.log('updateUserInfo payload:', {
+      userId,
+      hasImage: !!updateData.image,
+      dataPayload
     });
 
-    return { success: true, data: response.data };
+    const response = await api.post("/users/info/update", formData, {
+      headers: { 
+        "Content-Type": "multipart/form-data" 
+      },
+    });
+
+    console.log('updateUserInfo response:', response.data);
+
+    // Check if response indicates an error
+    if (response.data?.error === true) {
+      return { 
+        success: false, 
+        message: response.data.message || "Update failed" 
+      };
+    }
+
+    return { 
+      success: true, 
+      data: response.data 
+    };
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
+    console.error('updateUserInfo error:', error.response?.data || error.message);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || error.message 
+    };
   }
 };
 
 // ✅ Change user email
 export const changeUserEmail = async (userId: string, newEmail: string) => {
   try {
-    const formData = new FormData();
-    formData.append("data", JSON.stringify({ user_id: userId, email: newEmail }));
+    console.log('API Request - user_id:', userId, 'email:', newEmail);
 
-    const response = await api.post("/users/email/change", formData);
-    return { success: true, data: response.data };
+    // Backend expects FormData with parameters wrapped in "data" field
+    const formData = new FormData();
+    formData.append("data", JSON.stringify({
+      user_id: userId,
+      email: newEmail,
+    }));
+
+    const response = await api.post("/users/email/change", formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    console.log('API Response:', response.data);
+
+    // Check if the response indicates an error
+    if (response.data?.error === true) {
+      return {
+        success: false,
+        message: response.data.message || "Email update failed"
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data,
+      message: response.data?.message
+    };
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
+    console.error('API Error:', error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || "Network error"
+    };
   }
 };
+
 
 // ✅ Sync user settings
 export const syncUserSettings = async (userId: string, settingsData: any) => {
