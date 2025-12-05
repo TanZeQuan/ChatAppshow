@@ -179,7 +179,7 @@ export const readChatMessages = async ({
         console.log("readChatMessages payload:", dataPayload);
 
         const response = await api.post("/chats/message/read", formData, {
-            headers: { "Content-Type": undefined },
+            headers: { "Content-Type": "multipart/form-data" },
         });
 
         console.log("readChatMessages response:", response.data);

@@ -4,7 +4,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useUserStore } from './userStore';
 
-type Message = {
+export type Message = {
   id: string;
   text: string;
   createdAt: string;
