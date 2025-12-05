@@ -37,6 +37,7 @@ export default function LoginScreen() {
             phone: userResult.data.response.phone,
             email: userResult.data.response.email,
             avatar: userResult.data.response.image,
+            about: userResult.data.response.about,
           };
 
           useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
