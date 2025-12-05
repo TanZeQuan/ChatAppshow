@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
-import { useChatStore } from '../../store/chatStore';
+import { useChatStore, Message } from '../../store/chatStore'; // Import Message type
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useUserStore } from '../../store/userStore'; // Updated import path
 import { readChatMessages } from '../../api/Chat'; // Import readChatMessages

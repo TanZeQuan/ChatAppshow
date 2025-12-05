@@ -1,25 +1,25 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
 import {
-  View,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Image,
-  FlatList,
-  Alert,
-  Dimensions,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { addGroup } from "../../api/Group"; // Import addGroup
+import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
-import { useChatStore } from "../../store/chatStore";
-import { addGroup } from "../../api/Group"; // Import addGroup
 
 const { width, height } = Dimensions.get("window");
 
@@ -67,7 +67,7 @@ export default function AddGroupScreen() {
   };
 
   const handleCreateGroup = async () => {
-    console.log("handleCreateGroup called"); // Log function start
+    // console.log("handleCreateGroup called"); // Log function start
 
     if (!groupName.trim()) {
       Alert.alert("错误", "请输入群聊名称");
@@ -94,10 +94,10 @@ export default function AddGroupScreen() {
 
       console.log("API Response received:", JSON.stringify(apiResponse, null, 2)); // Log the full response
 
-      if (!apiResponse.error && apiResponse.group_id) {
-        console.log("Group creation successful, proceeding to add chat to store."); // Log success branch
+      if (!apiResponse.error && apiResponse.response) {
+        // console.log("Group creation successful, proceeding to add chat to store."); // Log success branch
         const newGroupChat = {
-          id: apiResponse.group_id, // Use the ID from the API response
+          id: apiResponse.response, // Use the ID from the API response (apiResponse.response)
           name: groupName.trim(),
           avatar: null, // API currently doesn't handle group avatars directly
           isGroup: true,
@@ -112,20 +112,21 @@ export default function AddGroupScreen() {
         addChat(newGroupChat);
         setShowGroupNameModal(false);
 
-        Alert.alert(
-          "成功",
-          `群聊 "${groupName}" 已创建！`,
-          [
-            {
-              text: "确定",
-              onPress: () => {
-                navigation.goBack();
-              },
-            },
-          ]
-        );
+        // Navigate directly to the new group chat screen
+        const parentNavigation = navigation.getParent();
+        if (parentNavigation) {
+            parentNavigation.navigate('ChatStack', {
+                screen: 'GroupRoom',
+                params: {
+                    chatId: newGroupChat.id,
+                    chatName: newGroupChat.name,
+                    members: newGroupChat.members,
+                    memberIds: newGroupChat.memberIds,
+                },
+            });
+        }
       } else {
-        console.log("Group creation failed. API response indicates an error or missing group_id."); // Log failure branch
+        // console.log("Group creation failed. API response indicates an error or missing group_id."); // Log failure branch
         Alert.alert("错误", apiResponse.message || "创建群聊失败，无法获取群组ID");
       }
     } catch (error) {

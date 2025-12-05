@@ -13,7 +13,7 @@ export interface AddGroupParams {
 }
 
 export const addGroup = async (params: AddGroupParams) => {
-  console.log("📞 addGroup called:", params);
+  // console.log("📞 addGroup called:", params);
 
   try {
     const formData = new FormData();
@@ -28,15 +28,15 @@ export const addGroup = async (params: AddGroupParams) => {
       })
     );
 
-    console.log("➡ Sending to backend (FormData JSON):", {
-      name: params.name,
-      user_id: params.user_id,
-      image: params.image,
-      groupCount: params.group.length
-    });
+    // console.log("➡ Sending to backend (FormData JSON):", {
+    //   name: params.name,
+    //   user_id: params.user_id,
+    //   image: params.image,
+    //   groupCount: params.group.length
+    // });
 
     const response = await api.post("/chats/group/new", formData, {
-      headers: { "Content-Type": undefined }, // React Native 必须这样写！
+      headers: { "Content-Type": "multipart/form-data" }, // React Native 必须这样写！
       transformResponse: [
         (data) => {
           try {
@@ -53,7 +53,7 @@ export const addGroup = async (params: AddGroupParams) => {
       ],
     });
 
-    console.log("📩 Parsed backend response:", response.data);
+    // console.log("📩 Parsed backend response:", response.data);
     return response.data;
 
   } catch (error: any) {

@@ -194,13 +194,13 @@ export default function ContactsScreen() {
         ],
       });
 
-      if (!response.error && typeof response.response === 'string') {
+      if (response.success && response.data && typeof response.data.response === 'string') {
         const parentNavigation = navigation.getParent();
         if (parentNavigation) {
           parentNavigation.navigate('ChatStack', {
             screen: 'ChatRoom',
             params: {
-              chatId: response.response, // Use chat_id from API's 'response' field
+              chatId: response.data.response, // Use chat_id from the nested data object
               chatName: contact.name,
               isGroup: false,
             },

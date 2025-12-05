@@ -117,7 +117,7 @@ export const readFriends = async ({
 
         formData.append("data", JSON.stringify(dataPayload));
 
-        console.log("readFriends payload:", dataPayload);
+        // console.log("readFriends payload:", dataPayload);
 
         const response = await api.post("/chats/friends/read", formData, {
             headers: {
@@ -125,7 +125,7 @@ export const readFriends = async ({
             },
         });
 
-        console.log("readFriends response:", response.data);
+        // console.log("readFriends response:", response.data);
 
         if (response.data?.error === true) {
             return {
