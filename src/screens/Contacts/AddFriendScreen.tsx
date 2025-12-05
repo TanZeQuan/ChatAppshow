@@ -48,7 +48,7 @@ export default function AddFriendScreen() {
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
-  const { addFriendRequest } = useContactStore();
+  useContactStore();
   const { addRequest } = useFriendRequestStore();
 
   const handleSearch = async () => {

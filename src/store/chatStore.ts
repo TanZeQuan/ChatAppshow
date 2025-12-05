@@ -76,7 +76,7 @@ export const useChatStore = create<ChatStore>()(
           text,
           createdAt: new Date().toISOString(),
           senderId: user.id,
-          username: user.username,
+          username: user.name,
           avatar: user.avatar,
         };
 
