@@ -14,72 +14,114 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
-import { useFriendRequestStore } from "../../store/friendRequestStore";
+import { useFriendRequestStore, FriendRequest as FriendRequestType } from "../../store/friendRequestStore"; // Renamed FriendRequest type to FriendRequestType to avoid conflict
 import { useUserStore } from "../../store/userStore";
+import { readFriends, updateFriendStatus } from "../../api/Friend"; // Import real APIs
 
 const { width, height } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
 const scaleHeight = (size: number) => (height / 812) * size;
 const scaleFont = (size: number) => (width / 375) * size;
 
-// Mock API
-const acceptFriendRequestAPI = async (userId: string, token: string) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return { success: true };
-};
-
-const rejectFriendRequestAPI = async (userId: string, token: string) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return { success: true };
-};
-
 export default function FriendRequestScreen() {
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
-  const { requests, removeRequest } = useFriendRequestStore();
+  
+  // Local states for different categories of friend requests
+  const [receivedPending, setReceivedPending] = useState<FriendRequestType[]>([]);
+  const [receivedAccepted, setReceivedAccepted] = useState<FriendRequestType[]>([]);
+  const [receivedRejected, setReceivedRejected] = useState<FriendRequestType[]>([]);
+  const [sentPending, setSentPending] = useState<FriendRequestType[]>([]);
+  const [sentAccepted, setSentAccepted] = useState<FriendRequestType[]>([]);
+  const [sentRejected, setSentRejected] = useState<FriendRequestType[]>([]);
+
+  const { removeRequest } = useFriendRequestStore();
   const { addContact, getContactById } = useContactStore();
-  const { token } = useUserStore();
+  const { token, user } = useUserStore(); // Get user from userStore
 
-  // Mock data - Replace with actual data from your store
-  const mockData = {
-    receivedPending: requests, // Current requests
-    receivedAccepted: [],
-    receivedRejected: [],
-    sentPending: [],
-    sentAccepted: [],
-    sentRejected: [],
+  // Function to fetch friend requests from API
+  const fetchFriendRequests = async () => {
+    if (!token || !user?.id) {
+      console.warn("User not logged in or token missing. Cannot fetch friend requests.");
+      return;
+    }
+
+    try {
+      const fetchAndSetRequests = async (
+        isstatus: number,
+        type: 'received' | 'sent'
+      ): Promise<FriendRequestType[]> => {
+        const response = await readFriends({
+          user_id: user.id,
+          request_id: type === 'sent' ? user.id : '',
+          approve_id: type === 'received' ? user.id : '',
+          isstatus: isstatus,
+        });
+
+        if (response.success) {
+          const data = type === 'received' ? response.data?.approve : response.data?.request;
+          if (data) {
+            return data.map((req: any) => ({
+              id: req.user_id,
+              list_id: req.list_id,
+              name: req.name,
+              avatar: req.image || `https://i.pravatar.cc/150?img=${req.user_id}`,
+              status: req.isstatus,
+              message: req.message,
+            }));
+          }
+        }
+        return [];
+      };
+
+      // Use Promise.all to fetch all categories in parallel
+      const [
+        recPending, recAccepted, recRejected,
+        sntPending, sntAccepted, sntRejected
+      ] = await Promise.all([
+        fetchAndSetRequests(1, 'received'),
+        fetchAndSetRequests(2, 'received'),
+        fetchAndSetRequests(3, 'received'),
+        fetchAndSetRequests(1, 'sent'),
+        fetchAndSetRequests(2, 'sent'),
+        fetchAndSetRequests(3, 'sent'),
+      ]);
+
+      setReceivedPending(recPending);
+      setReceivedAccepted(recAccepted);
+      setReceivedRejected(recRejected);
+      setSentPending(sntPending);
+      setSentAccepted(sntAccepted);
+      setSentRejected(sntRejected);
+
+      console.log('好友请求历史已更新');
+
+    } catch (error) {
+      console.error("Error fetching friend requests history:", error);
+      Alert.alert("错误", "获取好友请求历史失败，请重试");
+    }
   };
-
+  
   useFocusEffect(
     React.useCallback(() => {
-      console.log('好友请求页面刷新，当前请求数:', requests.length);
-    }, [requests.length])
+      fetchFriendRequests(); // Fetch requests when screen is focused
+    }, [token, user?.id]) // Depend on token and user ID
   );
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    
-    try {
-      // TODO: Replace with your actual API call to fetch friend requests
-      // await fetchFriendRequests(token);
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      console.log('好友请求已刷新');
-    } catch (error) {
-      console.error('刷新好友请求失败:', error);
-      Alert.alert("错误", "刷新失败，请重试");
-    } finally {
-      setRefreshing(false);
-    }
+    await fetchFriendRequests();
+    setRefreshing(false);
   };
 
-  const handleConfirm = (item: any) => {
+  const handleConfirm = async (item: FriendRequestType) => {
+    if (!token || !user?.id) return Alert.alert("错误", "请先登录");
+
     const existingContact = getContactById(item.id);
     if (existingContact) {
       Alert.alert("提示", `${item.name} 已经是你的好友了`);
-      removeRequest(item.id);
+      removeRequest(item.list_id);
+      await fetchFriendRequests(); // Re-fetch to update lists
       return;
     }
 
@@ -91,20 +133,14 @@ export default function FriendRequestScreen() {
         {
           text: "确定",
           onPress: async () => {
-            if (!token) return Alert.alert("错误", "请先登录");
             try {
-              const result = await acceptFriendRequestAPI(item.id, token);
+              const result = await updateFriendStatus(item.list_id, 2); // 2 for Accepted
               if (result.success) {
-                addContact({ id: item.id, name: item.name, avatar: item.avatar, online: true });
-                removeRequest(item.id);
-                Alert.alert(
-                  "成功",
-                  `已添加 ${item.name} 为好友`,
-                  [
-                    { text: "确定" },
-                    { text: "查看通讯录", onPress: () => navigation.goBack() },
-                  ]
-                );
+                addContact({ id: item.id, name: item.name, avatar: item.avatar, online: false });
+                Alert.alert("成功", `已添加 ${item.name} 为好友`);
+                await fetchFriendRequests(); // Re-fetch to update lists
+              } else {
+                Alert.alert("错误", result.message || "添加好友失败，请重试");
               }
             } catch (error) {
               Alert.alert("错误", "添加好友失败，请重试");
@@ -116,7 +152,9 @@ export default function FriendRequestScreen() {
     );
   };
 
-  const handleReject = (item: any) => {
+  const handleReject = async (item: FriendRequestType) => {
+    if (!token || !user?.id) return Alert.alert("错误", "请先登录");
+
     Alert.alert(
       "拒绝",
       `确定拒绝 ${item.name} 的好友请求吗？`,
@@ -126,12 +164,13 @@ export default function FriendRequestScreen() {
           text: "拒绝",
           style: "destructive",
           onPress: async () => {
-            if (!token) return Alert.alert("错误", "请先登录");
             try {
-              const result = await rejectFriendRequestAPI(item.id, token);
+              const result = await updateFriendStatus(item.list_id, 3); // 3 for Rejected
               if (result.success) {
-                removeRequest(item.id);
                 Alert.alert("已拒绝", `已拒绝 ${item.name} 的好友请求`);
+                await fetchFriendRequests(); // Re-fetch to update lists
+              } else {
+                Alert.alert("错误", result.message || "操作失败，请重试");
               }
             } catch (error) {
               Alert.alert("错误", "操作失败，请重试");
@@ -143,8 +182,8 @@ export default function FriendRequestScreen() {
     );
   };
 
-  const renderReceivedPendingItem = (item: any) => (
-    <View key={item.id} style={styles.requestItem}>
+  const renderReceivedPendingItem = (item: FriendRequestType) => (
+    <View key={item.list_id} style={styles.requestItem}>
       <View style={styles.requestLeft}>
         <Image
           source={{ uri: item.avatar || `https://i.pravatar.cc/150?img=${item.id}` }}
@@ -153,6 +192,7 @@ export default function FriendRequestScreen() {
         <View style={styles.userInfo}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.userId}>ID: {item.id}</Text>
+          {item.message && <Text style={styles.requestMessage}>留言: {item.message}</Text>}
         </View>
       </View>
       <View style={styles.buttonGroup}>
@@ -166,8 +206,8 @@ export default function FriendRequestScreen() {
     </View>
   );
 
-  const renderStatusItem = (item: any, statusText: string, statusColor: string) => (
-    <View key={item.id} style={styles.requestItem}>
+  const renderStatusItem = (item: FriendRequestType, statusText: string, statusColor: string) => (
+    <View key={item.list_id} style={styles.requestItem}>
       <View style={styles.requestLeft}>
         <Image
           source={{ uri: item.avatar || `https://i.pravatar.cc/150?img=${item.id}` }}
@@ -176,6 +216,7 @@ export default function FriendRequestScreen() {
         <View style={styles.userInfo}>
           <Text style={styles.name}>{item.name}</Text>
           <Text style={styles.userId}>ID: {item.id}</Text>
+          {item.message && <Text style={styles.requestMessage}>留言: {item.message}</Text>}
         </View>
       </View>
       <Text style={[styles.statusText, { color: statusColor }]}>{statusText}</Text>
@@ -185,9 +226,9 @@ export default function FriendRequestScreen() {
   const renderSection = (
     title: string,
     count: number,
-    data: any[],
+    data: FriendRequestType[],
     emptyMessage: string,
-    renderItem: (item: any) => React.ReactNode
+    renderItem: (item: FriendRequestType) => React.ReactNode
   ) => (
     <View style={styles.section}>
       <View style={styles.sectionHeader}>
@@ -234,35 +275,17 @@ export default function FriendRequestScreen() {
         {/* 收到的待处理请求 */}
         {renderSection(
           "收到的待处理请求",
-          mockData.receivedPending.length,
-          mockData.receivedPending,
+          receivedPending.length,
+          receivedPending,
           "目前没有待处理的好友请求～",
           renderReceivedPendingItem
-        )}
-
-        {/* 已接受的好友 */}
-        {renderSection(
-          "已接受的好友",
-          mockData.receivedAccepted.length,
-          mockData.receivedAccepted,
-          "还没有接受的好友请求～",
-          (item) => renderStatusItem(item, "已接受", "#4CAF50")
-        )}
-
-        {/* 已拒绝的请求 */}
-        {renderSection(
-          "已拒绝的请求",
-          mockData.receivedRejected.length,
-          mockData.receivedRejected,
-          "还没有拒绝的好友请求～",
-          (item) => renderStatusItem(item, "已拒绝", "#F44336")
         )}
 
         {/* 发送的待处理请求 */}
         {renderSection(
           "发送的待处理请求",
-          mockData.sentPending.length,
-          mockData.sentPending,
+          sentPending.length,
+          sentPending,
           "还没有发送待处理的请求～",
           (item) => renderStatusItem(item, "等待回应", "#FF9800")
         )}
@@ -270,18 +293,36 @@ export default function FriendRequestScreen() {
         {/* 对方已接受的请求 */}
         {renderSection(
           "对方已接受的请求",
-          mockData.sentAccepted.length,
-          mockData.sentAccepted,
+          sentAccepted.length,
+          sentAccepted,
           "还没有对方接受的请求～",
+          (item) => renderStatusItem(item, "已接受", "#4CAF50")
+        )}
+        
+        {/* 已接受的好友 */}
+        {renderSection(
+          "我接受的好友",
+          receivedAccepted.length,
+          receivedAccepted,
+          "还没有接受的好友请求～",
           (item) => renderStatusItem(item, "已接受", "#4CAF50")
         )}
 
         {/* 对方已拒绝的请求 */}
         {renderSection(
           "对方已拒绝的请求",
-          mockData.sentRejected.length,
-          mockData.sentRejected,
+          sentRejected.length,
+          sentRejected,
           "还没有对方拒绝的请求～",
+          (item) => renderStatusItem(item, "已拒绝", "#F44336")
+        )}
+        
+        {/* 已拒绝的请求 */}
+        {renderSection(
+          "我拒绝的请求",
+          receivedRejected.length,
+          receivedRejected,
+          "还没有拒绝的好友请求～",
           (item) => renderStatusItem(item, "已拒绝", "#F44336")
         )}
       </ScrollView>

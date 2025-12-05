@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Alert
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +19,8 @@ import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { useChatStore } from '../../store/chatStore';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
-import { useUserStore } from '@/src/store/userStore';
+import { useUserStore } from '../../store/userStore'; // Updated import path
+import { readChatMessages } from '../../api/Chat'; // Import readChatMessages
 
 interface DisplayMessage {
   id: string;
@@ -34,6 +36,8 @@ interface DisplayMessage {
 interface RouteParams {
   chatId: string;
   chatName: string;
+  // Potentially group members here if isGroup is true
+  // isGroup: boolean; // You might want to pass this if handling group vs private chat differently
 }
 
 export default function ChatRoomScreen() {
@@ -43,24 +47,31 @@ export default function ChatRoomScreen() {
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
 
-  // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
-  const currentUserId = currentUser?.id || 'me';
+  const currentUserId = currentUser?.id || ''; // Ensure it's a string, empty if null
   const currentUserAvatar = currentUser?.avatar || 'https://i.pravatar.cc/150?img=default';
   const currentUserName = currentUser?.name || '我';
 
-  const { getChatById, chats, addMessage, clearChat } = useChatStore();
+  const { getChatById, chats, addMessage, clearChat, setMessagesForChat } = useChatStore(); // Added setMessagesForChat
   const storedMessages = chats[chatId] || [];
 
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+  const [messagesLoading, setMessagesLoading] = useState(true);
 
-  const messages: DisplayMessage[] = storedMessages.map(msg => ({
-    ...msg,
-    sender: msg.senderId === currentUserId ? 'me' : 'other',
-    senderName: msg.senderId === currentUserId ? currentUserName : (msg.username || chatName),
-  }));
+  // Messages for display, sorted by createdAt ascending
+  const displayMessages: DisplayMessage[] = storedMessages
+    .slice() // Create a shallow copy to avoid mutating the store's array
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .map(msg => ({
+        ...msg,
+        sender: msg.senderId === currentUserId ? 'me' : 'other',
+        senderName: msg.senderId === currentUserId ? currentUserName : (msg.username || chatName),
+        // avatar for other sender. If the message doesn't have an avatar, use the chat's general avatar or a default
+        avatar: msg.senderId === currentUserId ? currentUserAvatar : (msg.avatar || getChatById(chatId)?.avatar || 'https://i.pravatar.cc/150?img=' + msg.senderId),
+    }));
+
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
@@ -76,9 +87,53 @@ export default function ChatRoomScreen() {
     };
   }, [insets, navigation]);
 
+
+  const loadMessages = useCallback(async () => {
+    if (!chatId || !currentUserId) {
+        setMessagesLoading(false);
+        return;
+    }
+    setMessagesLoading(true);
+    try {
+        const response = await readChatMessages({
+            chat_id: chatId,
+            user_id: currentUserId,
+            offset: 0, // Load initial 50 messages
+        });
+
+        if (response.success && response.data?.chat) {
+            // Transform API response messages to Message type
+            const apiMessages: Message[] = response.data.chat.map((msg: any) => ({
+                id: msg.message_id,
+                senderId: msg.user_id,
+                text: msg.message,
+                createdAt: msg.timestamp,
+                username: msg.username, // Assuming API provides this
+                avatar: msg.avatar, // Assuming API provides this
+            })).sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()); // Sort by time ascending
+
+            setMessagesForChat(chatId, apiMessages);
+        } else {
+            console.error("Failed to load messages:", response.message);
+            setMessagesForChat(chatId, []); // Clear messages on error
+        }
+    } catch (error) {
+        console.error("Error fetching messages:", error);
+        setMessagesForChat(chatId, []); // Clear messages on error
+    } finally {
+        setMessagesLoading(false);
+    }
+  }, [chatId, currentUserId, setMessagesForChat]);
+
+  useEffect(() => {
+    loadMessages();
+  }, [loadMessages]);
+
+
   const handleSend = () => {
     if (!inputText.trim()) return;
 
+    // TODO: Send message to backend via API
     addMessage(chatId, inputText); // store handles user info automatically
     setInputText('');
   };
@@ -90,7 +145,8 @@ export default function ChatRoomScreen() {
         text: '清除',
         style: 'destructive',
         onPress: () => {
-          clearChat(chatId);
+          setMessagesForChat(chatId, []); // Clear messages locally
+          // TODO: API call to clear messages on backend if available
           Alert.alert('成功', '聊天记录已清除');
         }
       }
@@ -111,7 +167,7 @@ export default function ChatRoomScreen() {
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
-        avatar: 'https://i.pravatar.cc/150?img=' + chatId
+        avatar: chat?.avatar || 'https://i.pravatar.cc/150?img=' + chatId // Use chat's avatar
       });
     }
   };
@@ -135,10 +191,10 @@ export default function ChatRoomScreen() {
       roomStyles.messageRow,
       item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
     ]}>
-      {item.sender === 'other' && (
+      {(item.sender === 'other') && ( // Only show avatar for other sender
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: item.avatar || 'https://i.pravatar.cc/150?img=' + chatId }}
+            source={{ uri: item.avatar || 'https://i.pravatar.cc/150?img=' + item.senderId }}
             style={roomStyles.avatarImage}
           />
         </View>
@@ -147,6 +203,7 @@ export default function ChatRoomScreen() {
         roomStyles.bubble,
         item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
       ]}>
+        {item.sender === 'other' && <Text style={roomStyles.senderName}>{item.senderName}</Text>}
         <Text style={roomStyles.messageText}>{item.text}</Text>
         <Text style={roomStyles.timestamp}>
           {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
@@ -176,6 +233,15 @@ export default function ChatRoomScreen() {
     </TouchableOpacity>
   );
 
+  if (messagesLoading) {
+    return (
+      <View style={roomStyles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFB84D" />
+        <Text style={roomStyles.loadingText}>加载消息中...</Text>
+      </View>
+    );
+  }
+
   return (
     <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
@@ -194,7 +260,7 @@ export default function ChatRoomScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <FlatList
-            data={[...messages].reverse()}
+            data={[...displayMessages].reverse()} // Reverse for inverted FlatList
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
@@ -330,4 +396,6 @@ const roomStyles = RNStyleSheet.create({
     marginBottom: 6,
   },
   toolbarLabel: { fontSize: 12, color: '#333333' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF9E6' },
+  loadingText: { marginTop: 10, fontSize: 16, color: '#666' },
 });

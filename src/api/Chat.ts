@@ -126,7 +126,7 @@ export const readUserChats = async (user_id: string) => {
         console.log("readUserChats payload:", dataPayload);
 
         const response = await api.post("/chats/read", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
+            headers: { "Content-Type": undefined },
         });
 
         console.log("readUserChats response:", response.data);
@@ -179,7 +179,7 @@ export const readChatMessages = async ({
         console.log("readChatMessages payload:", dataPayload);
 
         const response = await api.post("/chats/message/read", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
+            headers: { "Content-Type": undefined },
         });
 
         console.log("readChatMessages response:", response.data);

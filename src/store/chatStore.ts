@@ -52,6 +52,8 @@ type ChatStore = {
   getTotalMessages: () => number;
   markAsRead: (chatId: string) => void;
   incrementUnread: (chatId: string) => void;
+  setMessagesForChat: (chatId: string, messages: Message[]) => void; // Add setMessagesForChat
+
 };
 
 export const useChatStore = create<ChatStore>()(
@@ -64,6 +66,15 @@ export const useChatStore = create<ChatStore>()(
         soundEnabled: true,
         vibrationEnabled: true,
         showPreview: true,
+      },
+
+      setMessagesForChat: (chatId, messages) => { // Implementation for setMessagesForChat
+        set(state => ({
+          chats: {
+            ...state.chats,
+            [chatId]: messages,
+          }
+        }));
       },
 
       // ⭐ addMessage 自动取 userStore 的用户

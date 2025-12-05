@@ -3,19 +3,14 @@ import api from './service';
 // Add this search user function
 export const searchUser = async (userId: string, token?: string) => {
     try {
-        const formData = new FormData();
+        const params = new URLSearchParams();
+        params.append('user_id', userId);
 
-        const dataPayload = {
-            user_id: userId,
-        };
+        console.log("searchUser payload:", { user_id: userId });
 
-        formData.append("data", JSON.stringify(dataPayload));
-
-        console.log("searchUser payload:", dataPayload);
-
-        const response = await api.post("/chats/users/search", formData, {
+        const response = await api.post("/chats/users/search", params, {
             headers: {
-                "Content-Type": "multipart/form-data",
+                "Content-Type": "application/x-www-form-urlencoded",
                 ...(token && { "Authorization": `Bearer ${token}` }),
             },
         });

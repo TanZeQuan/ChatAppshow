@@ -17,29 +17,8 @@ import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useContactStore } from "../../store/contactStore"; // 引入好友请求 store
 import { useFriendRequestStore } from "../../store/friendRequestStore";
-
-// Mock search function - replace with your actual API call
-const searchUserById = async (userId: string) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-
-  // Mock user data - replace with actual API response
-  if (userId.trim().length > 0) {
-    return {
-      id: userId,
-      name: `用户${userId}`,
-      avatar: `https://i.pravatar.cc/150?img=${userId}`,
-      bio: "这是个人简介",
-    };
-  }
-  return null;
-};
-
-// Mock function to send friend request
-const sendFriendRequest = async (userId: string) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return { success: true };
-};
+import { searchUser, createFriendRequest } from "../../api/Friend";
+import { useUserStore } from "../../store/userStore";
 
 export default function AddFriendScreen() {
   const navigation = useNavigation();
@@ -50,6 +29,7 @@ export default function AddFriendScreen() {
   const [requestSent, setRequestSent] = useState(false);
   const { addFriendRequest } = useContactStore();
   const { addRequest } = useFriendRequestStore();
+  const { token, user: currentUser } = useUserStore();
 
   const handleSearch = async () => {
     if (!searchText.trim()) {
@@ -62,11 +42,13 @@ export default function AddFriendScreen() {
     setRequestSent(false);
 
     try {
-      const user = await searchUserById(searchText.trim());
-      setSearchResult(user);
-
-      if (!user) {
-        Alert.alert("提示", "未找到该用户");
+      const response = await searchUser(searchText.trim(), token || undefined);
+      
+      if (response.success && response.user) {
+        setSearchResult(response.user);
+      } else {
+        setSearchResult(null);
+        Alert.alert("提示", response.message || "未找到该用户");
       }
     } catch (error) {
       Alert.alert("错误", "搜索失败，请重试");
@@ -77,21 +59,16 @@ export default function AddFriendScreen() {
   };
 
   const handleSendRequest = async () => {
-    if (!searchResult) return;
+    if (!searchResult || !currentUser?.id) return;
 
     try {
-      const result = await sendFriendRequest(searchResult.id);
+      const response = await createFriendRequest(currentUser.id, searchResult.id, "");
 
-      if (result.success) {
-        // ✅ 加入好友请求 store
-        addRequest({
-          id: searchResult.id,
-          name: searchResult.name,
-          avatar: searchResult.avatar,
-        });
-
+      if (response.success) {
         setRequestSent(true);
         Alert.alert("成功", "好友请求已发送", [{ text: "确定" }]);
+      } else {
+        Alert.alert("错误", response.message || "发送请求失败，请重试");
       }
     } catch (error) {
       Alert.alert("错误", "发送请求失败，请重试");

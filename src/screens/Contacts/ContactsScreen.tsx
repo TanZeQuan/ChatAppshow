@@ -18,6 +18,9 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
+import { readFriends } from "../../api/Friend";
+import { createPrivateChat } from "../../api/Chat";
+import { Alert } from "react-native";
 
 const { width, height } = Dimensions.get("window");
 
@@ -41,36 +44,64 @@ export default function ContactsScreen() {
   const sectionListRef = React.useRef<SectionList>(null);
 
   // Get data from Zustand stores
-  const { contacts } = useContactStore();
-  const { token } = useUserStore();
+  const { contacts, setContacts } = useContactStore(); // Added setContacts
+  const { token, user } = useUserStore(); // Added user from useUserStore
   useChatStore();
 
   // Fetch contacts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      if (token) {
+      if (token && user?.id) { // Check for user.id
         loadContacts();
       }
-    }, [token])
+    }, [token, user?.id]) // Added user?.id to dependencies
   );
 
   const loadContacts = async () => {
     try {
       setIsLoading(true);
 
-      // TODO: Replace with your actual API call
-      // const response = await getFriendRequests(token, 2);
-      // const contactsData = processApiResponse(response);
-      // setContacts(contactsData);
+      if (!token || !user?.id) {
+        setIsLoading(false);
+        return;
+      }
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Fetch accepted friends using the readFriends API
+      const response = await readFriends({
+        user_id: user.id,
+        request_id: user.id,
+        approve_id: user.id,
+        isstatus: 2, // 2 for Accepted Friends
+      });
 
-      // Demo: Keep existing contacts from store
+      if (response.success && response.data) {
+        // Combine and transform friends from 'request' and 'approve' arrays
+        const allFriends = [
+          ...(response.data.request || []),
+          ...(response.data.approve || []),
+        ];
+
+        // Remove duplicates based on user_id (since a friend can be in both request and approve arrays)
+        const uniqueFriends = Array.from(
+          new Map(allFriends.map((friend: any) => [friend.user_id, friend])).values()
+        );
+        
+        const transformedContacts = uniqueFriends.map((friend: any) => ({
+          id: friend.user_id,
+          name: friend.name,
+          avatar: friend.image || `https://i.pravatar.cc/150?img=${friend.user_id}`, // Use image for avatar, fallback to pravatar
+          online: false, // API doesn't provide online status, default to false
+        }));
+        setContacts(transformedContacts); // Update the store
+      } else {
+        console.error("Error fetching friends:", response.message);
+        setContacts([]); // Clear contacts on error
+      }
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading contacts:", error);
       setIsLoading(false);
+      setContacts([]); // Clear contacts on error
     }
   };
 
@@ -145,18 +176,42 @@ export default function ContactsScreen() {
     }
   };
 
-  const handleContactPress = (contact: any) => {
-    const parentNavigation = navigation.getParent();
+  const handleContactPress = async (contact: any) => {
+    if (!user?.id) {
+      Alert.alert("错误", "无法获取当前用户信息，请重新登录");
+      return;
+    }
 
-    if (parentNavigation) {
-      parentNavigation.navigate('ChatStack', {
-        screen: 'ChatRoom',
-        params: {
-          chatId: contact.id,
-          chatName: contact.name,
-          isGroup: false,
-        },
+    try {
+      // Create or get the private chat
+      const response = await createPrivateChat({
+        name: `Chat with ${contact.name}`,
+        user_id: user.id,
+        chat_with: contact.id,
+        group: [
+          { user_id: user.id, isadmin: 2 },
+          { user_id: contact.id, isadmin: 1 },
+        ],
       });
+
+      if (!response.error && typeof response.response === 'string') {
+        const parentNavigation = navigation.getParent();
+        if (parentNavigation) {
+          parentNavigation.navigate('ChatStack', {
+            screen: 'ChatRoom',
+            params: {
+              chatId: response.response, // Use chat_id from API's 'response' field
+              chatName: contact.name,
+              isGroup: false,
+            },
+          });
+        }
+      } else {
+        Alert.alert("错误", response.message || "无法打开聊天");
+      }
+    } catch (error) {
+      console.error("Error creating or getting private chat:", error);
+      Alert.alert("错误", "无法打开聊天，请重试");
     }
   };
 

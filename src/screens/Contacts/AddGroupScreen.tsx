@@ -19,6 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
+import { addGroup } from "../../api/Group"; // Import addGroup
 
 const { width, height } = Dimensions.get("window");
 
@@ -29,7 +30,7 @@ const scaleFont = (size: number) => (width / 375) * size;
 export default function AddGroupScreen() {
   const navigation = useNavigation<any>();
   const { contacts } = useContactStore();
-  const { token } = useUserStore();
+  const { token, user } = useUserStore();
   const { addChat } = useChatStore();
 
   const [searchText, setSearchText] = useState("");
@@ -66,49 +67,69 @@ export default function AddGroupScreen() {
   };
 
   const handleCreateGroup = async () => {
+    console.log("handleCreateGroup called"); // Log function start
+
     if (!groupName.trim()) {
       Alert.alert("错误", "请输入群聊名称");
       return;
     }
+    if (!user?.id) {
+      Alert.alert("错误", "无法获取当前用户信息，请重新登录");
+      return;
+    }
 
     try {
-      const selectedContacts = contacts.filter((c) =>
-        selectedMembers.includes(c.id)
-      );
+      const allMembers = Array.from(new Set([...selectedMembers, user.id]));
+      const groupMembers = allMembers.map((memberId) => ({
+        user_id: memberId,
+        isadmin: memberId === user.id ? 2 : 1, // Set creator as admin (2), others as regular members (1)
+      }));
 
-      const groupChatId = `group_${Date.now()}`;
-
-      const newGroupChat = {
-        id: groupChatId,
+      // Call the addGroup API
+      const apiResponse = await addGroup({
         name: groupName.trim(),
-        avatar: null,
-        isGroup: true,
-        members: selectedContacts,
-        memberIds: selectedMembers,
-        lastMessage: "群聊已创建",
-        timestamp: new Date().toISOString(),
-        unreadCount: 0,
-        online: false,
-      };
+        user_id: user.id, // Creator of the group
+        group: groupMembers,
+      });
 
-      addChat(newGroupChat);
-      setShowGroupNameModal(false);
+      console.log("API Response received:", JSON.stringify(apiResponse, null, 2)); // Log the full response
 
-      Alert.alert(
-        "成功",
-        `群聊 "${groupName}" 已创建！`,
-        [
-          {
-            text: "确定",
-            onPress: () => {
-              // Simply go back to the previous screen (Contact screen)
-              navigation.goBack();
+      if (!apiResponse.error && apiResponse.group_id) {
+        console.log("Group creation successful, proceeding to add chat to store."); // Log success branch
+        const newGroupChat = {
+          id: apiResponse.group_id, // Use the ID from the API response
+          name: groupName.trim(),
+          avatar: null, // API currently doesn't handle group avatars directly
+          isGroup: true,
+          members: contacts.filter(c => allMembers.includes(c.id)), // Filter actual contact objects
+          memberIds: allMembers,
+          lastMessage: "群聊已创建",
+          timestamp: new Date().toISOString(),
+          unreadCount: 0,
+          online: false,
+        };
+
+        addChat(newGroupChat);
+        setShowGroupNameModal(false);
+
+        Alert.alert(
+          "成功",
+          `群聊 "${groupName}" 已创建！`,
+          [
+            {
+              text: "确定",
+              onPress: () => {
+                navigation.goBack();
+              },
             },
-          },
-        ]
-      );
+          ]
+        );
+      } else {
+        console.log("Group creation failed. API response indicates an error or missing group_id."); // Log failure branch
+        Alert.alert("错误", apiResponse.message || "创建群聊失败，无法获取群组ID");
+      }
     } catch (error) {
-      console.error("Error creating group:", error);
+      console.error("Error creating group (catch block):", error); // Log caught error
       Alert.alert("错误", "创建群聊失败，请重试");
     }
   };

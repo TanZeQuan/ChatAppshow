@@ -26,6 +26,7 @@ type ContactStore = {
   removeContact: (contactId: string) => void;
   getContactById: (contactId: string) => Contact | undefined;
   getOnlineContacts: () => Contact[];
+  setContacts: (contacts: Contact[]) => void; // Added setContacts action
 
   // Friend Requests
   addFriendRequest: (request: FriendRequest) => void;
@@ -61,6 +62,8 @@ export const useContactStore = create<ContactStore>()(
 
       getOnlineContacts: () =>
         get().contacts.filter((c) => c.online === true),
+
+      setContacts: (contacts) => set({ contacts }), // Implementation for setContacts
 
       // Friend Requests
       addFriendRequest: (request) =>
