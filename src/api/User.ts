@@ -53,21 +53,34 @@ export const readUsers = async (userId: string) => {
 };
 
 // ✅ Search users
-export const searchUsers = async (query: string, userId?: string) => {
+export const searchUsers = async (searchQuery: string, currentUserId: string) => {
   try {
     const formData = new FormData();
     formData.append(
       "data",
       JSON.stringify({
-        search: query,
-        user_id: userId || "",
+        search: searchQuery,
+        user_id: currentUserId, // Current user ID for friend status check
       })
     );
 
-    const response = await api.post("/users/search", formData);
-    return { success: true, data: response.data };
+    const response = await api.post("/users/search", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    if (response.data?.error === true) {
+      return {
+        success: false,
+        message: response.data.message || "Search failed",
+        users: [], // Return empty array on error
+      };
+    }
+
+    // Assuming response.data.response is an array of user objects with friend status
+    return { success: true, users: response.data.response, message: response.data.message };
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
+    console.error('searchUsers error:', error.response?.data || error.message);
+    return { success: false, message: error.response?.data?.message || error.message, users: [] };
   }
 };
 

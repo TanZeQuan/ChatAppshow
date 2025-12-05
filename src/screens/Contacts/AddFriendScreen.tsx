@@ -17,42 +17,56 @@ import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useContactStore } from "../../store/contactStore"; // 引入好友请求 store
 import { useFriendRequestStore } from "../../store/friendRequestStore";
-import { searchUser, createFriendRequest } from "../../api/Friend";
+import { createFriendRequest } from "../../api/Friend";
+import { searchUsers } from "../../api/User"; // Import searchUsers from User API
 import { useUserStore } from "../../store/userStore";
 
 export default function AddFriendScreen() {
   const navigation = useNavigation();
+  const { addFriendRequest } = useContactStore(); // Not used, can be removed later
+  const { addRequest } = useFriendRequestStore(); // Not used, can be removed later
+  const { token, user: currentUser } = useUserStore(); // Get current user
+
   const [searchText, setSearchText] = useState("");
-  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchResult, setSearchResult] = useState<any | null>(null); // searchResult will now hold more properties
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [requestSent, setRequestSent] = useState(false);
-  const { addFriendRequest } = useContactStore();
-  const { addRequest } = useFriendRequestStore();
-  const { token, user: currentUser } = useUserStore();
+  // const [requestSent, setRequestSent] = useState(false); // No longer needed, status is in searchResult
 
   const handleSearch = async () => {
     if (!searchText.trim()) {
-      Alert.alert("提示", "请输入账号ID");
+      Alert.alert("提示", "请输入账号ID或手机号");
       return;
+    }
+    if (!currentUser?.id) {
+        Alert.alert("错误", "无法获取当前用户信息，请重新登录");
+        return;
     }
 
     setIsSearching(true);
     setHasSearched(true);
-    setRequestSent(false);
+    // setRequestSent(false); // No longer needed
 
     try {
-      const response = await searchUser(searchText.trim(), token || undefined);
+      const response = await searchUsers(searchText.trim(), currentUser.id); // Use new searchUsers API
       
-      if (response.success && response.user) {
-        setSearchResult(response.user);
+      if (response.success && response.users && response.users.length > 0) {
+        const foundUser = response.users[0]; // Assuming we display the first result
+        setSearchResult({
+          id: foundUser.user_id,
+          name: foundUser.name,
+          avatar: foundUser.image || `https://i.pravatar.cc/150?img=${foundUser.user_id}`,
+          bio: foundUser.about,
+          request_by: foundUser.request_by, // Friend status
+          isstatus: foundUser.isstatus   // Friend status
+        });
       } else {
         setSearchResult(null);
         Alert.alert("提示", response.message || "未找到该用户");
       }
     } catch (error) {
+      console.error("Search failed:", error);
       Alert.alert("错误", "搜索失败，请重试");
-      console.error(error);
     } finally {
       setIsSearching(false);
     }
@@ -61,11 +75,32 @@ export default function AddFriendScreen() {
   const handleSendRequest = async () => {
     if (!searchResult || !currentUser?.id) return;
 
+    // Check existing friend status
+    if (searchResult.isstatus === 1) { // Pending
+        if (searchResult.request_by === 1) { // Current user sent request
+            Alert.alert("提示", "您已发送好友请求，请等待对方同意");
+        } else if (searchResult.request_by === 2) { // Other user sent request
+            Alert.alert("提示", "对方已发送好友请求，请前往好友请求页面处理");
+        }
+        return;
+    } else if (searchResult.isstatus === 2) { // Accepted
+        Alert.alert("提示", "对方已是您的好友");
+        return;
+    } else if (searchResult.isstatus === 4) { // Blocked
+        Alert.alert("提示", "该用户已被您拉黑");
+        return;
+    }
+
     try {
       const response = await createFriendRequest(currentUser.id, searchResult.id, "");
 
       if (response.success) {
-        setRequestSent(true);
+        // Optimistically update status to Pending (I sent request) in searchResult for UI
+        setSearchResult((prev: any) => ({
+          ...prev,
+          isstatus: 1,
+          request_by: 1,
+        }));
         Alert.alert("成功", "好友请求已发送", [{ text: "确定" }]);
       } else {
         Alert.alert("错误", response.message || "发送请求失败，请重试");
@@ -117,7 +152,6 @@ export default function AddFriendScreen() {
                 setSearchText(text);
                 setHasSearched(false);
                 setSearchResult(null);
-                setRequestSent(false);
               }}
               autoCapitalize="none"
               autoCorrect={false}
@@ -129,7 +163,6 @@ export default function AddFriendScreen() {
                 setSearchText("");
                 setSearchResult(null);
                 setHasSearched(false);
-                setRequestSent(false);
               }}>
                 <Ionicons name="close-circle" size={18} color="#9ca3af" />
               </TouchableOpacity>
@@ -167,7 +200,8 @@ export default function AddFriendScreen() {
                 </View>
               </View>
 
-              {!requestSent ? (
+              {/* Add/Status Button */}
+              {searchResult.isstatus === 0 ? ( // No relation
                 <TouchableOpacity
                   style={styles.addButton}
                   onPress={handleSendRequest}
@@ -175,12 +209,24 @@ export default function AddFriendScreen() {
                   <Ionicons name="person-add" size={18} color="#78350f" />
                   <Text style={styles.addButtonText}>添加好友</Text>
                 </TouchableOpacity>
-              ) : (
+              ) : searchResult.isstatus === 1 ? ( // Pending
+                <View style={styles.sentContainer}>
+                  <Ionicons name="time-outline" size={18} color="#FF9800" />
+                  <Text style={styles.sentText}>
+                    {searchResult.request_by === 1 ? "请求已发送" : "待处理请求"}
+                  </Text>
+                </View>
+              ) : searchResult.isstatus === 2 ? ( // Accepted
                 <View style={styles.sentContainer}>
                   <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-                  <Text style={styles.sentText}>已发送请求</Text>
+                  <Text style={styles.rewordingSentText}>已是好友</Text>
                 </View>
-              )}
+              ) : searchResult.isstatus === 4 ? ( // Blocked
+                <View style={styles.sentContainer}>
+                  <Ionicons name="ban-outline" size={18} color="#F44336" />
+                  <Text style={styles.sentText}>已拉黑</Text>
+                </View>
+              ) : null}
             </View>
           )}
 
@@ -377,6 +423,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
     color: "#16a34a",
+  },
+  rewordingSentText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#333",
   },
   noResultContainer: {
     alignItems: "center",
