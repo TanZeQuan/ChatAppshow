@@ -53,7 +53,22 @@ export default function GroupRoomScreen() {
     // Get real-time data from store
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '群聊';
-    const members = groupChat?.members || params.members || [];
+    // 生成包含自己的成员列表
+    const membersWithSelf = [
+        ...(groupChat?.members || params.members || []),
+        ...(currentUser
+            ? [{
+                id: currentUserId,
+                name: currentUser.name || '我',
+                avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUserId}`,
+            }]
+            : []
+        ),
+    ];
+
+    // 去重，避免重复
+    const uniqueMembers = Array.from(new Map(membersWithSelf.map(m => [m.id, m])).values());
+
     const memberIds = groupChat?.memberIds || [];
 
     const storedMessages = chats[chatId] || [];
@@ -63,15 +78,13 @@ export default function GroupRoomScreen() {
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
 
     const messages: DisplayMessage[] = storedMessages.map(msg => {
-        // Find the member who sent this message
-        const member = members.find(m => m.id === msg.senderId);
-
+        const member = uniqueMembers.find(m => m.id === msg.senderId); // ⚡用 uniqueMembers
         return {
             ...msg,
             sender: msg.senderId === currentUserId ? 'me' : 'other',
             senderName: msg.senderId === currentUserId
-                ? (currentUser?.name || '我')
-                : (member?.name || msg.username || '未知成员'),
+                ? `${currentUser?.name || '我'} (我)` // ⚡显示自己
+                : (member?.name || msg.name || '未知成员'),
             avatar: msg.senderId === currentUserId
                 ? currentUser?.avatar
                 : (member?.avatar || msg.avatar),
@@ -114,7 +127,7 @@ export default function GroupRoomScreen() {
         navigation.navigate('GroupSettingScreen', {
             chatId: chatId,
             chatName: chatName,
-            members: members,
+            members: memberIds,
             memberIds: memberIds,
         });
     };
@@ -191,7 +204,7 @@ export default function GroupRoomScreen() {
                     <View style={roomStyles.headerCenter}>
                         <Text style={roomStyles.headerTitle}>{chatName}</Text>
                         <Text style={roomStyles.headerSubtitle}>
-                            {members.length} 位成员
+                             {uniqueMembers.length} 位成员
                         </Text>
                     </View>
                     <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>

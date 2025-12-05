@@ -10,6 +10,7 @@ import {
   Dimensions,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,6 +19,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
+import { readFriends } from "../../api/Friend";
 
 const { width, height } = Dimensions.get("window");
 
@@ -41,7 +43,7 @@ export default function ContactsScreen() {
   const sectionListRef = React.useRef<SectionList>(null);
 
   // Get data from Zustand stores
-  const { contacts } = useContactStore();
+  const { contacts, setContacts } = useContactStore();
   const { token } = useUserStore();
   useChatStore();
 
@@ -51,6 +53,7 @@ export default function ContactsScreen() {
       if (token) {
         loadContacts();
       }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token])
   );
 
@@ -58,19 +61,60 @@ export default function ContactsScreen() {
     try {
       setIsLoading(true);
 
-      // TODO: Replace with your actual API call
-      // const response = await getFriendRequests(token, 2);
-      // const contactsData = processApiResponse(response);
-      // setContacts(contactsData);
+      // Fetch approved friends (isstatus = 2)
+      const result = await readFriends(2);
 
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log("loadContacts result:", result);
 
-      // Demo: Keep existing contacts from store
+      if (result.success && result.data) {
+        // Combine request and approve arrays
+        const allFriends = [
+          ...(result.data.request || []),
+          ...(result.data.approve || [])
+        ];
+
+        // Transform API response to contact format
+        const formattedContacts = allFriends.map((friend: any) => {
+          // Try different possible field names from API
+          const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
+          const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
+          const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
+
+          console.log(`Contact ${userId}: avatar = ${userAvatar}`);
+
+          return {
+            id: userId,
+            name: userName,
+            avatar: userAvatar,
+            online: friend.online || friend.is_online || false,
+            rawData: friend, // Store original data for reference
+          };
+        });
+
+        // Remove duplicates based on id
+        const uniqueContacts = Array.from(
+          new Map(formattedContacts.map(contact => [contact.id, contact])).values()
+        );
+
+        console.log("Formatted contacts:", uniqueContacts);
+
+        setContacts(uniqueContacts);
+      } else {
+        console.error("Failed to load contacts:", result.message);
+        // Don't clear existing contacts on error, just show error message
+        if (contacts.length === 0) {
+          Alert.alert("加载失败", result.message || "无法加载联系人列表");
+        }
+      }
+
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading contacts:", error);
       setIsLoading(false);
+      
+      if (contacts.length === 0) {
+        Alert.alert("错误", "加载联系人时出错，请稍后重试");
+      }
     }
   };
 
@@ -121,7 +165,7 @@ export default function ContactsScreen() {
     return (
       cleanName.includes(searchLower) ||
       fullName.includes(searchLower) ||
-      c.id.toLowerCase().includes(searchLower)
+      (c.id && c.id.toString().toLowerCase().includes(searchLower))
     );
   });
 

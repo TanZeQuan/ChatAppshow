@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -15,45 +15,50 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import { useContactStore } from "../../store/contactStore"; // 引入好友请求 store
 import { useFriendRequestStore } from "../../store/friendRequestStore";
+import { useUserStore } from "../../store/userStore";
+import { searchUser, createFriendRequest } from "../../api/Friend";
 
-// Mock search function - replace with your actual API call
-const searchUserById = async (userId: string) => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 800));
-
-  // Mock user data - replace with actual API response
-  if (userId.trim().length > 0) {
-    return {
-      id: userId,
-      name: `用户${userId}`,
-      avatar: `https://i.pravatar.cc/150?img=${userId}`,
-      bio: "这是个人简介",
-    };
-  }
-  return null;
-};
-
-// Mock function to send friend request
-const sendFriendRequest = async (userId: string) => {
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return { success: true };
-};
+// Define proper types matching API response
+interface SearchResult {
+  user_id: string;
+  name: string;
+  image: string;
+  phone: string;
+  about?: string;
+  isstatus: number;
+}
 
 export default function AddFriendScreen() {
   const navigation = useNavigation();
   const [searchText, setSearchText] = useState("");
-  const [searchResult, setSearchResult] = useState<any>(null);
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
-  useContactStore();
+  
   const { addRequest } = useFriendRequestStore();
+  const currentUser = useUserStore((state) => state.user);
+  
+  // Prevent memory leaks
+  const isMounted = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
 
   const handleSearch = async () => {
     if (!searchText.trim()) {
       Alert.alert("提示", "请输入账号ID");
+      return;
+    }
+
+    // Prevent self-search
+    if (currentUser && searchText.trim() === currentUser.id) {
+      Alert.alert("提示", "不能添加自己为好友");
       return;
     }
 
@@ -62,50 +67,108 @@ export default function AddFriendScreen() {
     setRequestSent(false);
 
     try {
-      const user = await searchUserById(searchText.trim());
-      setSearchResult(user);
-
-      if (!user) {
-        Alert.alert("提示", "未找到该用户");
+      const result = await searchUser(searchText.trim());
+      
+      console.log("=== Search Result Debug ===");
+      console.log("Full result:", JSON.stringify(result, null, 2));
+      console.log("result.success:", result.success);
+      console.log("result.user:", result.user);
+      console.log("Is array:", Array.isArray(result.user));
+      console.log("Array length:", result.user?.length);
+      
+      if (!isMounted.current) return;
+      
+      // API returns response as an array, get the first item
+      if (result.success && result.user && Array.isArray(result.user) && result.user.length > 0) {
+        const userData = result.user[0]; // Get first result
+        console.log("✅ User found:", userData);
+        setSearchResult(userData);
+      } else {
+        console.log("❌ No user found");
+        setSearchResult(null);
+        Alert.alert("提示", result.message || "未找到该用户");
       }
     } catch (error) {
+      if (!isMounted.current) return;
       Alert.alert("错误", "搜索失败，请重试");
       console.error(error);
     } finally {
-      setIsSearching(false);
+      if (isMounted.current) {
+        setIsSearching(false);
+      }
     }
   };
 
   const handleSendRequest = async () => {
     if (!searchResult) return;
 
+    setIsSending(true);
+
     try {
-      const result = await sendFriendRequest(searchResult.id);
+      // Use user_id from the search result
+      const result = await createFriendRequest(searchResult.user_id);
+
+      if (!isMounted.current) return;
 
       if (result.success) {
-        // ✅ 加入好友请求 store
+        // Add to friend request store with correct field mapping
         addRequest({
-          id: searchResult.id,
+          id: searchResult.user_id,
           name: searchResult.name,
-          avatar: searchResult.avatar,
+          avatar: searchResult.image,
         });
 
         setRequestSent(true);
-        Alert.alert("成功", "好友请求已发送", [{ text: "确定" }]);
+        Alert.alert("成功", "好友请求已发送", [
+          { 
+            text: "确定",
+            onPress: () => {
+              // Optionally navigate to FriendRequest screen
+              // navigation.navigate("FriendRequest" as never);
+            }
+          }
+        ]);
+      } else {
+        // Handle specific error cases
+        const errorMessage = result.message || "发送请求失败";
+        
+        if (errorMessage.includes("已经是好友") || errorMessage.includes("already friends")) {
+          Alert.alert("提示", "你们已经是好友了");
+        } else if (errorMessage.includes("已发送") || errorMessage.includes("pending")) {
+          Alert.alert("提示", "已有待处理的好友请求");
+          setRequestSent(true);
+        } else if (errorMessage.includes("不能添加自己") || errorMessage.includes("cannot add yourself")) {
+          Alert.alert("提示", "不能添加自己为好友");
+        } else {
+          Alert.alert("错误", errorMessage);
+        }
       }
     } catch (error) {
+      if (!isMounted.current) return;
       Alert.alert("错误", "发送请求失败，请重试");
       console.error(error);
+    } finally {
+      if (isMounted.current) {
+        setIsSending(false);
+      }
     }
   };
 
-
   const handleScanQR = () => {
-    console.log("Scan QR Code");
+    // TODO: Implement QR scanner navigation
+    // navigation.navigate("QRScanner" as never);
+    Alert.alert("提示", "扫描功能即将推出");
   };
 
   const handleMyQR = () => {
     navigation.navigate("FriendRequest" as never);
+  };
+
+  const handleClearSearch = () => {
+    setSearchText("");
+    setSearchResult(null);
+    setHasSearched(false);
+    setRequestSent(false);
   };
 
   return (
@@ -146,14 +209,10 @@ export default function AddFriendScreen() {
               autoCorrect={false}
               returnKeyType="search"
               onSubmitEditing={handleSearch}
+              editable={!isSearching}
             />
             {searchText.length > 0 && (
-              <TouchableOpacity onPress={() => {
-                setSearchText("");
-                setSearchResult(null);
-                setHasSearched(false);
-                setRequestSent(false);
-              }}>
+              <TouchableOpacity onPress={handleClearSearch}>
                 <Ionicons name="close-circle" size={18} color="#9ca3af" />
               </TouchableOpacity>
             )}
@@ -161,9 +220,9 @@ export default function AddFriendScreen() {
 
           {/* Search Button */}
           <TouchableOpacity
-            style={styles.searchButton}
+            style={[styles.searchButton, isSearching && styles.searchButtonDisabled]}
             onPress={handleSearch}
-            disabled={isSearching}
+            disabled={isSearching || !searchText.trim()}
           >
             {isSearching ? (
               <ActivityIndicator color="#78350f" />
@@ -172,36 +231,46 @@ export default function AddFriendScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Search Result */}
+          {/* Search Result - Compact Horizontal Card */}
           {hasSearched && searchResult && (
-            <View style={styles.resultContainer}>
-              <Text style={styles.resultTitle}>搜索结果</Text>
-              <View style={styles.userCard}>
-                <Image
-                  source={{ uri: searchResult.avatar }}
-                  style={styles.userAvatar}
-                />
-                <View style={styles.userInfo}>
-                  <Text style={styles.userName}>{searchResult.name}</Text>
-                  <Text style={styles.userId}>ID: {searchResult.id}</Text>
-                  {searchResult.bio && (
-                    <Text style={styles.userBio}>{searchResult.bio}</Text>
-                  )}
-                </View>
+            <View style={styles.resultCard}>
+              {/* Left: Avatar */}
+              <Image
+                source={{ uri: searchResult.image }}
+                style={styles.resultAvatar}
+              />
+              
+              {/* Middle: User Info */}
+              <View style={styles.resultInfo}>
+                <Text style={styles.resultName} numberOfLines={1}>
+                  {searchResult.name}
+                </Text>
+                <Text style={styles.resultId} numberOfLines={1}>
+                  ID: {searchResult.user_id}
+                </Text>
+                {searchResult.phone && (
+                  <Text style={styles.resultPhone} numberOfLines={1}>
+                    📱 {searchResult.phone}
+                  </Text>
+                )}
               </View>
 
+              {/* Right: Add Button */}
               {!requestSent ? (
                 <TouchableOpacity
-                  style={styles.addButton}
+                  style={[styles.addIconButton, isSending && styles.addIconButtonDisabled]}
                   onPress={handleSendRequest}
+                  disabled={isSending}
                 >
-                  <Ionicons name="person-add" size={18} color="#78350f" />
-                  <Text style={styles.addButtonText}>添加好友</Text>
+                  {isSending ? (
+                    <ActivityIndicator color="#78350f" size="small" />
+                  ) : (
+                    <Ionicons name="person-add" size={24} color="#78350f" />
+                  )}
                 </TouchableOpacity>
               ) : (
-                <View style={styles.sentContainer}>
-                  <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-                  <Text style={styles.sentText}>已发送请求</Text>
+                <View style={styles.addedIconButton}>
+                  <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
                 </View>
               )}
             </View>
@@ -211,6 +280,7 @@ export default function AddFriendScreen() {
             <View style={styles.noResultContainer}>
               <Ionicons name="search-outline" size={48} color="#d1d5db" />
               <Text style={styles.noResultText}>未找到该用户</Text>
+              <Text style={styles.noResultSubtext}>请检查账号ID是否正确</Text>
             </View>
           )}
 
@@ -228,6 +298,7 @@ export default function AddFriendScreen() {
                 </View>
                 <Text style={styles.actionLabel}>扫描名片</Text>
               </View>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
 
             {/* My QR Code → FriendRequest */}
@@ -321,8 +392,214 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
+  searchButtonDisabled: {
+    opacity: 0.6,
+  },
   searchButtonText: {
     fontSize: 15,
+    fontWeight: "600",
+    color: "#78350f",
+  },
+  // Compact Result Card Styles
+  resultCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "white",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  resultAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#f3f4f6",
+    marginRight: 12,
+  },
+  resultInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  resultName: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#1f2937",
+    marginBottom: 4,
+  },
+  resultId: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginBottom: 2,
+  },
+  resultPhone: {
+    fontSize: 12,
+    color: "#9ca3af",
+  },
+  addIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#fbbf24",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  addIconButtonDisabled: {
+    opacity: 0.6,
+  },
+  addedIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#dcfce7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  // Profile Card Styles
+  profileCard: {
+    backgroundColor: "white",
+    borderRadius: 16,
+    marginBottom: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  profileHeader: {
+    height: 100,
+    position: "relative",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  profileHeaderGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  avatarContainer: {
+    marginTop: 40,
+    position: "relative",
+  },
+  profileAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 4,
+    borderColor: "white",
+    backgroundColor: "#f3f4f6",
+  },
+  avatarBorder: {
+    position: "absolute",
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderRadius: 42,
+    borderWidth: 2,
+    borderColor: "#fbbf24",
+  },
+  profileInfo: {
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
+    alignItems: "center",
+  },
+  profileName: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1f2937",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  profileId: {
+    fontSize: 14,
+    color: "#6b7280",
+    marginBottom: 16,
+    fontWeight: "500",
+  },
+  detailsContainer: {
+    width: "100%",
+    backgroundColor: "#f9fafb",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    gap: 10,
+  },
+  detailRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  detailText: {
+    fontSize: 14,
+    color: "#374151",
+    flex: 1,
+  },
+  actionButtonsContainer: {
+    width: "100%",
+    gap: 10,
+  },
+  primaryButton: {
+    flexDirection: "row",
+    backgroundColor: "#fbbf24",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    shadowColor: "#fbbf24",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#ffffff",
+  },
+  successButton: {
+    flexDirection: "row",
+    backgroundColor: "#dcfce7",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 2,
+    borderColor: "#86efac",
+  },
+  successButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#16a34a",
+  },
+  secondaryButton: {
+    flexDirection: "row",
+    backgroundColor: "white",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderWidth: 2,
+    borderColor: "#fbbf24",
+  },
+  secondaryButtonText: {
+    fontSize: 16,
     fontWeight: "600",
     color: "#78350f",
   },
@@ -372,6 +649,11 @@ const styles = StyleSheet.create({
   userBio: {
     fontSize: 12,
     color: "#9ca3af",
+    marginBottom: 2,
+  },
+  userPhone: {
+    fontSize: 12,
+    color: "#9ca3af",
   },
   addButton: {
     flexDirection: "row",
@@ -381,6 +663,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
+  },
+  addButtonDisabled: {
+    opacity: 0.6,
   },
   addButtonText: {
     fontSize: 15,
@@ -411,6 +696,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#9ca3af",
     marginTop: 12,
+    fontWeight: "500",
+  },
+  noResultSubtext: {
+    fontSize: 12,
+    color: "#d1d5db",
+    marginTop: 4,
   },
   actionsContainer: {
     gap: 16,
