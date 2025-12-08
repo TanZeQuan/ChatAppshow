@@ -64,8 +64,6 @@ export default function ContactsScreen() {
       // Fetch approved friends (isstatus = 2)
       const result = await readFriends(2);
 
-      console.log("loadContacts result:", result);
-
       if (result.success && result.data) {
         // Combine request and approve arrays
         const allFriends = [
@@ -80,13 +78,13 @@ export default function ContactsScreen() {
           const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
           const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
 
-          console.log(`Contact ${userId}: avatar = ${userAvatar}`);
-
           return {
             id: userId,
             name: userName,
             avatar: userAvatar,
             online: friend.online || friend.is_online || false,
+            listId: friend.list_id || friend.listId || 0,
+            isFriend: true,
             rawData: friend, // Store original data for reference
           };
         });
@@ -95,8 +93,6 @@ export default function ContactsScreen() {
         const uniqueContacts = Array.from(
           new Map(formattedContacts.map(contact => [contact.id, contact])).values()
         );
-
-        console.log("Formatted contacts:", uniqueContacts);
 
         setContacts(uniqueContacts);
       } else {
@@ -184,7 +180,6 @@ export default function ContactsScreen() {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (error) {
         // Fallback if scrollToLocation fails
-        console.log('Scroll to letter:', letter);
       }
     }
   };

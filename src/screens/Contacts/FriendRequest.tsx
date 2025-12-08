@@ -141,6 +141,8 @@ export default function FriendRequestScreen() {
                   name: item.name,
                   avatar: item.image,
                   online: true,
+                  listId: undefined,
+                  isFriend: false
                 });
 
                 // Remove from local request store if exists

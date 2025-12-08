@@ -131,14 +131,12 @@ export default function ChatListScreen() {
       if (currentUserId && currentUserId !== 'YOUR_CURRENT_USER_ID') {
         const chatsResult = await readUserChats(currentUserId);
         if (chatsResult.success) {
-          console.log("Refreshed chats:", chatsResult.data);
           // Update your chat store here if needed
         }
 
         // 2️⃣ Refresh friends/contacts
         const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
         if (friendsResult.success) {
-          console.log("Refreshed friends:", friendsResult.data);
           // Update your contact store here if needed
         }
       }
