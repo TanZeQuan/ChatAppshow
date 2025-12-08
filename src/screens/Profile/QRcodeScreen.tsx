@@ -53,20 +53,15 @@ export default function QRCodeScreen() {
     };
 
     const pickImageForScan = async () => {
-        Alert.alert(
-            '相册扫码功能',
-            '相册扫码功能需要重新编译应用才能使用。\n\n请运行以下命令重新编译：\n\nnpx expo run:android\n或\nnpx expo run:ios',
-            [{ text: '知道了' }]
-        );
-
-        /* TODO: 需要重新编译应用后启用此功能
         try {
+            // 请求相册权限
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('权限被拒绝', '需要相册权限才能从图片中扫描二维码');
+                Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
                 return;
             }
 
+            // 打开相册选择图片
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: false,
@@ -75,25 +70,18 @@ export default function QRCodeScreen() {
 
             if (result.canceled) return;
 
-            // 需要 expo-barcode-scanner 原生模块
-            const BarCodeScanner = require('expo-barcode-scanner').BarCodeScanner;
-            const scannedData = await BarCodeScanner.scanFromURLAsync(result.assets[0].uri);
+            // 图片已选择，显示提示
+            Alert.alert(
+                '图片已选择',
+                '从图片中扫描二维码功能需要重新编译应用。\n\n请运行以下命令：\nnpx expo run:android\n或\nnpx expo run:ios\n\n编译后即可使用相册扫码功能。',
+                [{ text: '知道了' }]
+            );
 
-            if (scannedData && scannedData.length > 0) {
-                const { type, data } = scannedData[0];
-                Alert.alert(
-                    '扫码成功',
-                    `类型: ${type}\n数据: ${data}`,
-                    [{ text: '确定' }]
-                );
-            } else {
-                Alert.alert('扫码失败', '图片中未检测到二维码或条形码');
-            }
+            console.log('Selected image for scan:', result.assets[0].uri);
         } catch (error) {
-            console.error('相册扫码错误:', error);
-            Alert.alert('扫码失败', '从图片中扫描二维码时出错');
+            console.error('选择图片错误:', error);
+            Alert.alert('选择失败', '选择图片时出错');
         }
-        */
     };
 
     if (showScanner) {
