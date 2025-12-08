@@ -45,10 +45,11 @@ export default function ChatListScreen() {
     }, [])
   );
 
-  // Build comprehensive chat list combining chatList and contacts
+  // Build comprehensive chat list - keeping only the LATEST chat for each unique contact/group
   const allChats = useMemo(() => {
     const chatMap = new Map<string, any>();
 
+    // Process chatList first (these have actual message history)
     chatList.forEach(chat => {
       const membersWithSelf = [
         ...(chat.members || []),
@@ -58,18 +59,38 @@ export default function ChatListScreen() {
       ];
 
       const uniqueMembers = Array.from(new Map(membersWithSelf.map(m => [m.id, m])).values());
+      
+      // Create a unique key based on participants (sorted to ensure consistency)
+      const participantKey = chat.isGroup 
+        ? chat.id // Use chat ID for groups
+        : uniqueMembers
+            .map(m => m.id)
+            .filter(id => id !== currentUserId)
+            .sort()
+            .join('-'); // Create key from other participants
 
-      chatMap.set(chat.id, {
-        ...chat,
-        members: uniqueMembers,
-        memberIds: uniqueMembers.map(m => m.id),
-      });
+      const existingChat = chatMap.get(participantKey);
+      const chatTimestamp = new Date(chat.timestamp || 0).getTime();
+      const existingTimestamp = existingChat ? new Date(existingChat.timestamp || 0).getTime() : 0;
+
+      // Only keep the chat with the most recent timestamp
+      if (!existingChat || chatTimestamp > existingTimestamp) {
+        chatMap.set(participantKey, {
+          ...chat,
+          members: uniqueMembers,
+          memberIds: uniqueMembers.map(m => m.id),
+        });
+      }
     });
 
+    // Add contacts that don't have any chat history yet
     contacts.forEach(contact => {
-      if (!chatMap.has(contact.id)) {
+      const participantKey = contact.id;
+      
+      // Only add if there's no existing chat with this contact
+      if (!chatMap.has(participantKey)) {
         const lastMessage = getLastMessage(contact.id);
-        chatMap.set(contact.id, {
+        chatMap.set(participantKey, {
           id: contact.id,
           name: contact.name.replace(/^用户/, ''),
           avatar: contact.avatar,
@@ -84,6 +105,7 @@ export default function ChatListScreen() {
       }
     });
 
+    // Sort by timestamp (most recent first)
     return Array.from(chatMap.values()).sort((a, b) => {
       if (!a.timestamp) return 1;
       if (!b.timestamp) return -1;
