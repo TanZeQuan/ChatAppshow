@@ -1,18 +1,22 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from "@react-navigation/native";
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useLayoutEffect, useState } from 'react';
 import {
+    Dimensions,
+    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
     View,
-    Dimensions,
-    StatusBar
+    Alert,
+    Button
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Rect, Line } from 'react-native-svg';
-import { useNavigation } from "@react-navigation/native";
+import Svg, { Line, Rect } from 'react-native-svg';
 import { getOriginalTabBarStyle } from '../../components/tabstyle';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
 
 const { width } = Dimensions.get('window');
 
@@ -20,6 +24,8 @@ export default function QRCodeScreen() {
     const navigation = useNavigation();
     const insets = useSafeAreaInsets();
     const [showScanner, setShowScanner] = useState(false);
+    const [permission, requestPermission] = useCameraPermissions();
+    const [scanned, setScanned] = useState(false);
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
@@ -35,7 +41,72 @@ export default function QRCodeScreen() {
         };
     }, [insets, navigation]);
 
+    const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+        setScanned(true);
+        Alert.alert(
+            '扫码成功',
+            `类型: ${type}\n数据: ${data}`,
+            [
+                { text: '确定', onPress: () => setScanned(false) }
+            ]
+        );
+    };
+
+    const pickImageForScan = async () => {
+        try {
+            // 请求相册权限
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
+                return;
+            }
+
+            // 打开相册选择图片
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: false,
+                quality: 1,
+            });
+
+            if (result.canceled) return;
+
+            // 图片已选择，显示提示
+            Alert.alert(
+                '图片已选择',
+                '从图片中扫描二维码功能需要重新编译应用。\n\n请运行以下命令：\nnpx expo run:android\n或\nnpx expo run:ios\n\n编译后即可使用相册扫码功能。',
+                [{ text: '知道了' }]
+            );
+
+            console.log('Selected image for scan:', result.assets[0].uri);
+        } catch (error) {
+            console.error('选择图片错误:', error);
+            Alert.alert('选择失败', '选择图片时出错');
+        }
+    };
+
     if (showScanner) {
+        // 权限检查
+        if (!permission) {
+            return (
+                <View style={styles.container}>
+                    <Text style={{ color: 'white', textAlign: 'center', margin: 20 }}>
+                        正在请求相机权限...
+                    </Text>
+                </View>
+            );
+        }
+
+        if (!permission.granted) {
+            return (
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                    <Text style={{ color: 'white', textAlign: 'center', marginBottom: 20 }}>
+                        需要相机权限才能扫描二维码
+                    </Text>
+                    <Button onPress={requestPermission} title="授予权限" />
+                </View>
+            );
+        }
+
         return (
             <LinearGradient
                 colors={['#4a5568', '#2d3748']}
@@ -57,22 +128,32 @@ export default function QRCodeScreen() {
 
                     {/* Scanner Content */}
                     <View style={styles.scannerContent}>
-                        {/* Scanning Frame */}
+                        {/* Camera View - 全屏背景 */}
+                        <CameraView
+                            style={StyleSheet.absoluteFillObject}
+                            facing="back"
+                            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+                            barcodeScannerSettings={{
+                                barcodeTypes: ["qr", "ean13", "ean8", "code128"],
+                            }}
+                        />
+
+                        {/* Scanning Frame - 叠加在相机上 */}
                         <View style={styles.scannerFrame}>
                             <Svg width="100%" height="100%" viewBox="0 0 200 200">
                                 {/* Corner brackets */}
                                 {/* Top-left */}
                                 <Line x1="10" y1="50" x2="10" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
                                 <Line x1="10" y1="10" x2="50" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                
+
                                 {/* Top-right */}
                                 <Line x1="150" y1="10" x2="190" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
                                 <Line x1="190" y1="10" x2="190" y2="50" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                
+
                                 {/* Bottom-left */}
                                 <Line x1="10" y1="150" x2="10" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
                                 <Line x1="10" y1="190" x2="50" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                
+
                                 {/* Bottom-right */}
                                 <Line x1="150" y1="190" x2="190" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
                                 <Line x1="190" y1="150" x2="190" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
@@ -84,7 +165,10 @@ export default function QRCodeScreen() {
 
                     {/* Scanner Actions */}
                     <View style={styles.scannerActions}>
-                        <TouchableOpacity style={styles.scannerActionButton}>
+                        <TouchableOpacity
+                            style={styles.scannerActionButton}
+                            onPress={pickImageForScan}
+                        >
                             <View style={styles.scannerActionIconContainer}>
                                 <Ionicons name="albums-outline" size={28} color="white" />
                             </View>

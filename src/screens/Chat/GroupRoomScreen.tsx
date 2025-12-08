@@ -25,6 +25,7 @@ import { useUserStore } from '@/src/store/userStore';
 import { readChatMessages } from '../../api/Chat';
 import { Audio } from 'expo-av';
 import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
+import * as ImagePicker from 'expo-image-picker';
 
 interface DisplayMessage {
     id: string;
@@ -293,6 +294,32 @@ export default function GroupRoomScreen() {
         });
     };
 
+    const pickImage = async () => {
+        try {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
+                return;
+            }
+
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: false,
+                quality: 0.8,
+                allowsMultipleSelection: true,
+            });
+
+            if (!result.canceled && result.assets.length > 0) {
+                // TODO: 实现图片发送功能
+                Alert.alert('选择成功', `已选择 ${result.assets.length} 张图片\n\n图片发送功能即将推出...`);
+                console.log('Selected images:', result.assets);
+            }
+        } catch (error) {
+            console.error('选择图片错误:', error);
+            Alert.alert('选择失败', '选择图片时出错');
+        }
+    };
+
     const toggleToolbar = () => {
         setShowToolbar(!showToolbar);
         if (isEmojiPickerOpen) setIsEmojiPickerOpen(false);
@@ -463,7 +490,7 @@ export default function GroupRoomScreen() {
                         {showToolbar && (
                             <View style={roomStyles.toolbar}>
                                 <View style={roomStyles.toolbarRow}>
-                                    <ToolbarButton icon="image-outline" label="图片" />
+                                    <ToolbarButton icon="image-outline" label="图片" onPress={pickImage} />
                                     <ToolbarButton icon="play-circle-outline" label="视频" />
                                     <ToolbarButton icon="call-outline" label="群通话" />
                                     <ToolbarButton icon="videocam-outline" label="视频通话" />

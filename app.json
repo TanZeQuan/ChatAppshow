@@ -8,11 +8,9 @@
     "icon": "./src/assets/images/sentalk-logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "assetBundlePatterns": [
-      "src/assets/images/**"      
+      "src/assets/images/**"
     ],
-
     "ios": {
       "supportsTablet": true
     },
@@ -22,7 +20,8 @@
         "backgroundColor": "#E6F4FE"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.ChatApp"
     },
     "web": {
       "output": "single",
