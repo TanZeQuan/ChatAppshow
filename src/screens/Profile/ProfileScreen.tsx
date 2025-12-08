@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import { colors, borders, typography } from "../../styles";
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useUserStore } from '../../store/userStore';
 import { readUsers, updateUserInfo } from '../../api/User';
@@ -301,102 +302,120 @@ export default function ProfileScreen() {
 const profileStyles = RNStyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF'
-  },
-  gradientHeader: {
-    paddingBottom: scaleHeight(20)
-  },
-  whiteSection: {
-    flex: 1,
-    backgroundColor: '#FFFFFF'
-  },
-  scrollContent: {
-    paddingBottom: scaleHeight(40)
+    backgroundColor: colors.background.white,
   },
 
-  profileHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: scaleWidth(16),
-    paddingVertical: scaleHeight(16)
+  gradientHeader: {
+    paddingBottom: scaleHeight(20),
   },
+
+  whiteSection: {
+    flex: 1,
+    backgroundColor: colors.background.white,
+  },
+
+  scrollContent: {
+    paddingBottom: scaleHeight(40),
+  },
+
+  /** HEADER */
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: scaleWidth(16),
+    paddingVertical: scaleHeight(16),
+  },
+
   avatarTouchable: {
     marginRight: scaleWidth(12),
   },
+
   profileInfo: {
-    flex: 1
+    flex: 1,
   },
+
   profileName: {
-    fontSize: scaleFont(18),
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: scaleHeight(4)
+    fontSize: scaleFont(typography.fontSize18),
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
+    marginBottom: scaleHeight(4),
   },
+
   profileId: {
-    fontSize: scaleFont(13),
-    color: '#999'
+    fontSize: scaleFont(typography.fontSize13),
+    color: colors.text.grayLight,
   },
+
   qrButton: {
     width: scaleWidth(36),
     height: scaleWidth(36),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: scaleWidth(4)
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: scaleWidth(4),
   },
 
+  /** MENU */
   menuContainer: {
     paddingHorizontal: scaleWidth(16),
-    paddingTop: scaleHeight(20)
+    paddingTop: scaleHeight(20),
   },
+
   menuItem: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingVertical: scaleHeight(16),
     paddingHorizontal: scaleWidth(16),
     marginBottom: scaleHeight(12),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#000',
+
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 5, height: 8 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1
+    elevation: 1,
   },
+
   menuLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
   },
+
   menuIconContainer: {
     width: scaleWidth(32),
     height: scaleHeight(32),
-    backgroundColor: '#F8F9FA',
-    borderRadius: scaleWidth(16),
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: scaleWidth(12)
-  },
-  menuLabel: {
-    fontSize: scaleFont(15),
-    color: '#333',
-    fontWeight: '400'
+    backgroundColor: colors.background.iconBg,
+    borderRadius: borders.radius16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: scaleWidth(12),
   },
 
+  menuLabel: {
+    fontSize: scaleFont(typography.fontSize15),
+    fontWeight: typography.fontWeight400,
+    color: colors.text.dark,
+  },
+
+  /** LOGOUT BUTTON */
   logoutButton: {
-    backgroundColor: '#FFD966',
-    borderRadius: 25,
+    backgroundColor: colors.functional.yellowBright,
+    borderRadius: borders.radius25,
     paddingVertical: scaleHeight(14),
     marginHorizontal: scaleWidth(32),
     marginTop: scaleHeight(30),
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FFB84D'
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: borders.width1,
+    borderColor: colors.functional.yellow,
   },
+
   logoutText: {
-    fontSize: scaleFont(16),
-    fontWeight: '500',
-    color: '#333'
+    fontSize: scaleFont(typography.fontSize16),
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
 });

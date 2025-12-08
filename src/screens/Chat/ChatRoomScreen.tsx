@@ -17,6 +17,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
@@ -26,6 +27,13 @@ import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useChatStore } from '../../store/chatStore';
 import * as ImagePicker from 'expo-image-picker';
+
+const { width, height } = Dimensions.get("window");
+
+// Responsive scaling functions
+const scaleWidth = (size: number) => (width / 375) * size;
+const scaleHeight = (size: number) => (height / 812) * size;
+const scaleFont = (size: number) => (width / 375) * size;
 
 interface DisplayMessage {
   id: string;
@@ -74,7 +82,7 @@ export default function ChatRoomScreen() {
   // Load messages on mount
   useEffect(() => {
     loadMessages();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
   const loadMessages = async (loadMore = false) => {
@@ -99,7 +107,7 @@ export default function ChatRoomScreen() {
       if (result.success && result.data) {
         // Transform API response to message format
         const apiMessages = Array.isArray(result.data) ? result.data : [];
-        
+
         console.log("API Messages count:", apiMessages.length);
 
         // TODO: Store messages in chatStore
@@ -133,14 +141,14 @@ export default function ChatRoomScreen() {
         Alert.alert('Permission not granted', 'Failed to get recording permissions');
         return;
       }
-  
+
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-  
+
       const { recording } = await Audio.Recording.createAsync(
-         Audio.RecordingOptionsPresets.HIGH_QUALITY
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       setRecording(recording);
       setIsRecording(true);
@@ -154,16 +162,16 @@ export default function ChatRoomScreen() {
     if (!recording) {
       return;
     }
-  
+
     console.log('Stopping recording..');
     setIsRecording(false);
     setIsUploading(true);
-  
+
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
       console.log('Recording stopped and stored at', uri);
-  
+
       if (uri) {
         // Now, send the voice message
         // const result = await sendVoiceMessageToApi(uri);
@@ -201,13 +209,17 @@ export default function ChatRoomScreen() {
   const handleSend = async () => {
     if (!inputText.trim()) return;
 
-    // TODO: Send message via API
-    // For now, just add to local store
-    addMessage(chatId, inputText); // store handles user info automatically
+    const messageText = inputText.trim();
+
+    // Add message to store
+    addMessage(chatId, messageText);
+
+    // REMOVE updateChatTimestamp — 已删除
+
     setInputText('');
 
-    // Here you would call your send message API:
-    // const result = await sendMessage({ chat_id: chatId, user_id: currentUserId, message: inputText });
+    // TODO: Send via API
+    // await sendMessage(...)
   };
 
   const handleClearChat = () => {
@@ -323,7 +335,7 @@ export default function ChatRoomScreen() {
   const ToolbarButton = ({ icon, label, onPress }: any) => (
     <TouchableOpacity style={roomStyles.toolbarButton} onPress={onPress}>
       <View style={roomStyles.toolbarIconContainer}>
-        <Ionicons name={icon} size={24} color="#333" />
+        <Ionicons name={icon} size={scaleWidth(24)} color="#333" />
       </View>
       <Text style={roomStyles.toolbarLabel}>{label}</Text>
     </TouchableOpacity>
@@ -335,11 +347,11 @@ export default function ChatRoomScreen() {
         <SafeAreaView style={{ flex: 1 }}>
           <View style={roomStyles.header}>
             <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={24} color="#333" />
+              <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
             <Text style={roomStyles.headerTitle}>{chatName}</Text>
             <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
-              <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+              <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
           </View>
           <View style={roomStyles.loadingContainer}>
@@ -356,11 +368,11 @@ export default function ChatRoomScreen() {
       <SafeAreaView style={{ flex: 1 }}>
         <View style={roomStyles.header}>
           <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={24} color="#333" />
+            <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
           </TouchableOpacity>
           <Text style={roomStyles.headerTitle}>{chatName}</Text>
           <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
-            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+            <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
           </TouchableOpacity>
         </View>
 
@@ -382,13 +394,6 @@ export default function ChatRoomScreen() {
                 tintColor="#FFD966"
               />
             }
-            // ListEmptyComponent={
-            //   <View style={roomStyles.emptyContainer}>
-            //     <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
-            //     <Text style={roomStyles.emptyText}>暂无消息</Text>
-            //     <Text style={roomStyles.emptySubtext}>发送第一条消息开始聊天</Text>
-            //   </View>
-            // }
           />
 
           <View style={roomStyles.inputSection}>
@@ -400,9 +405,9 @@ export default function ChatRoomScreen() {
                 disabled={isUploading}
               >
                 {isUploading ? (
-                  <ActivityIndicator color="#333" />
+                  <ActivityIndicator color="#333" size={scaleWidth(20)} />
                 ) : (
-                  <Ionicons name="mic" size={22} color={isRecording ? 'red' : '#333'} />
+                  <Ionicons name="mic" size={scaleWidth(22)} color={isRecording ? 'red' : '#333'} />
                 )}
               </TouchableOpacity>
               <TextInput
@@ -415,19 +420,19 @@ export default function ChatRoomScreen() {
               <TouchableOpacity style={roomStyles.iconButton} onPress={toggleEmojiPicker}>
                 <Ionicons
                   name={isEmojiPickerOpen ? "close-circle" : "happy-outline"}
-                  size={22}
+                  size={scaleWidth(22)}
                   color="#333"
                 />
               </TouchableOpacity>
               {inputText.trim() ? (
                 <TouchableOpacity style={roomStyles.iconButton} onPress={handleSend}>
-                  <Ionicons name="send" size={22} color="#333" />
+                  <Ionicons name="send" size={scaleWidth(22)} color="#333" />
                 </TouchableOpacity>
               ) : (
                 <TouchableOpacity style={roomStyles.iconButton} onPress={toggleToolbar}>
                   <Ionicons
                     name={showToolbar ? 'close-circle-outline' : 'add-circle-outline'}
-                    size={22}
+                    size={scaleWidth(22)}
                     color="#333"
                   />
                 </TouchableOpacity>
@@ -438,7 +443,7 @@ export default function ChatRoomScreen() {
               <View style={roomStyles.toolbar}>
                 <View style={roomStyles.toolbarRow}>
                   <ToolbarButton icon="image-outline" label="图片" onPress={pickImage} />
-                  <ToolbarButton icon="play-circle-outline" label="视频" />
+                  <ToolbarButton icon="play-circle-outline" label="视频" onPress={pickImage} />
                   <ToolbarButton icon="call-outline" label="通话" />
                   <ToolbarButton icon="videocam-outline" label="视频通话" />
                 </View>
@@ -473,119 +478,152 @@ const roomStyles = RNStyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.background.gradientYellow[1],
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(10),
     borderBottomWidth: borders.width1,
     borderBottomColor: colors.border.grayLight,
   },
-  backButton: { padding: 4 },
-  headerTitle: { 
-    fontSize: typography.fontSize16, 
-    fontWeight: typography.fontWeight500, 
-    color: colors.text.blackMedium, 
-    flex: 1, 
-    textAlign: 'center' 
+  backButton: {
+    padding: scaleWidth(4)
   },
-  moreButton: { padding: 4 },
+  headerTitle: {
+    fontSize: scaleFont(16),
+    fontWeight: typography.fontWeight500,
+    color: colors.text.blackMedium,
+    flex: 1,
+    textAlign: 'center'
+  },
+  moreButton: {
+    padding: scaleWidth(4)
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
-    marginTop: 12,
-    fontSize: typography.fontSize14,
+    marginTop: scaleHeight(12),
+    fontSize: scaleFont(14),
     color: colors.text.grayDark,
   },
   keyboardAvoidingView: { flex: 1 },
-  chatList: { paddingHorizontal: 12, paddingVertical: 16 },
-  messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
+  chatList: {
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(16)
+  },
+  messageRow: {
+    flexDirection: 'row',
+    marginVertical: scaleHeight(6),
+    alignItems: 'flex-start'
+  },
   messageRowLeft: { justifyContent: 'flex-start' },
   messageRowRight: { justifyContent: 'flex-end' },
-  avatar: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: borders.radius4, 
-    backgroundColor: colors.background.grayLight, 
-    marginHorizontal: 8, 
-    overflow: 'hidden' 
+  avatar: {
+    width: scaleWidth(40),
+    height: scaleWidth(40),
+    borderRadius: borders.radius4,
+    backgroundColor: colors.background.grayLight,
+    marginHorizontal: scaleWidth(8),
+    overflow: 'hidden'
   },
-  avatarImage: { width: 40, height: 40 },
-  bubble: { 
-    maxWidth: '60%', 
-    borderRadius: borders.radius4, 
-    paddingHorizontal: 12, 
-    paddingVertical: 10 
+  avatarImage: {
+    width: scaleWidth(40),
+    height: scaleWidth(40)
+  },
+  bubble: {
+    maxWidth: '60%',
+    borderRadius: borders.radius4,
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(10)
   },
   bubbleLeft: { backgroundColor: colors.background.white },
   bubbleRight: { backgroundColor: colors.functional.green },
-  senderName: { 
-    fontWeight: typography.fontWeight600, 
-    marginBottom: 2, 
-    fontSize: typography.fontSize14, 
-    color: colors.text.blackMedium 
+  senderName: {
+    fontWeight: typography.fontWeight600,
+    marginBottom: scaleHeight(2),
+    fontSize: scaleFont(14),
+    color: colors.text.blackMedium
   },
-  messageText: { 
-    fontSize: typography.fontSize16, 
-    color: colors.text.blackMedium, 
-    lineHeight: typography.lineHeight22 
+  messageText: {
+    fontSize: scaleFont(16),
+    color: colors.text.blackMedium,
+    lineHeight: scaleHeight(22)
   },
-  timestamp: { 
-    fontSize: typography.fontSize11, 
-    color: colors.text.grayDark, 
-    marginTop: 4, 
-    opacity: 0.7 
+  timestamp: {
+    fontSize: scaleFont(11),
+    color: colors.text.grayDark,
+    marginTop: scaleHeight(4),
+    opacity: 0.7
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    paddingVertical: scaleHeight(60),
     transform: [{ scaleY: -1 }],
   },
   emptyText: {
-    fontSize: typography.fontSize16,
+    fontSize: scaleFont(16),
     color: colors.text.grayLight,
-    marginTop: 12,
+    marginTop: scaleHeight(12),
   },
   emptySubtext: {
-    fontSize: typography.fontSize14,
+    fontSize: scaleFont(14),
     color: colors.text.grayMedium,
-    marginTop: 6,
+    marginTop: scaleHeight(6),
   },
-  inputSection: { backgroundColor: colors.background.grayLight },
+  inputSection: {
+    backgroundColor: colors.background.grayLight
+  },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background.gradientYellow[1],
-    paddingHorizontal: 10,
-    paddingVertical: 12,
+    paddingHorizontal: scaleWidth(10),
+    paddingVertical: scaleHeight(12),
     borderTopWidth: borders.width1,
     borderTopColor: colors.border.grayLight,
   },
-  iconButton: { padding: 8 },
+  iconButton: {
+    padding: scaleWidth(8)
+  },
   input: {
     flex: 1,
-    minHeight: 36,
-    maxHeight: 100,
+    minHeight: scaleHeight(36),
+    maxHeight: scaleHeight(100),
     backgroundColor: colors.background.white,
     borderRadius: borders.radius10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: typography.fontSize16,
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(8),
+    fontSize: scaleFont(16),
     color: colors.text.blackMedium,
   },
-  toolbar: { backgroundColor: colors.background.grayLight, paddingVertical: 25, paddingHorizontal: 15 },
-  toolbarRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  toolbarButton: { alignItems: 'center', width: 70, margin: 10 },
+  toolbar: {
+    backgroundColor: colors.background.grayLight,
+    paddingVertical: scaleHeight(20),
+    paddingHorizontal: scaleWidth(10)
+  },
+  toolbarRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: scaleHeight(10),
+  },
+  toolbarButton: {
+    alignItems: 'center',
+    width: scaleWidth(70),
+  },
   toolbarIconContainer: {
-    width: 50,
-    height: 50,
+    width: scaleWidth(50),
+    height: scaleWidth(50),
     borderRadius: borders.radius8,
     backgroundColor: colors.background.white,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: scaleHeight(6),
   },
-  toolbarLabel: { fontSize: typography.fontSize12, color: colors.text.blackMedium },
+  toolbarLabel: {
+    fontSize: scaleFont(12),
+    color: colors.text.blackMedium,
+    textAlign: 'center',
+  },
 });

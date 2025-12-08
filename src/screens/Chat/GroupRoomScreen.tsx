@@ -11,6 +11,7 @@ import {
     Image,
     Alert,
     ActivityIndicator,
+    Dimensions,
     RefreshControl
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -26,6 +27,13 @@ import { readChatMessages } from '../../api/Chat';
 import { Audio } from 'expo-av';
 import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import * as ImagePicker from 'expo-image-picker';
+
+const { width, height } = Dimensions.get("window");
+
+// Responsive scaling functions
+const scaleWidth = (size: number) => (width / 375) * size;
+const scaleHeight = (size: number) => (height / 812) * size;
+const scaleFont = (size: number) => (width / 375) * size;
 
 interface DisplayMessage {
     id: string;
@@ -60,7 +68,7 @@ export default function GroupRoomScreen() {
     // Get real-time data from store
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '群聊';
-    
+
     // 生成包含自己的成员列表
     const membersWithSelf = [
         ...(groupChat?.members || params.members || []),
@@ -96,53 +104,53 @@ export default function GroupRoomScreen() {
 
     const startRecording = async () => {
         try {
-          const { status } = await Audio.requestPermissionsAsync();
-          if (status !== 'granted') {
-            Alert.alert('Permission not granted', 'Failed to get recording permissions');
-            return;
-          }
-      
-          await Audio.setAudioModeAsync({
-            allowsRecordingIOS: true,
-            playsInSilentModeIOS: true,
-          });
-      
-          const { recording } = await Audio.Recording.createAsync(
-             Audio.RecordingOptionsPresets.HIGH_QUALITY
-          );
-          setRecording(recording);
-          setIsRecording(true);
-          console.log('Recording started');
+            const { status } = await Audio.requestPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission not granted', 'Failed to get recording permissions');
+                return;
+            }
+
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+            });
+
+            const { recording } = await Audio.Recording.createAsync(
+                Audio.RecordingOptionsPresets.HIGH_QUALITY
+            );
+            setRecording(recording);
+            setIsRecording(true);
+            console.log('Recording started');
         } catch (err) {
-          console.error('Failed to start recording', err);
+            console.error('Failed to start recording', err);
         }
     };
 
     const stopRecording = async () => {
         if (!recording) {
-          return;
+            return;
         }
-      
+
         console.log('Stopping recording..');
         setIsRecording(false);
         setIsUploading(true);
-      
+
         try {
-          await recording.stopAndUnloadAsync();
-          const uri = recording.getURI();
-          console.log('Recording stopped and stored at', uri);
-      
-          if (uri) {
-            // Now, send the voice message
-            // const result = await sendVoiceMessageToApi(uri);
-            console.log('Simulating sending voice message with URI:', uri);
-            // console.log('Voice message sent, result:', result);
-          }
+            await recording.stopAndUnloadAsync();
+            const uri = recording.getURI();
+            console.log('Recording stopped and stored at', uri);
+
+            if (uri) {
+                // Now, send the voice message
+                // const result = await sendVoiceMessageToApi(uri);
+                console.log('Simulating sending voice message with URI:', uri);
+                // console.log('Voice message sent, result:', result);
+            }
         } catch (error) {
-          console.error('Failed to send voice message', error);
+            console.error('Failed to send voice message', error);
         } finally {
-          setIsUploading(false);
-          setRecording(null);
+            setIsUploading(false);
+            setRecording(null);
         }
     };
 
@@ -163,9 +171,9 @@ export default function GroupRoomScreen() {
     // Load initial messages
     const loadMessages = useCallback(async (isRefresh = false) => {
         if (!currentUserId || !chatId) return;
-        
+
         const currentOffset = isRefresh ? 0 : offset;
-        
+
         if (isRefresh) {
             setIsRefreshing(true);
         } else {
@@ -185,14 +193,14 @@ export default function GroupRoomScreen() {
                 // API returns { chat: [], group: [] }
                 // Determine which array to use based on chat type
                 const isGroupChat = chatId.startsWith('group_') || params.isGroup;
-                const apiMessages = isGroupChat 
+                const apiMessages = isGroupChat
                     ? (result.data.group || [])
                     : (result.data.chat || []);
-                
+
                 console.log('📨 API Messages:', apiMessages);
                 console.log('📊 Message count:', apiMessages.length);
                 console.log('🏷️ Is group chat:', isGroupChat);
-                
+
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
                     setHasMoreMessages(false);
@@ -414,7 +422,7 @@ export default function GroupRoomScreen() {
                     <View style={roomStyles.headerCenter}>
                         <Text style={roomStyles.headerTitle}>{chatName}</Text>
                         <Text style={roomStyles.headerSubtitle}>
-                             {uniqueMembers.length} 位成员
+                            {uniqueMembers.length} 位成员
                         </Text>
                     </View>
                     <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
@@ -491,7 +499,7 @@ export default function GroupRoomScreen() {
                             <View style={roomStyles.toolbar}>
                                 <View style={roomStyles.toolbarRow}>
                                     <ToolbarButton icon="image-outline" label="图片" onPress={pickImage} />
-                                    <ToolbarButton icon="play-circle-outline" label="视频" />
+                                    <ToolbarButton icon="play-circle-outline" label="视频" onPress={pickImage}  />
                                     <ToolbarButton icon="call-outline" label="群通话" />
                                     <ToolbarButton icon="videocam-outline" label="视频通话" />
                                 </View>
@@ -520,116 +528,131 @@ export default function GroupRoomScreen() {
 }
 
 const roomStyles = RNStyleSheet.create({
-  safeArea: { flex: 1 },
+    safeArea: { flex: 1 },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: colors.background.yellowPale,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.grayLight,
-  },
-  backButton: { padding: 4 },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: {
-    fontSize: typography.fontSize16,
-    fontWeight: typography.fontWeight500,
-    color: colors.text.blackMedium,
-  },
-  headerSubtitle: {
-    fontSize: typography.fontSize12,
-    color: colors.text.grayDark,
-    marginTop: 2,
-  },
-  moreButton: { padding: 4 },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: colors.background.yellowPale,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderBottomWidth: borders.width1,
+        borderBottomColor: colors.background.grayLight,
+    },
+    backButton: { padding: 4 },
+    headerCenter: { flex: 1, alignItems: 'center' },
+    headerTitle: {
+        fontSize: typography.fontSize16,
+        fontWeight: typography.fontWeight500,
+        color: colors.text.blackMedium,
+    },
+    headerSubtitle: {
+        fontSize: typography.fontSize12,
+        color: colors.text.grayDark,
+        marginTop: 2,
+    },
+    moreButton: { padding: 4 },
 
-  keyboardAvoidingView: { flex: 1 },
-  chatList: { paddingHorizontal: 12, paddingVertical: 16 },
+    keyboardAvoidingView: { flex: 1 },
+    chatList: { paddingHorizontal: 12, paddingVertical: 16 },
 
-  messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
-  messageRowLeft: { justifyContent: 'flex-start' },
-  messageRowRight: { justifyContent: 'flex-end' },
+    messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
+    messageRowLeft: { justifyContent: 'flex-start' },
+    messageRowRight: { justifyContent: 'flex-end' },
 
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: borders.radius4,
-    backgroundColor: colors.background.grayLight,
-    marginHorizontal: 8,
-    overflow: 'hidden',
-  },
-  avatarImage: { width: 40, height: 40 },
+    avatar: {
+        width: 40,
+        height: 40,
+        borderRadius: borders.radius4,
+        backgroundColor: colors.background.grayLight,
+        marginHorizontal: 8,
+        overflow: 'hidden',
+    },
+    avatarImage: { width: 40, height: 40 },
 
-  bubble: { maxWidth: '60%', borderRadius: borders.radius4, paddingHorizontal: 12, paddingVertical: 10 },
-  bubbleLeft: { backgroundColor: colors.background.white },
-  bubbleRight: { backgroundColor: colors.functional.green },
+    bubble: { maxWidth: '60%', borderRadius: borders.radius4, paddingHorizontal: 12, paddingVertical: 10 },
+    bubbleLeft: { backgroundColor: colors.background.white },
+    bubbleRight: { backgroundColor: colors.functional.green },
 
-  senderName: {
-    fontWeight: typography.fontWeight600,
-    marginBottom: 2,
-    fontSize: typography.fontSize12,
-    color: colors.text.grayDark,
-  },
-  messageText: {
-    fontSize: typography.fontSize16,
-    color: colors.text.blackMedium,
-    lineHeight: typography.lineHeight22,
-  },
-  timestamp: {
-    fontSize: typography.fontSize11,
-    color: colors.text.grayDark,
-    marginTop: 4,
-    opacity: 0.7,
-  },
+    senderName: {
+        fontWeight: typography.fontWeight600,
+        marginBottom: 2,
+        fontSize: typography.fontSize12,
+        color: colors.text.grayDark,
+    },
+    messageText: {
+        fontSize: typography.fontSize16,
+        color: colors.text.blackMedium,
+        lineHeight: typography.lineHeight22,
+    },
+    timestamp: {
+        fontSize: typography.fontSize11,
+        color: colors.text.grayDark,
+        marginTop: 4,
+        opacity: 0.7,
+    },
 
-  inputSection: { backgroundColor: colors.background.grayLight },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.background.yellowPale,
-    paddingHorizontal: 10,
-    paddingVertical: 12,
-    borderTopWidth: borders.width1,
-    borderTopColor: colors.background.grayLight,
-  },
-  iconButton: { padding: 8 },
-  input: {
-    flex: 1,
-    minHeight: 36,
-    maxHeight: 100,
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: typography.fontSize16,
-    color: colors.text.blackMedium,
-  },
+    inputSection: { backgroundColor: colors.background.grayLight },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: colors.background.yellowPale,
+        paddingHorizontal: 10,
+        paddingVertical: 12,
+        borderTopWidth: borders.width1,
+        borderTopColor: colors.background.grayLight,
+    },
+    iconButton: { padding: 8 },
+    input: {
+        flex: 1,
+        minHeight: 36,
+        maxHeight: 100,
+        backgroundColor: colors.background.white,
+        borderRadius: borders.radius10,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        fontSize: typography.fontSize16,
+        color: colors.text.blackMedium,
+    },
 
-  toolbar: { backgroundColor: colors.background.grayLight, paddingVertical: 25, paddingHorizontal: 15 },
-  toolbarRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  toolbarButton: { alignItems: 'center', width: 70, margin: 10 },
-  toolbarIconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: borders.radius8,
-    backgroundColor: colors.background.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  toolbarLabel: { fontSize: typography.fontSize12, color: colors.text.blackMedium },
+    toolbar: {
+        backgroundColor: colors.background.grayLight,
+        paddingVertical: scaleHeight(20),
+        paddingHorizontal: scaleWidth(10)
+    },
+    toolbarRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        marginBottom: scaleHeight(10),
+    },
+    toolbarButton: {
+        alignItems: 'center',
+        width: scaleWidth(70),
+    },
+    toolbarIconContainer: {
+        width: scaleWidth(50),
+        height: scaleWidth(50),
+        borderRadius: borders.radius8,
+        backgroundColor: colors.background.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: scaleHeight(6),
+    },
+    toolbarLabel: {
+        fontSize: scaleFont(12),
+        color: colors.text.blackMedium,
+        textAlign: 'center',
+    },
 
-  loadingFooter: {
-    paddingVertical: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: typography.fontSize12,
-    color: colors.text.grayDark,
-  },
+    loadingFooter: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingText: {
+        marginTop: 8,
+        fontSize: typography.fontSize12,
+        color: colors.text.grayDark,
+    },
 });

@@ -97,7 +97,7 @@ function MainTabsContent() {
         tabBarLabelStyle: {
           fontSize: responsiveSizes.fontSize,
           fontWeight: "600",
-          marginTop: -2,  // Reduced from 2 to bring label closer to icon
+          marginTop: 2,  // Reduced from 2 to bring label closer to icon
         },
         tabBarItemStyle: {
           paddingVertical: 2,  // Reduced from 4 to move everything up

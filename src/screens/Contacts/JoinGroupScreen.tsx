@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: typography.fontSize20,
     fontWeight: typography.fontWeight600,
-    color: colors.functional.yellow, // 替代 #78350f
+    color: colors.text.dark, // 替代 #78350f
   },
 
   /** SEARCH */
