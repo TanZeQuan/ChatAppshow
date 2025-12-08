@@ -22,6 +22,8 @@ import { useChatStore } from '../../store/chatStore';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useUserStore } from '@/src/store/userStore';
 import { readChatMessages } from '../../api/Chat';
+import { Audio } from 'expo-av';
+import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 
 interface DisplayMessage {
     id: string;
@@ -84,6 +86,63 @@ export default function GroupRoomScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [offset, setOffset] = useState(0);
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
+
+    // Voice message state
+    const [recording, setRecording] = useState<Audio.Recording | null>(null);
+    const [isRecording, setIsRecording] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+
+    const startRecording = async () => {
+        try {
+          const { status } = await Audio.requestPermissionsAsync();
+          if (status !== 'granted') {
+            Alert.alert('Permission not granted', 'Failed to get recording permissions');
+            return;
+          }
+      
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+          });
+      
+          const { recording } = await Audio.Recording.createAsync(
+             Audio.RecordingOptionsPresets.HIGH_QUALITY
+          );
+          setRecording(recording);
+          setIsRecording(true);
+          console.log('Recording started');
+        } catch (err) {
+          console.error('Failed to start recording', err);
+        }
+    };
+
+    const stopRecording = async () => {
+        if (!recording) {
+          return;
+        }
+      
+        console.log('Stopping recording..');
+        setIsRecording(false);
+        setIsUploading(true);
+      
+        try {
+          await recording.stopAndUnloadAsync();
+          const uri = recording.getURI();
+          console.log('Recording stopped and stored at', uri);
+      
+          if (uri) {
+            // Now, send the voice message
+            // const result = await sendVoiceMessageToApi(uri);
+            console.log('Simulating sending voice message with URI:', uri);
+            // console.log('Voice message sent, result:', result);
+          }
+        } catch (error) {
+          console.error('Failed to send voice message', error);
+        } finally {
+          setIsUploading(false);
+          setRecording(null);
+        }
+    };
 
     const messages: DisplayMessage[] = storedMessages.map(msg => {
         const member = uniqueMembers.find(m => m.id === msg.senderId);
@@ -359,8 +418,17 @@ export default function GroupRoomScreen() {
 
                     <View style={roomStyles.inputSection}>
                         <View style={roomStyles.inputContainer}>
-                            <TouchableOpacity style={roomStyles.iconButton}>
-                                <Ionicons name="mic" size={22} color="#333" />
+                            <TouchableOpacity
+                                style={roomStyles.iconButton}
+                                onPressIn={startRecording}
+                                onPressOut={stopRecording}
+                                disabled={isUploading}
+                            >
+                                {isUploading ? (
+                                    <ActivityIndicator color="#333" />
+                                ) : (
+                                    <Ionicons name="mic" size={22} color={isRecording ? 'red' : '#333'} />
+                                )}
                             </TouchableOpacity>
                             <TextInput
                                 style={roomStyles.input}
