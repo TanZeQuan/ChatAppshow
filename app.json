@@ -5,30 +5,29 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "chatapp",
-    "icon": "../assets/images/sentalk-logo.png",
+    "icon": "./src/assets/images/sentalk-logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
+    "assetBundlePatterns": [
+      "src/assets/images/**"      
+    ],
 
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/sentalk-logo.png",
-        "backgroundImage": "./assets/images/sentalk-logo.png",
-        "monochromeImage": "./assets/images/sentalk-logo.png"
+        "foregroundImage": "./src/assets/images/sentalk-logo.png",
+        "backgroundColor": "#E6F4FE"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
-
     "web": {
       "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
-
     "plugins": [
       [
         "expo-splash-screen",
@@ -41,7 +40,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

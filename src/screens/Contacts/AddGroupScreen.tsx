@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
+=======
+import React, { useState, useEffect } from "react";
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 import {
   Alert,
   Dimensions,
@@ -13,13 +17,30 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+<<<<<<< HEAD
   View,
+=======
+  StyleSheet,
+  Image,
+  FlatList,
+  Alert,
+  Dimensions,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { addGroup } from "../../api/Group"; // Import addGroup
 import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
+<<<<<<< HEAD
+=======
+import { useChatStore } from "../../store/chatStore";
+import { readFriends } from "../../api/Friend";
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 
 const { width, height } = Dimensions.get("window");
 
@@ -29,14 +50,71 @@ const scaleFont = (size: number) => (width / 375) * size;
 
 export default function AddGroupScreen() {
   const navigation = useNavigation<any>();
+<<<<<<< HEAD
   const { contacts } = useContactStore();
   const { token, user } = useUserStore();
+=======
+  const { contacts, setContacts } = useContactStore();
+  const { token } = useUserStore();
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
   const { addChat } = useChatStore();
 
   const [searchText, setSearchText] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [showGroupNameModal, setShowGroupNameModal] = useState(false);
   const [groupName, setGroupName] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Load contacts when screen mounts
+  useEffect(() => {
+    loadContacts();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const loadContacts = async () => {
+    try {
+      setIsLoading(true);
+
+      // Fetch approved friends (isstatus = 2)
+      const result = await readFriends(2);
+
+      if (result.success && result.data) {
+        const allFriends = [
+          ...(result.data.request || []),
+          ...(result.data.approve || [])
+        ];
+
+        // Transform API response to contact format
+        const formattedContacts = allFriends.map((friend: any) => {
+          const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
+          const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
+          const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
+
+          return {
+            id: userId,
+            name: userName,
+            avatar: userAvatar,
+            online: friend.online || friend.is_online || false,
+            rawData: friend,
+            listId: '',       // 👈 补上默认值
+            isFriend: true,   // 👈 补上默认值
+          };
+        });
+
+        // Remove duplicates
+        const uniqueContacts = Array.from(
+          new Map(formattedContacts.map(contact => [contact.id, contact])).values()
+        );
+
+        setContacts(uniqueContacts);
+      }
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error loading contacts:", error);
+      setIsLoading(false);
+    }
+  };
 
   // Filter contacts based on search
   const filteredContacts = contacts.filter((contact) =>
@@ -94,6 +172,7 @@ export default function AddGroupScreen() {
 
       console.log("API Response received:", JSON.stringify(apiResponse, null, 2)); // Log the full response
 
+<<<<<<< HEAD
       if (!apiResponse.error && apiResponse.response) {
         // console.log("Group creation successful, proceeding to add chat to store."); // Log success branch
         const newGroupChat = {
@@ -129,6 +208,20 @@ export default function AddGroupScreen() {
         // console.log("Group creation failed. API response indicates an error or missing group_id."); // Log failure branch
         Alert.alert("错误", apiResponse.message || "创建群聊失败，无法获取群组ID");
       }
+=======
+      Alert.alert(
+        "成功",
+        `群聊 "${groupName}" 已创建！`,
+        [
+          {
+            text: "确定",
+            onPress: () => {
+              navigation.goBack();
+            },
+          },
+        ]
+      );
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
     } catch (error) {
       console.error("Error creating group (catch block):", error); // Log caught error
       Alert.alert("错误", "创建群聊失败，请重试");
@@ -152,11 +245,13 @@ export default function AddGroupScreen() {
       >
         <View style={styles.contactLeft}>
           <Image
-            source={{ uri: item.avatar || "https://i.pravatar.cc/150" }}
+            source={{ uri: item.avatar || `https://i.pravatar.cc/150?u=${item.id}` }}
             style={styles.contactAvatar}
           />
           <View style={styles.contactInfo}>
-            <Text style={styles.contactName}>{item.name}</Text>
+            <Text style={styles.contactName}>
+              {item.name.replace(/^用户/, '')}
+            </Text>
           </View>
         </View>
         <View style={[styles.checkbox, !isSelected && styles.checkboxUnchecked]}>
@@ -224,7 +319,12 @@ export default function AddGroupScreen() {
 
       {/* Contacts List */}
       <View style={styles.contactsSection}>
-        {filteredContacts.length === 0 ? (
+        {isLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#F5C842" />
+            <Text style={styles.loadingText}>加载联系人中...</Text>
+          </View>
+        ) : filteredContacts.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="people-outline" size={60} color="#ccc" />
             <Text style={styles.emptyText}>
@@ -388,6 +488,19 @@ const styles = StyleSheet.create({
     color: "#666",
   },
 
+  /** LOADING */
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: scaleHeight(60),
+  },
+  loadingText: {
+    marginTop: scaleHeight(12),
+    fontSize: scaleFont(14),
+    color: "#666",
+  },
+
   /** CONTACTS LIST */
   contactsSection: {
     backgroundColor: "#FFFFFF",
@@ -412,6 +525,7 @@ const styles = StyleSheet.create({
     height: scaleHeight(40),
     borderRadius: scaleWidth(20),
     marginRight: scaleWidth(12),
+    backgroundColor: "#E0E0E0",
   },
   contactInfo: {
     flex: 1,

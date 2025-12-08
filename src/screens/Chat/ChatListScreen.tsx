@@ -16,7 +16,10 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '../../store/chatStore';
 import { useContactStore } from '../../store/contactStore';
-
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { readUserChats, readChatMessages } from '../../api/Chat';
+import { readFriends } from '../../api/Friend';
+import { useUserStore } from '../../store/userStore';
 
 const { width, height } = Dimensions.get("window");
 
@@ -28,37 +31,41 @@ export default function ChatListScreen() {
   const navigation = useNavigation<any>();
   const { chatList, getLastMessage } = useChatStore();
   const { contacts } = useContactStore();
+  const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const currentUserId = user?.id || 'YOUR_CURRENT_USER_ID';
 
   // Refresh chat list when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      // You can add logic here to refresh chat data
+      // Silently refresh data without showing refresh indicator
+      silentRefresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
 
   // Build comprehensive chat list combining chatList and contacts
   const allChats = useMemo(() => {
-    const chatMap = new Map();
+    const chatMap = new Map<string, any>();
 
-    // Add all chats from chatList (includes groups)
     chatList.forEach(chat => {
+      const membersWithSelf = [
+        ...(chat.members || []),
+        ...(currentUserId && !chat.members?.some(m => m.id === currentUserId)
+          ? [{ id: currentUserId, name: '我', avatar: '' }]
+          : [])
+      ];
+
+      const uniqueMembers = Array.from(new Map(membersWithSelf.map(m => [m.id, m])).values());
+
       chatMap.set(chat.id, {
-        id: chat.id,
-        name: chat.name.replace(/^用户/, ''),
-        avatar: chat.avatar,
-        isGroup: chat.isGroup,
-        members: chat.members,
-        memberIds: chat.memberIds,
-        lastMessage: chat.lastMessage,
-        timestamp: chat.timestamp,
-        unreadCount: chat.unreadCount,
-        online: chat.online,
+        ...chat,
+        members: uniqueMembers,
+        memberIds: uniqueMembers.map(m => m.id),
       });
     });
 
-    // Add individual contacts (if not already in chatList)
     contacts.forEach(contact => {
       if (!chatMap.has(contact.id)) {
         const lastMessage = getLastMessage(contact.id);
@@ -67,6 +74,8 @@ export default function ChatListScreen() {
           name: contact.name.replace(/^用户/, ''),
           avatar: contact.avatar,
           isGroup: false,
+          members: [contact],
+          memberIds: [contact.id],
           lastMessage: lastMessage?.text || '开始聊天',
           timestamp: lastMessage?.createdAt || '',
           unreadCount: 0,
@@ -75,13 +84,12 @@ export default function ChatListScreen() {
       }
     });
 
-    // Convert to array and sort by timestamp
     return Array.from(chatMap.values()).sort((a, b) => {
       if (!a.timestamp) return 1;
       if (!b.timestamp) return -1;
       return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
     });
-  }, [chatList, contacts, getLastMessage]);
+  }, [chatList, contacts, getLastMessage, currentUserId]);
 
   // Filter chats based on search query
   const filteredChats = allChats.filter(chat =>
@@ -108,19 +116,40 @@ export default function ChatListScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-
-    // 1️⃣ Refresh chat list and contacts from store or API
-    // Example: fetch latest chats/messages here
-    await new Promise(resolve => setTimeout(resolve, 1000)); // simulate network
-
-    // 2️⃣ For each contact not in chatList, fetch last message
-    contacts.forEach(contact => getLastMessage(contact.id));
-
-    // 3️⃣ Once data is updated, allChats will recompute (useMemo depends on chatList & contacts)
-
+    await refreshData();
     setRefreshing(false);
   };
 
+  const silentRefresh = async () => {
+    // Refresh without showing the refresh indicator
+    await refreshData();
+  };
+
+  const refreshData = async () => {
+    try {
+      // 1️⃣ Refresh chat list from API
+      if (currentUserId && currentUserId !== 'YOUR_CURRENT_USER_ID') {
+        const chatsResult = await readUserChats(currentUserId);
+        if (chatsResult.success) {
+          console.log("Refreshed chats:", chatsResult.data);
+          // Update your chat store here if needed
+        }
+
+        // 2️⃣ Refresh friends/contacts
+        const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
+        if (friendsResult.success) {
+          console.log("Refreshed friends:", friendsResult.data);
+          // Update your contact store here if needed
+        }
+      }
+
+      // 3️⃣ For each contact not in chatList, fetch last message
+      contacts.forEach(contact => getLastMessage(contact.id));
+
+    } catch (error) {
+      console.error("Refresh error:", error);
+    }
+  };
 
   const formatTime = (timestamp: string) => {
     if (!timestamp) return '';
@@ -214,7 +243,7 @@ export default function ChatListScreen() {
               <View style={styles.groupBadge}>
                 <Ionicons name="people" size={12} color="#666" />
                 <Text style={styles.groupBadgeText}>
-                  {item.memberIds?.length || 0}
+                  {item.members?.length || 0}
                 </Text>
               </View>
             )}
@@ -281,6 +310,7 @@ export default function ChatListScreen() {
           keyExtractor={(item) => item.id}
           renderItem={renderChatItem}
           contentContainerStyle={styles.listContent}
+          extraData={filteredChats.map(chat => chat.members?.length)}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl

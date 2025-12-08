@@ -11,7 +11,7 @@ export type Message = {
 
   // Auto-fill
   senderId: string;
-  username?: string;
+  name?: string;
   avatar?: string;
 };
 
@@ -24,8 +24,16 @@ type ChatListItem = {
   memberIds?: string[];
   lastMessage: string;
   timestamp: string;
+  ownerId?: string; 
   unreadCount: number;
   online: boolean;
+  rawData?: {
+    push_notification?: boolean;
+    top_notification?: boolean;
+    show_nicknames?: boolean;
+    // 你可以在这里加 ownerId
+  };
+  admins?: string[]; // 可选，保存管理员 ID
 };
 
 type Settings = {
@@ -41,7 +49,9 @@ type ChatStore = {
   settings: Settings;
 
   addMessage: (chatId: string, text: string) => void;
+  setMessages: (chatId: string, messages: Message[]) => void; // ⭐ 新增
   addChat: (chat: ChatListItem) => void;
+  setChats: (chats: ChatListItem[]) => void;
   updateChatLastMessage: (chatId: string, message: string, timestamp: string) => void;
   removeChat: (chatId: string) => void;
   getChatById: (chatId: string) => ChatListItem | undefined;
@@ -87,7 +97,7 @@ export const useChatStore = create<ChatStore>()(
           text,
           createdAt: new Date().toISOString(),
           senderId: user.id,
-          username: user.username,
+          name: user.name,
           avatar: user.avatar,
         };
 
@@ -104,13 +114,29 @@ export const useChatStore = create<ChatStore>()(
         get().updateChatLastMessage(chatId, text, newMessage.createdAt);
       },
 
+      // ⭐ 新增：直接设置某个聊天的所有消息（用于 API 加载）
+      setMessages: (chatId, messages) => {
+        set({
+          chats: {
+            ...get().chats,
+            [chatId]: messages,
+          },
+        });
+
+        // 如果有消息，更新聊天列表的最后一条消息
+        if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          get().updateChatLastMessage(chatId, lastMsg.text, lastMsg.createdAt);
+        }
+      },
+
       // ⭐ Add new chat to chat list (for groups or new conversations)
       addChat: (chat) => {
         const currentChatList = get().chatList;
-        
+
         // Check if chat already exists
         const existingIndex = currentChatList.findIndex(c => c.id === chat.id);
-        
+
         if (existingIndex !== -1) {
           // Update existing chat
           const updatedChatList = [...currentChatList];
@@ -127,26 +153,31 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
+      // ⭐ Set all chats (for API bulk updates)
+      setChats: (chats) => {
+        set({ chatList: chats });
+      },
+
       // ⭐ Update last message in chat list
       updateChatLastMessage: (chatId, message, timestamp) => {
         const currentChatList = get().chatList;
         const chatIndex = currentChatList.findIndex(c => c.id === chatId);
-        
+
         if (chatIndex !== -1) {
           const updatedChatList = [...currentChatList];
           const chat = updatedChatList[chatIndex];
-          
+
           // Update chat
           updatedChatList[chatIndex] = {
             ...chat,
             lastMessage: message,
             timestamp: timestamp,
           };
-          
+
           // Move to top of list
           const [movedChat] = updatedChatList.splice(chatIndex, 1);
           updatedChatList.unshift(movedChat);
-          
+
           set({ chatList: updatedChatList });
         }
       },
@@ -157,7 +188,7 @@ export const useChatStore = create<ChatStore>()(
         set({
           chatList: currentChatList.filter(c => c.id !== chatId),
         });
-        
+
         // Also clear messages
         get().clearChat(chatId);
       },
@@ -171,7 +202,7 @@ export const useChatStore = create<ChatStore>()(
       markAsRead: (chatId) => {
         const currentChatList = get().chatList;
         const chatIndex = currentChatList.findIndex(c => c.id === chatId);
-        
+
         if (chatIndex !== -1) {
           const updatedChatList = [...currentChatList];
           updatedChatList[chatIndex] = {
@@ -186,7 +217,7 @@ export const useChatStore = create<ChatStore>()(
       incrementUnread: (chatId) => {
         const currentChatList = get().chatList;
         const chatIndex = currentChatList.findIndex(c => c.id === chatId);
-        
+
         if (chatIndex !== -1) {
           const updatedChatList = [...currentChatList];
           updatedChatList[chatIndex] = {

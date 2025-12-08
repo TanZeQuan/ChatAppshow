@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
+=======
+import React, { useState, useLayoutEffect, useEffect } from 'react';
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 import {
   View,
   Text,
@@ -11,6 +15,10 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+<<<<<<< HEAD
+=======
+  RefreshControl,
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,8 +27,13 @@ import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { useChatStore, Message } from '../../store/chatStore'; // Import Message type
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
+<<<<<<< HEAD
 import { useUserStore } from '../../store/userStore'; // Updated import path
 import { readChatMessages } from '../../api/Chat'; // Import readChatMessages
+=======
+import { useUserStore } from '@/src/store/userStore';
+import { readChatMessages } from '../../api/Chat';
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 
 interface DisplayMessage {
   id: string;
@@ -58,6 +71,7 @@ export default function ChatRoomScreen() {
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+<<<<<<< HEAD
   const [messagesLoading, setMessagesLoading] = useState(true);
 
   // Messages for display, sorted by createdAt ascending
@@ -72,6 +86,72 @@ export default function ChatRoomScreen() {
         avatar: msg.senderId === currentUserId ? currentUserAvatar : (msg.avatar || getChatById(chatId)?.avatar || 'https://i.pravatar.cc/150?img=' + msg.senderId),
     }));
 
+=======
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [offset, setOffset] = useState(0);
+
+  // Load messages on mount
+  useEffect(() => {
+    loadMessages();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  const loadMessages = async (loadMore = false) => {
+    if (!currentUserId) return;
+
+    try {
+      if (!loadMore) {
+        setIsLoading(true);
+      }
+
+      const currentOffset = loadMore ? offset : 0;
+
+      const result = await readChatMessages({
+        chat_id: chatId,
+        user_id: currentUserId,
+        offset: currentOffset,
+      });
+
+      console.log("=== Load Messages Debug ===");
+      console.log("API Result:", result);
+
+      if (result.success && result.data) {
+        // Transform API response to message format
+        const apiMessages = Array.isArray(result.data) ? result.data : [];
+        
+        console.log("API Messages count:", apiMessages.length);
+
+        // TODO: Store messages in chatStore
+        // You'll need to add a method to bulk load messages
+        // For now, messages will be shown from local store
+
+        if (loadMore) {
+          setOffset(currentOffset + apiMessages.length);
+        } else {
+          setOffset(apiMessages.length);
+        }
+      }
+
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error loading messages:", error);
+      setIsLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await loadMessages(false);
+    setRefreshing(false);
+  };
+
+  const messages: DisplayMessage[] = storedMessages.map(msg => ({
+    ...msg,
+    sender: msg.senderId === currentUserId ? 'me' : 'other',
+    senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
+  }));
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
@@ -87,6 +167,7 @@ export default function ChatRoomScreen() {
     };
   }, [insets, navigation]);
 
+<<<<<<< HEAD
 
   const loadMessages = useCallback(async () => {
     if (!chatId || !currentUserId) {
@@ -134,8 +215,18 @@ export default function ChatRoomScreen() {
     if (!inputText.trim()) return;
 
     // TODO: Send message to backend via API
+=======
+  const handleSend = async () => {
+    if (!inputText.trim()) return;
+
+    // TODO: Send message via API
+    // For now, just add to local store
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
     addMessage(chatId, inputText); // store handles user info automatically
     setInputText('');
+
+    // Here you would call your send message API:
+    // const result = await sendMessage({ chat_id: chatId, user_id: currentUserId, message: inputText });
   };
 
   const handleClearChat = () => {
@@ -194,7 +285,11 @@ export default function ChatRoomScreen() {
       {(item.sender === 'other') && ( // Only show avatar for other sender
         <View style={roomStyles.avatar}>
           <Image
+<<<<<<< HEAD
             source={{ uri: item.avatar || 'https://i.pravatar.cc/150?img=' + item.senderId }}
+=======
+            source={{ uri: item.avatar || `https://i.pravatar.cc/150?u=${chatId}` }}
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
             style={roomStyles.avatarImage}
           />
         </View>
@@ -233,12 +328,34 @@ export default function ChatRoomScreen() {
     </TouchableOpacity>
   );
 
+<<<<<<< HEAD
   if (messagesLoading) {
     return (
       <View style={roomStyles.loadingContainer}>
         <ActivityIndicator size="large" color="#FFB84D" />
         <Text style={roomStyles.loadingText}>加载消息中...</Text>
       </View>
+=======
+  if (isLoading && messages.length === 0) {
+    return (
+      <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
+        <SafeAreaView style={{ flex: 1 }}>
+          <View style={roomStyles.header}>
+            <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="chevron-back" size={24} color="#333" />
+            </TouchableOpacity>
+            <Text style={roomStyles.headerTitle}>{chatName}</Text>
+            <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
+              <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+          <View style={roomStyles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFD966" />
+            <Text style={roomStyles.loadingText}>加载消息中...</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
+>>>>>>> 90aaf57c5e02850cf7bb2802c0b304936322c93c
     );
   }
 
@@ -265,6 +382,21 @@ export default function ChatRoomScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
             inverted
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={['#FFD966']}
+                tintColor="#FFD966"
+              />
+            }
+            ListEmptyComponent={
+              <View style={roomStyles.emptyContainer}>
+                <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
+                <Text style={roomStyles.emptyText}>暂无消息</Text>
+                <Text style={roomStyles.emptySubtext}>发送第一条消息开始聊天</Text>
+              </View>
+            }
           />
 
           <View style={roomStyles.inputSection}>
@@ -348,6 +480,16 @@ const roomStyles = RNStyleSheet.create({
   backButton: { padding: 4 },
   headerTitle: { fontSize: 16, fontWeight: '500', color: '#333333', flex: 1, textAlign: 'center' },
   moreButton: { padding: 4 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#666',
+  },
   keyboardAvoidingView: { flex: 1 },
   chatList: { paddingHorizontal: 12, paddingVertical: 16 },
   messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
@@ -361,6 +503,23 @@ const roomStyles = RNStyleSheet.create({
   senderName: { fontWeight: 'bold', marginBottom: 2, fontSize: 14, color: '#333333' },
   messageText: { fontSize: 16, color: '#333333', lineHeight: 22 },
   timestamp: { fontSize: 10, color: '#666666', marginTop: 4, opacity: 0.7 },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 60,
+    transform: [{ scaleY: -1 }], // Flip back since FlatList is inverted
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#CCC',
+    marginTop: 6,
+  },
   inputSection: { backgroundColor: '#F5F5F5' },
   inputContainer: {
     flexDirection: 'row',
