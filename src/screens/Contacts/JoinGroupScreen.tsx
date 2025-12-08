@@ -8,19 +8,38 @@ import {
   ScrollView,
   StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { colors, borders, typography } from "../../styles";
 import { LinearGradient } from "expo-linear-gradient";
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
 
 export default function JoinGroupScreen() {
   const navigation = useNavigation();
   const [searchText, setSearchText] = useState("");
+  const insets = useSafeAreaInsets();
 
   const handleScanGroupCard = () => {
     // Navigate to QR scanner for group
     console.log("Scan Group Card");
   };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      // Hide tab bar when screen is focused
+      navigation.getParent()?.setOptions({
+        tabBarStyle: { display: 'none' }
+      });
+
+      // Show tab bar when leaving the screen with ORIGINAL STYLE
+      return () => {
+        navigation.getParent()?.setOptions({
+          tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
+        });
+      };
+    }, [navigation, insets])
+  );
 
   return (
     <LinearGradient colors={["#fcd34d", "#fef3c7"]} style={styles.container}>
@@ -80,19 +99,22 @@ export default function JoinGroupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background.grayPale, // 替代默认白色
   },
   safeArea: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
+    paddingHorizontal: 20, // 可用 scaleWidth(20)
   },
+
+  /** HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 20,
+    paddingVertical: 20, // scaleHeight(20)
     marginTop: 10,
     position: "relative",
   },
@@ -101,26 +123,28 @@ const styles = StyleSheet.create({
     left: 0,
     width: 36,
     height: 36,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    borderRadius: 18,
+    backgroundColor: colors.background.transparentWhite50,
+    borderRadius: borders.radius50 / 2,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#78350f",
+    fontSize: typography.fontSize20,
+    fontWeight: typography.fontWeight600,
+    color: colors.functional.yellow, // 替代 #78350f
   },
+
+  /** SEARCH */
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
+    paddingHorizontal: 16, // scaleWidth(16)
+    paddingVertical: 12, // scaleHeight(12)
     marginTop: 10,
     marginBottom: 20,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -128,12 +152,15 @@ const styles = StyleSheet.create({
   },
   searchIcon: {
     marginRight: 10,
+    color: colors.text.grayLight,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: "#1f2937",
+    fontSize: typography.fontSize14,
+    color: colors.text.dark,
   },
+
+  /** ACTIONS */
   actionsContainer: {
     gap: 16,
   },
@@ -141,11 +168,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -159,13 +186,14 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borders.radius50 / 2,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.background.iconBg,
   },
   actionLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1f2937",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
 });

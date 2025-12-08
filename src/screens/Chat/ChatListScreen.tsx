@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '../../store/chatStore';
+import { colors, borders, typography } from "../../styles";
 import { useContactStore } from '../../store/contactStore';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { readUserChats, readChatMessages } from '../../api/Chat';
@@ -25,7 +26,6 @@ const { width, height } = Dimensions.get("window");
 
 const scaleWidth = (size: number) => (width / 375) * size;
 const scaleHeight = (size: number) => (height / 812) * size;
-const scaleFont = (size: number) => (width / 375) * size;
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
@@ -360,59 +360,59 @@ export default function ChatListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F5F5'
+    backgroundColor: colors.background.lightGray, // 替换 #F5F5F5
   },
   gradientHeader: {
-    paddingBottom: scaleHeight(16)
+    paddingBottom: scaleHeight(16),
   },
   header: {
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    alignItems: 'center'
+    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: '600',
-    color: '#333'
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.black,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.background.white,
     marginHorizontal: scaleWidth(16),
     marginTop: scaleHeight(8),
-    borderRadius: 20,
+    borderRadius: borders.radius20,
     paddingHorizontal: scaleWidth(12),
-    paddingVertical: scaleHeight(8)
+    paddingVertical: scaleHeight(8),
   },
   searchIcon: {
-    marginRight: scaleWidth(8)
+    marginRight: scaleWidth(8),
   },
   searchInput: {
     flex: 1,
-    fontSize: scaleFont(15),
-    color: '#333',
-    padding: 0
+    fontSize: typography.fontSize15,
+    color: colors.text.dark,
+    padding: 0,
   },
   listContainer: {
     flex: 1,
-    backgroundColor: '#F5F5F5',
-    paddingTop: scaleHeight(12)
+    backgroundColor: colors.background.lightGray,
+    paddingTop: scaleHeight(12),
   },
   listContent: {
-    paddingHorizontal: scaleWidth(16)
+    paddingHorizontal: scaleWidth(16),
   },
   chatItem: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     padding: scaleWidth(12),
     marginBottom: scaleHeight(8),
-    shadowColor: '#000',
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 1
+    elevation: 1,
   },
   avatarContainer: {
     width: scaleWidth(48),
@@ -423,15 +423,15 @@ const styles = StyleSheet.create({
   avatar: {
     width: scaleWidth(48),
     height: scaleWidth(48),
-    borderRadius: scaleWidth(8)
+    borderRadius: borders.radius8,
   },
   avatarPlaceholder: {
     width: scaleWidth(48),
     height: scaleWidth(48),
-    backgroundColor: '#E8E8E8',
-    borderRadius: scaleWidth(8),
+    backgroundColor: colors.background.grayLight,
+    borderRadius: borders.radius8,
     justifyContent: 'center',
-    alignItems: 'center'
+    alignItems: 'center',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -440,23 +440,23 @@ const styles = StyleSheet.create({
     width: scaleWidth(12),
     height: scaleWidth(12),
     borderRadius: scaleWidth(6),
-    backgroundColor: '#4CAF50',
+    backgroundColor: colors.functional.green,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.background.white,
   },
   groupAvatarContainer: {
     width: scaleWidth(48),
     height: scaleWidth(48),
     flexDirection: 'row',
     flexWrap: 'wrap',
-    borderRadius: scaleWidth(8),
+    borderRadius: borders.radius8,
     overflow: 'hidden',
   },
   groupAvatarPlaceholder: {
     width: scaleWidth(48),
     height: scaleWidth(48),
-    backgroundColor: '#E8E8E8',
-    borderRadius: scaleWidth(8),
+    backgroundColor: colors.background.grayLight,
+    borderRadius: borders.radius8,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -478,13 +478,13 @@ const styles = StyleSheet.create({
   },
   chatContent: {
     flex: 1,
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   chatHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: scaleHeight(4)
+    marginBottom: scaleHeight(4),
   },
   nameContainer: {
     flexDirection: 'row',
@@ -498,15 +498,15 @@ const styles = StyleSheet.create({
   groupBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: colors.background.grayLight,
     paddingHorizontal: scaleWidth(6),
     paddingVertical: scaleHeight(2),
-    borderRadius: 10,
+    borderRadius: borders.radius10,
     marginLeft: scaleWidth(6),
   },
   groupBadgeText: {
-    fontSize: scaleFont(10),
-    color: '#666',
+    fontSize: typography.fontSize11,
+    color: colors.text.grayMedium,
     marginLeft: scaleWidth(2),
   },
   messageRow: {
@@ -515,47 +515,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   badge: {
-    backgroundColor: '#FF3B30',
-    borderRadius: 10,
+    backgroundColor: colors.functional.red,
+    borderRadius: borders.radius10,
     paddingHorizontal: 6,
     paddingVertical: 2,
     marginLeft: 6,
     minWidth: 20,
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
   },
   badgeText: {
-    color: '#FFF',
-    fontSize: scaleFont(11),
-    fontWeight: '600'
+    color: colors.text.white,
+    fontSize: typography.fontSize11,
+    fontWeight: typography.fontWeight600,
   },
   name: {
-    fontSize: scaleFont(16),
-    fontWeight: '500',
-    color: '#333'
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
   time: {
-    fontSize: scaleFont(12),
-    color: '#999'
+    fontSize: typography.fontSize12,
+    color: colors.text.grayMedium,
   },
   message: {
-    fontSize: scaleFont(14),
-    color: '#999',
+    fontSize: typography.fontSize14,
+    color: colors.text.grayMedium,
     flex: 1,
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: scaleHeight(60)
+    paddingTop: scaleHeight(60),
   },
   emptyText: {
-    fontSize: scaleFont(16),
-    color: '#999',
-    marginTop: scaleHeight(12)
+    fontSize: typography.fontSize16,
+    color: colors.text.grayMedium,
+    marginTop: scaleHeight(12),
   },
   emptySubtext: {
-    fontSize: scaleFont(14),
-    color: '#CCC',
+    fontSize: typography.fontSize14,
+    color: colors.text.grayLight,
     marginTop: scaleHeight(6),
   },
 });

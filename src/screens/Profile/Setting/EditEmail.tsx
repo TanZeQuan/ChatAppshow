@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ProfileStackParamList } from "../../../navigation/types";
+import { colors, borders, typography } from "../../../styles";
 import { useUserStore } from '../../../store/userStore';
 import { changeUserEmail, readUsers } from '../../../api/User';
 
@@ -197,7 +198,7 @@ export default function EditEmailScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF8DC",
+    backgroundColor: colors.background.yellowPale, // 原 #FFF8DC
   },
 
   /** HEADER */
@@ -207,17 +208,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: "#F5C842",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5B830",
+    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.functional.yellowBright, // 原 #E5B830
   },
   backButton: {
     padding: scaleWidth(8),
   },
   headerTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium, // 原 #333
   },
   placeholder: {
     width: scaleWidth(40),
@@ -228,56 +229,56 @@ const styles = StyleSheet.create({
     padding: scaleWidth(20),
   },
   label: {
-    fontSize: scaleFont(14),
-    color: "#666",
+    fontSize: typography.fontSize14,
+    color: colors.text.darkGray, // 原 #666
     marginBottom: scaleHeight(8),
     marginTop: scaleHeight(8),
   },
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius10,
     paddingHorizontal: scaleWidth(16),
     marginBottom: scaleHeight(8),
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
+    borderWidth: borders.width1,
+    borderColor: colors.border.lightGray, // 原 #E5E5E5
   },
   input: {
     flex: 1,
-    fontSize: scaleFont(16),
-    color: "#333",
+    fontSize: typography.fontSize16,
+    color: colors.text.blackMedium, // 原 #333
     paddingVertical: scaleHeight(12),
   },
   disabledInput: {
-    color: "#999",
-    backgroundColor: "#F5F5F5",
+    color: colors.text.grayLight, // 原 #999
+    backgroundColor: colors.background.grayLight, // 原 #F5F5F5
   },
   clearButton: {
     padding: scaleWidth(4),
   },
   hint: {
-    fontSize: scaleFont(12),
-    color: "#999",
+    fontSize: typography.fontSize12,
+    color: colors.text.grayLight, // 原 #999
     marginBottom: scaleHeight(20),
     marginLeft: scaleWidth(4),
   },
   confirmButton: {
-    backgroundColor: "#F5C842",
-    borderRadius: 25,
+    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    borderRadius: borders.radius25,
     paddingVertical: scaleHeight(14),
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#E5B830",
+    borderWidth: borders.width1,
+    borderColor: colors.functional.yellowBright, // 原 #E5B830
     marginTop: scaleHeight(20),
   },
   confirmButtonDisabled: {
-    backgroundColor: "#E5E5E5",
-    borderColor: "#D0D0D0",
+    backgroundColor: colors.background.grayLight, // 原 #E5E5E5
+    borderColor: colors.border.grayMedium, // 原 #D0D0D0
   },
   confirmButtonText: {
-    fontSize: scaleFont(16),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium, // 原 #333
   },
 });

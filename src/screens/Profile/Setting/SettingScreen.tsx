@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import {
@@ -9,13 +9,32 @@ import {
     TouchableOpacity,
     View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors, borders, typography } from "../../../styles";
 import { ProfileStackParamList } from "../../../navigation/types";
+import { getOriginalTabBarStyle } from "../../../components/tabstyle";
 
 export default function SettingScreen() {
     const navigation =
         useNavigation<NativeStackNavigationProp<ProfileStackParamList>>();
     const [showSendButton, setShowSendButton] = useState(false);
+    
+    const insets = useSafeAreaInsets();
+    useFocusEffect(
+        React.useCallback(() => {
+            // Hide tab bar when screen is focused
+            navigation.getParent()?.setOptions({
+                tabBarStyle: { display: 'none' }
+            });
+
+            // Show tab bar when leaving the screen with ORIGINAL STYLE
+            return () => {
+                navigation.getParent()?.setOptions({
+                    tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
+                });
+            };
+        }, [navigation, insets])
+    );
 
     const SettingItem = ({
         title,
@@ -75,26 +94,42 @@ export default function SettingScreen() {
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: "#ffefb4ff" },
+    container: {
+        flex: 1,
+        backgroundColor: colors.background.gradientYellow[0], // 原 #ffefb4ff
+    },
+
+    /** HEADER */
     header: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderColor: "#ecececff",
-        backgroundColor: "#ffe070ff",
+        paddingHorizontal: 16, // 可以换成 scaleWidth(16)
+        paddingVertical: 12,   // 可以换成 scaleHeight(12)
+        borderBottomWidth: borders.width1,
+        borderColor: colors.border.light, // 原 #ecececff
+        backgroundColor: colors.functional.yellowBright, // 原 #ffe070ff
     },
-    headerTitle: { flex: 1, textAlign: "center", fontSize: 18, fontWeight: "600" },
+    headerTitle: {
+        flex: 1,
+        textAlign: "center",
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.blackMedium,
+    },
+
+    /** SETTING ITEM */
     settingItem: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        backgroundColor: "#ffffff9c",
-        borderBottomWidth: 1,
-        borderColor: "#eee",
+        paddingHorizontal: 20, // scaleWidth(20)
+        paddingVertical: 15,   // scaleHeight(15)
+        backgroundColor: colors.background.white, // 原 #ffffff9c，可考虑透明度用 rgba(255,255,255,0.6)
+        borderBottomWidth: borders.width1,
+        borderColor: colors.border.lightGray, // 原 #eee
     },
-    settingTitle: { fontSize: 16, color: "#232323" },
+    settingTitle: {
+        fontSize: typography.fontSize16,
+        color: colors.text.primary,
+    },
 });

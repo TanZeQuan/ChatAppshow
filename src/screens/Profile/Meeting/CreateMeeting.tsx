@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, borders, typography } from "../../../styles";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -214,6 +215,7 @@ export default function CreateMeetingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: colors.background.grayLight,
   },
   safeArea: {
     flex: 1,
@@ -222,6 +224,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 20,
   },
+
+  /** HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -235,54 +239,58 @@ const styles = StyleSheet.create({
     left: 0,
     width: 36,
     height: 36,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    borderRadius: 18,
+    backgroundColor: colors.background.transparentWhite50,
+    borderRadius: borders.radius18,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#78350f",
+    fontSize: typography.fontSize20,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.dark,
   },
+
+  /** FORM */
   formContainer: {
     marginTop: 20,
   },
   inputContainer: {
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.default,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
   },
   input: {
-    fontSize: 14,
-    color: "#1f2937",
+    fontSize: typography.fontSize14,
+    color: colors.text.dark,
   },
+
+  /** ROW ITEM */
   rowItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.default,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
   },
   rowLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1f2937",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
   rowRight: {
     flexDirection: "row",
@@ -290,34 +298,38 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowValue: {
-    fontSize: 14,
-    color: "#9ca3af",
+    fontSize: typography.fontSize14,
+    color: colors.text.grayLight,
   },
+
+  /** TOGGLE */
   toggleContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.default,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
     elevation: 2,
   },
   toggleLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1f2937",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
+
+  /** SUBMIT BUTTON */
   submitButton: {
     marginTop: 20,
-    borderRadius: 25,
+    borderRadius: borders.radius25,
     overflow: "hidden",
-    shadowColor: "#000",
+    shadowColor: colors.shadow.default,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -326,13 +338,13 @@ const styles = StyleSheet.create({
   submitGradient: {
     paddingVertical: 14,
     alignItems: "center",
-    borderRadius: 25,
-    borderWidth: 2,
-    borderColor: "#78350f",
+    borderRadius: borders.radius25,
+    borderWidth: borders.width2,
+    borderColor: colors.functional.yellow,
   },
   submitText: {
-    color: "#78350f",
-    fontSize: 16,
-    fontWeight: "600",
+    color: colors.text.dark,
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
   },
 });

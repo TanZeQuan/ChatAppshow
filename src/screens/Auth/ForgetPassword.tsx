@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { colors, borders, typography } from "../../styles";
 import { sendOtpForPasswordReset, verifyOtpCode, resetPassword } from '../../api/UserForget'; // 引入你的 api 文件
 
 export default function ForgetPasswordScreen() {
@@ -193,7 +194,7 @@ export default function ForgetPasswordScreen() {
                             disabled={submitting}
                         >
                             <LinearGradient
-                                colors={['#fbbf24', '#f59e0b']}
+                                colors={['#FFFFFF', '#F8F8F8']}
                                 style={styles.submitGradient}
                             >
                                 <Text style={styles.submitText}>
@@ -211,14 +212,19 @@ export default function ForgetPasswordScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: colors.background.white,
     },
+
     safeArea: {
         flex: 1,
     },
+
     scrollContent: {
         flexGrow: 1,
         paddingHorizontal: 20,
     },
+
+    // Header
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -227,90 +233,108 @@ const styles = StyleSheet.create({
         marginTop: 10,
         position: 'relative',
     },
+
     backButton: {
         position: 'absolute',
         left: 0,
         width: 36,
         height: 36,
-        backgroundColor: 'rgba(255, 255, 255, 0.5)',
-        borderRadius: 18,
+        backgroundColor: colors.background.transparentWhite50,
+        borderRadius: borders.radius18,
         alignItems: 'center',
         justifyContent: 'center',
     },
+
     title: {
-        fontSize: 20,
-        fontWeight: '600',
-        color: '#000000ff',
+        fontSize: typography.fontSize20,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.black,
     },
+
+    // Form Container
     formContainer: {
         marginTop: 20,
     },
+
     inputContainer: {
-        backgroundColor: 'white',
-        borderRadius: 20,
+        backgroundColor: colors.background.white,
+        borderRadius: borders.radius20,
         paddingHorizontal: 16,
         paddingVertical: 12,
         marginBottom: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        shadowColor: '#000',
+
+        // shadow
+        shadowColor: colors.shadow.black,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.05,
         shadowRadius: 4,
         elevation: 2,
     },
+
     input: {
         flex: 1,
-        fontSize: 14,
-        color: '#1f2937',
+        fontSize: typography.fontSize14,
+        color: colors.text.dark,
     },
+
     eyeIcon: {
         padding: 2,
     },
+
+    // Verification Code Row
     inputRow: {
         flexDirection: 'row',
         alignItems: 'center',
         marginBottom: 12,
     },
+
     codeInput: {
         flex: 1,
         marginBottom: 0,
         marginRight: 10,
     },
+
     sendCodeButton: {
-        backgroundColor: '#fbbf24',
+        backgroundColor: colors.background.yellowLight,
         paddingHorizontal: 16,
         paddingVertical: 12,
-        borderRadius: 20,
-        shadowColor: '#000',
+        borderRadius: borders.radius20,
+        shadowColor: colors.shadow.black,
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
         elevation: 2,
     },
+
     sendCodeText: {
-        color: '#000000ff',
-        fontSize: 13,
-        fontWeight: '600',
+        color: colors.text.black,
+        fontSize: typography.fontSize13,
+        fontWeight: typography.fontWeight600,
     },
+
     submitButton: {
         marginTop: 20,
-        borderRadius: 25,
+        borderRadius: borders.radius25,
         overflow: 'hidden',
-        shadowColor: '#000',
+
+        shadowColor: colors.shadow.black,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 8,
         elevation: 4,
     },
+
     submitGradient: {
         paddingVertical: 14,
         alignItems: 'center',
-        borderRadius: 25,
+        borderRadius: borders.radius25,
     },
+
     submitText: {
-        color: '#030303ff',
-        fontSize: 16,
-        fontWeight: '600',
+        color: colors.text.black,
+        fontSize: typography.fontSize16,
+        fontWeight: typography.fontWeight600,
     },
 });

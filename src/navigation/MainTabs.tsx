@@ -19,26 +19,26 @@ const isTablet = width >= 768;
 const getResponsiveSize = () => {
   if (isTablet) {
     return {
-      iconSize: 28,
+      iconSize: 32,        // Increased from 28
       tabBarHeight: 70,
-      paddingBottom: 12,
-      paddingTop: 12,
+      paddingBottom: 8,    // Reduced from 12
+      paddingTop: 16,      // Increased from 12
       fontSize: 14,
     };
   } else if (isMediumDevice) {
     return {
-      iconSize: 26,
+      iconSize: 30,        // Increased from 26
       tabBarHeight: 60,
-      paddingBottom: 8,
-      paddingTop: 4,
+      paddingBottom: 4,    // Reduced from 8
+      paddingTop: 8,       // Increased from 4
       fontSize: 12,
     };
   } else {
     return {
-      iconSize: 22,
+      iconSize: 26,        // Increased from 22
       tabBarHeight: 55,
-      paddingBottom: 6,
-      paddingTop: 6,
+      paddingBottom: 2,    // Reduced from 6
+      paddingTop: 10,      // Increased from 6
       fontSize: 11,
     };
   }
@@ -97,10 +97,10 @@ function MainTabsContent() {
         tabBarLabelStyle: {
           fontSize: responsiveSizes.fontSize,
           fontWeight: "600",
-          marginTop: 2,
+          marginTop: -2,  // Reduced from 2 to bring label closer to icon
         },
         tabBarItemStyle: {
-          paddingVertical: 4,
+          paddingVertical: 2,  // Reduced from 4 to move everything up
         },
       })}
     >

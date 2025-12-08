@@ -16,6 +16,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, borders, typography } from "../../styles";
 import { createUser } from "../../api/User";
 import { useUserStore } from '../../store/userStore';
 
@@ -314,7 +315,7 @@ export default function RegisterScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    flex: 1
+    flex: 1,
   },
   keyboardView: {
     flex: 1,
@@ -333,16 +334,16 @@ const styles = StyleSheet.create({
 
   // Logo
   logoContainer: {
-    marginBottom: isSmallDevice ? scaleHeight(12) : scaleHeight(16)
+    marginBottom: isSmallDevice ? scaleHeight(12) : scaleHeight(16),
   },
   logoCard: {
     width: scaleWidth(isSmallDevice ? 90 : 110),
     height: scaleWidth(isSmallDevice ? 90 : 110),
-    backgroundColor: "#FFFFFF",
-    borderRadius: scaleWidth(20),
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius24,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -350,7 +351,7 @@ const styles = StyleSheet.create({
   },
   logoImage: {
     width: scaleWidth(isSmallDevice ? 92 : 112),
-    height: scaleWidth(isSmallDevice ? 92 : 112)
+    height: scaleWidth(isSmallDevice ? 92 : 112),
   },
 
   // Background shapes
@@ -358,8 +359,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: scaleWidth(350),
     height: scaleWidth(350),
-    borderRadius: scaleWidth(60),
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    borderRadius: borders.radius60,
+    backgroundColor: colors.background.transparentWhite50,
     top: scaleHeight(-100),
     right: scaleWidth(-120),
     transform: [{ rotate: "45deg" }],
@@ -368,8 +369,8 @@ const styles = StyleSheet.create({
     position: "absolute",
     width: scaleWidth(300),
     height: scaleWidth(300),
-    borderRadius: scaleWidth(60),
-    backgroundColor: "rgba(255, 255, 255, 0.7)",
+    borderRadius: borders.radius60,
+    backgroundColor: colors.background.transparentWhite70,
     top: scaleHeight(50),
     left: scaleWidth(-150),
     transform: [{ rotate: "30deg" }],
@@ -377,10 +378,10 @@ const styles = StyleSheet.create({
 
   // Title
   title: {
-    fontSize: scaleFont(isSmallDevice ? 22 : 24),
-    fontWeight: "700",
+    fontSize: typography.fontSize24,
+    fontWeight: typography.fontWeight700,
     marginBottom: isSmallDevice ? scaleHeight(16) : scaleHeight(22),
-    color: "#333333",
+    color: colors.text.blackMedium,
   },
 
   // Input
@@ -389,11 +390,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     height: scaleHeight(isSmallDevice ? 46 : 50),
-    backgroundColor: "#FFFFFF",
-    borderRadius: scaleHeight(25),
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius25,
     marginBottom: isSmallDevice ? scaleHeight(10) : scaleHeight(14),
     paddingHorizontal: scaleWidth(18),
-    shadowColor: "#2F80ED",
+    shadowColor: colors.shadow.blue,
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -401,12 +402,12 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    fontSize: scaleFont(15),
-    color: "#333333",
+    fontSize: typography.fontSize15,
+    color: colors.text.dark,
     height: "100%",
   },
   icon: {
-    marginLeft: scaleWidth(10)
+    marginLeft: scaleWidth(10),
   },
 
   // Links
@@ -418,16 +419,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleWidth(15),
   },
   linkText: {
-    color: "#555555",
-    fontSize: scaleFont(13)
+    color: colors.text.grayDark,
+    fontSize: typography.fontSize13,
   },
 
   // Register Button
   registerButtonWrapper: {
     width: "100%",
     height: scaleHeight(isSmallDevice ? 46 : 50),
-    borderRadius: scaleHeight(25),
-    shadowColor: "#2F80ED",
+    borderRadius: borders.radius25,
+    shadowColor: colors.shadow.blue,
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -440,17 +441,17 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
-    borderRadius: scaleHeight(25),
+    borderRadius: borders.radius25,
     borderWidth: 1,
-    borderColor: "#FFFFFF",
+    borderColor: colors.background.white,
   },
   registerButtonText: {
-    color: "#333333",
-    fontSize: scaleFont(15),
-    fontWeight: "700"
+    color: colors.text.dark,
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight700,
   },
   disabledButton: {
-    opacity: 0.6
+    opacity: 0.6,
   },
 
   // Agreement
@@ -463,15 +464,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaleWidth(10),
   },
   checkbox: {
-    padding: scaleWidth(5)
+    padding: scaleWidth(5),
   },
   agreementText: {
     marginLeft: scaleWidth(8),
-    color: "#666666",
-    fontSize: scaleFont(12),
+    color: colors.text.grayDark,
+    fontSize: typography.fontSize13,
     flexShrink: 1,
   },
   agreementLink: {
-    color: "#2F80ED"
+    color: colors.functional.blue,
   },
 });

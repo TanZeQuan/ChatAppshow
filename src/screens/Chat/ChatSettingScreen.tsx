@@ -13,6 +13,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { colors, borders, typography } from "../../styles";
 import { useChatStore } from '../../store/chatStore';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
@@ -495,7 +496,7 @@ export default function ChatSettingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF8DC",
+    backgroundColor: colors.background.yellowPale,
   },
 
   /** HEADER */
@@ -505,17 +506,17 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: "#F5C842",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5B830",
+    backgroundColor: colors.background.yellowLight,
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.background.yellowBright,
   },
   backButton: {
     padding: 8,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
   },
   placeholder: {
     width: 40,
@@ -529,8 +530,8 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 14,
-    color: '#666',
+    fontSize: typography.fontSize14,
+    color: colors.text.grayDark,
   },
 
   /** CONTENT */
@@ -546,8 +547,8 @@ const styles = StyleSheet.create({
   avatarContainer: {
     width: 100,
     height: 100,
-    borderRadius: 8,
-    backgroundColor: "#D1D1D6",
+    borderRadius: borders.radius8,
+    backgroundColor: colors.background.iconBg,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -558,18 +559,18 @@ const styles = StyleSheet.create({
     height: 100,
   },
   profileName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
     marginBottom: 4,
   },
   profileSubtext: {
-    fontSize: 14,
-    color: "#999",
+    fontSize: typography.fontSize14,
+    color: colors.text.grayLight,
   },
   aboutText: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: typography.fontSize13,
+    color: colors.text.grayDark,
     marginTop: 8,
     paddingHorizontal: 32,
     textAlign: 'center',
@@ -577,16 +578,16 @@ const styles = StyleSheet.create({
 
   /** SECTION */
   sectionLabel: {
-    fontSize: 13,
-    color: "#999",
+    fontSize: typography.fontSize13,
+    color: colors.text.grayLight,
     marginLeft: 20,
     marginBottom: 8,
     marginTop: 16,
   },
   section: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background.white,
     marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: borders.radius12,
     overflow: "hidden",
   },
   item: {
@@ -599,7 +600,7 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: borders.radius18,
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -608,18 +609,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   itemTitle: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#333",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.blackMedium,
     marginBottom: 2,
   },
   itemSubtitle: {
-    fontSize: 12,
-    color: "#999",
+    fontSize: typography.fontSize12,
+    color: colors.text.grayLight,
   },
   separator: {
     height: 1,
-    backgroundColor: "#F0F0F0",
+    backgroundColor: colors.background.grayLight,
     marginLeft: 64,
   },
 });

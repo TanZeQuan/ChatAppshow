@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-
+import { colors, borders, typography } from "../../styles";
 import { login } from '../../api/Auth';
 import { readUsers } from '../../api/User';
 import { useUserStore } from '../../store/userStore';
@@ -169,6 +169,7 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
+
   container: {
     flex: 1,
     justifyContent: 'flex-start',
@@ -176,27 +177,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 25,
     paddingTop: 40,
   },
+
+  // Logo
   logoContainer: { marginBottom: 20 },
   logoCard: {
     width: 128,
     height: 128,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius24,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
     elevation: 5,
   },
   logoImage: { width: 130, height: 130 },
+
+  // 背景装饰
   bgShape1: {
     position: 'absolute',
     width: 350,
     height: 350,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: borders.radius60,
+    backgroundColor: colors.background.transparentWhite50,
     top: -100,
     right: -120,
     transform: [{ rotate: '45deg' }],
@@ -205,28 +210,31 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 300,
     height: 300,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    borderRadius: borders.radius60,
+    backgroundColor: colors.background.transparentWhite70,
     top: 50,
     left: -150,
     transform: [{ rotate: '30deg' }],
   },
+
   title: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: typography.fontSize28,
+    fontWeight: typography.fontWeight700,
     marginBottom: 30,
-    color: '#333333',
+    color: colors.text.blackMedium,
   },
+
+  // 输入框
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     width: '100%',
     height: 55,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 30,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius30,
     marginBottom: 20,
     paddingHorizontal: 20,
-    shadowColor: '#2F80ED',
+    shadowColor: colors.shadow.blue,
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -234,11 +242,13 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    fontSize: 16,
-    color: '#333333',
+    fontSize: typography.fontSize16,
+    color: colors.text.dark,
     height: '100%',
   },
   icon: { marginLeft: 10 },
+
+  // 链接
   linksContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -247,14 +257,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
   },
   linkText: {
-    color: '#555555',
-    fontSize: 14,
+    color: colors.text.grayDark,
+    fontSize: typography.fontSize14,
   },
+
+  // 登录按钮
   loginButtonWrapper: {
     width: '100%',
     height: 55,
-    borderRadius: 30,
-    shadowColor: '#2F80ED',
+    borderRadius: borders.radius30,
+    shadowColor: colors.shadow.blue,
     shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 10,
@@ -267,16 +279,18 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    borderRadius: 30,
+    borderRadius: borders.radius30,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: colors.background.white,
   },
   loginButtonText: {
-    color: '#333333',
-    fontSize: 16,
-    fontWeight: '700',
+    color: colors.text.dark,
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight700,
   },
   disabledButton: { opacity: 0.6 },
+
+  // 协议勾选
   agreementContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,8 +301,8 @@ const styles = StyleSheet.create({
   checkbox: { padding: 5 },
   agreementText: {
     marginLeft: 8,
-    color: '#666666',
-    fontSize: 13,
+    color: colors.text.grayDark,
+    fontSize: typography.fontSize13,
   },
-  agreementLink: { color: '#2F80ED' },
+  agreementLink: { color: colors.functional.blue },
 });

@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
+import { colors, borders, typography } from "../../styles";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
 import { useUserStore } from "../../store/userStore";
 import { readFriends, acceptFriendRequest, rejectFriendRequest } from "../../api/Friend";
@@ -387,30 +388,26 @@ export default function FriendRequestScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: "#F5F5F5" 
-  },
+   container: { flex: 1, backgroundColor: colors.background.grayLight },
+
+  /** HEADER */
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: "#FFD700",
+    backgroundColor: colors.functional.yellow,
   },
-  backButton: { 
-    padding: scaleWidth(8) 
+  backButton: { padding: scaleWidth(8) },
+  headerTitle: {
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.black,
   },
-  headerTitle: { 
-    fontSize: scaleFont(18), 
-    fontWeight: "600", 
-    color: "#333" 
-  },
-  placeholder: { 
-    width: scaleWidth(40) 
-  },
+  placeholder: { width: scaleWidth(40) },
 
+  /** LOADING */
   loadingContainer: {
     padding: scaleHeight(20),
     alignItems: "center",
@@ -418,119 +415,101 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: scaleHeight(10),
-    fontSize: scaleFont(14),
-    color: "#666",
+    fontSize: typography.fontSize14,
+    color: colors.text.gray,
   },
 
-  scrollView: {
-    flex: 1,
-  },
+  scrollView: { flex: 1 },
 
-  // Section Styles
-  section: {
-    marginBottom: scaleHeight(12),
-  },
+  /** SECTIONS */
+  section: { marginBottom: scaleHeight(12) },
   sectionHeader: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background.white,
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.border.grayLight,
   },
   sectionTitle: {
-    fontSize: scaleFont(15),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.black,
   },
-  sectionContent: {
-    backgroundColor: "#FFFFFF",
-  },
+  sectionContent: { backgroundColor: colors.background.white },
 
-  // Request Item
+  /** REQUEST ITEM */
   requestItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: "#FFFFFF",
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#F0F0F0",
+    backgroundColor: colors.background.white,
+    borderBottomWidth: borders.width05,
+    borderBottomColor: colors.border.grayLight,
   },
-  requestLeft: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    flex: 1, 
-    marginRight: scaleWidth(12) 
+  requestLeft: { flexDirection: "row", alignItems: "center", flex: 1, marginRight: scaleWidth(12) },
+  avatar: {
+    width: scaleWidth(45),
+    height: scaleWidth(45),
+    borderRadius: borders.radius50,
+    marginRight: scaleWidth(12),
+    backgroundColor: colors.background.gray,
   },
-  avatar: { 
-    width: scaleWidth(45), 
-    height: scaleWidth(45), 
-    borderRadius: scaleWidth(22.5), 
-    marginRight: scaleWidth(12), 
-    backgroundColor: "#E5E5E5" 
+  userInfo: { flex: 1 },
+  name: {
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.black,
+    marginBottom: scaleHeight(2),
   },
-  userInfo: { 
-    flex: 1 
-  },
-  name: { 
-    fontSize: scaleFont(15), 
-    fontWeight: "500", 
-    color: "#333", 
-    marginBottom: scaleHeight(2) 
-  },
-  userId: { 
-    fontSize: scaleFont(12), 
-    color: "#999",
+  userId: {
+    fontSize: typography.fontSize12,
+    color: colors.text.gray,
     marginBottom: scaleHeight(2),
   },
   userPhone: {
-    fontSize: scaleFont(11),
-    color: "#999",
+    fontSize: typography.fontSize11,
+    color: colors.text.gray,
   },
 
-  // Buttons
-  buttonGroup: { 
-    flexDirection: "row", 
-    gap: scaleWidth(8),
-    minWidth: scaleWidth(100),
-    justifyContent: "flex-end",
+  /** BUTTONS */
+  buttonGroup: { flexDirection: "row", gap: scaleWidth(8), minWidth: scaleWidth(100), justifyContent: "flex-end" },
+  rejectButton: {
+    backgroundColor: colors.background.grayLight,
+    paddingHorizontal: scaleWidth(14),
+    paddingVertical: scaleHeight(6),
+    borderRadius: borders.radius4,
+    borderWidth: borders.width1,
+    borderColor: colors.border.grayLight,
   },
-  rejectButton: { 
-    backgroundColor: "#F5F5F5", 
-    paddingHorizontal: scaleWidth(14), 
-    paddingVertical: scaleHeight(6), 
-    borderRadius: 4, 
-    borderWidth: 1, 
-    borderColor: "#E5E5E5" 
+  rejectButtonText: {
+    fontSize: typography.fontSize13,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.gray,
   },
-  rejectButtonText: { 
-    fontSize: scaleFont(13), 
-    fontWeight: "500", 
-    color: "#666" 
+  confirmButton: {
+    backgroundColor: colors.functional.yellow,
+    paddingHorizontal: scaleWidth(14),
+    paddingVertical: scaleHeight(6),
+    borderRadius: borders.radius4,
   },
-  confirmButton: { 
-    backgroundColor: "#FFD700", 
-    paddingHorizontal: scaleWidth(14), 
-    paddingVertical: scaleHeight(6), 
-    borderRadius: 4,
-  },
-  confirmButtonText: { 
-    fontSize: scaleFont(13), 
-    fontWeight: "500", 
-    color: "#333" 
+  confirmButtonText: {
+    fontSize: typography.fontSize13,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.black,
   },
 
-  // Status Text
+  /** STATUS TEXT */
   statusText: {
-    fontSize: scaleFont(13),
-    fontWeight: "500",
+    fontSize: typography.fontSize13,
+    fontWeight: typography.fontWeight500,
   },
 
-  // Empty State
-  emptyText: { 
-    fontSize: scaleFont(13), 
-    color: "#999", 
+  /** EMPTY STATE */
+  emptyText: {
+    fontSize: typography.fontSize13,
+    color: colors.text.gray,
     textAlign: "center",
     paddingVertical: scaleHeight(20),
   },

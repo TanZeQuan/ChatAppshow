@@ -63,7 +63,7 @@ export default function ProfileScreen() {
         console.log('updatedUser:', JSON.stringify(updatedUser, null, 2));
 
         useUserStore.getState().setUser(updatedUser, useUserStore.getState().token || "");
-        
+
         // Force avatar component to re-render
         setAvatarKey(prev => prev + 1);
       }
@@ -79,7 +79,7 @@ export default function ProfileScreen() {
   useFocusEffect(
     React.useCallback(() => {
       fetchUserData(true); // Silent fetch when screen focuses
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
 
@@ -99,9 +99,21 @@ export default function ProfileScreen() {
   }
 
   const menuItems: MenuItem[] = [
-    { icon: 'star-outline', label: '我的收藏', navigateTo: 'Favorites' },
-    { icon: 'person-outline', label: '联系客服', navigateTo: 'HelpSupport' },
-    { icon: 'help-circle-outline', label: '帮助中心', navigateTo: 'HelpCenter' },
+    {
+      icon: 'star-outline',
+      label: '我的收藏',
+      onPress: () => Alert.alert('提示', '我的收藏功能暂未开放')
+    },
+    {
+      icon: 'person-outline',
+      label: '联系客服',
+      onPress: () => Alert.alert('提示', '联系客服功能暂未开放')
+    },
+    {
+      icon: 'help-circle-outline',
+      label: '帮助中心',
+      onPress: () => Alert.alert('提示', '帮助中心功能暂未开放')
+    },
     { icon: 'settings-outline', label: '设置', navigateTo: 'SettingScreen' },
     { icon: 'people-outline', label: '会议', navigateTo: 'MeetingScreen' },
   ];
@@ -210,8 +222,8 @@ export default function ProfileScreen() {
     <View style={profileStyles.container}>
       <LinearGradient colors={['#FFD966', '#FFB84D']} style={profileStyles.gradientHeader}>
         <SafeAreaView edges={['top']}>
-          <TouchableOpacity 
-            style={profileStyles.profileHeader} 
+          <TouchableOpacity
+            style={profileStyles.profileHeader}
             onPress={() => navigation.navigate('EditProfile')}
           >
             <TouchableOpacity
@@ -234,8 +246,8 @@ export default function ProfileScreen() {
               <Text style={profileStyles.profileId}>账号ID：{user.id}</Text>
             </View>
 
-            <TouchableOpacity 
-              style={profileStyles.qrButton} 
+            <TouchableOpacity
+              style={profileStyles.qrButton}
               onPress={() => navigation.navigate('QRcode')}
             >
               <Ionicons name="qr-code-outline" size={24} color="#666" />
@@ -245,8 +257,8 @@ export default function ProfileScreen() {
       </LinearGradient>
 
       <View style={profileStyles.whiteSection}>
-        <ScrollView 
-          showsVerticalScrollIndicator={false} 
+        <ScrollView
+          showsVerticalScrollIndicator={false}
           contentContainerStyle={profileStyles.scrollContent}
           refreshControl={
             <RefreshControl
@@ -287,104 +299,104 @@ export default function ProfileScreen() {
 }
 
 const profileStyles = RNStyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#FFFFFF' 
+  container: {
+    flex: 1,
+    backgroundColor: '#FFFFFF'
   },
-  gradientHeader: { 
-    paddingBottom: scaleHeight(20) 
+  gradientHeader: {
+    paddingBottom: scaleHeight(20)
   },
-  whiteSection: { 
-    flex: 1, 
-    backgroundColor: '#FFFFFF' 
+  whiteSection: {
+    flex: 1,
+    backgroundColor: '#FFFFFF'
   },
-  scrollContent: { 
-    paddingBottom: scaleHeight(40) 
+  scrollContent: {
+    paddingBottom: scaleHeight(40)
   },
 
-  profileHeader: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: scaleWidth(16), 
-    paddingVertical: scaleHeight(16) 
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: scaleWidth(16),
+    paddingVertical: scaleHeight(16)
   },
   avatarTouchable: {
     marginRight: scaleWidth(12),
   },
-  profileInfo: { 
-    flex: 1 
+  profileInfo: {
+    flex: 1
   },
-  profileName: { 
-    fontSize: scaleFont(18), 
-    fontWeight: '600', 
-    color: '#333', 
-    marginBottom: scaleHeight(4) 
+  profileName: {
+    fontSize: scaleFont(18),
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: scaleHeight(4)
   },
-  profileId: { 
-    fontSize: scaleFont(13), 
-    color: '#999' 
+  profileId: {
+    fontSize: scaleFont(13),
+    color: '#999'
   },
-  qrButton: { 
-    width: scaleWidth(36), 
-    height: scaleWidth(36), 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: scaleWidth(4) 
-  },
-
-  menuContainer: { 
-    paddingHorizontal: scaleWidth(16), 
-    paddingTop: scaleHeight(20) 
-  },
-  menuItem: { 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 12, 
-    paddingVertical: scaleHeight(16), 
-    paddingHorizontal: scaleWidth(16), 
-    marginBottom: scaleHeight(12), 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    shadowColor: '#000', 
-    shadowOffset: { width: 5, height: 8 }, 
-    shadowOpacity: 0.05, 
-    shadowRadius: 2, 
-    elevation: 1 
-  },
-  menuLeft: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    flex: 1 
-  },
-  menuIconContainer: { 
-    width: scaleWidth(32), 
-    height: scaleHeight(32), 
-    backgroundColor: '#F8F9FA', 
-    borderRadius: scaleWidth(16), 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginRight: scaleWidth(12) 
-  },
-  menuLabel: { 
-    fontSize: scaleFont(15), 
-    color: '#333', 
-    fontWeight: '400' 
+  qrButton: {
+    width: scaleWidth(36),
+    height: scaleWidth(36),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scaleWidth(4)
   },
 
-  logoutButton: { 
-    backgroundColor: '#FFD966', 
-    borderRadius: 25, 
-    paddingVertical: scaleHeight(14), 
-    marginHorizontal: scaleWidth(32), 
-    marginTop: scaleHeight(30), 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    borderWidth: 1, 
-    borderColor: '#FFB84D' 
+  menuContainer: {
+    paddingHorizontal: scaleWidth(16),
+    paddingTop: scaleHeight(20)
   },
-  logoutText: { 
-    fontSize: scaleFont(16), 
-    fontWeight: '500', 
-    color: '#333' 
+  menuItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    paddingVertical: scaleHeight(16),
+    paddingHorizontal: scaleWidth(16),
+    marginBottom: scaleHeight(12),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 5, height: 8 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1
+  },
+  menuLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1
+  },
+  menuIconContainer: {
+    width: scaleWidth(32),
+    height: scaleHeight(32),
+    backgroundColor: '#F8F9FA',
+    borderRadius: scaleWidth(16),
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scaleWidth(12)
+  },
+  menuLabel: {
+    fontSize: scaleFont(15),
+    color: '#333',
+    fontWeight: '400'
+  },
+
+  logoutButton: {
+    backgroundColor: '#FFD966',
+    borderRadius: 25,
+    paddingVertical: scaleHeight(14),
+    marginHorizontal: scaleWidth(32),
+    marginTop: scaleHeight(30),
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FFB84D'
+  },
+  logoutText: {
+    fontSize: scaleFont(16),
+    fontWeight: '500',
+    color: '#333'
   },
 });

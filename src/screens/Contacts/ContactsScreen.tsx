@@ -16,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { colors, borders, typography } from "../../styles";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
@@ -53,7 +54,7 @@ export default function ContactsScreen() {
       if (token) {
         loadContacts();
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token])
   );
 
@@ -107,7 +108,7 @@ export default function ContactsScreen() {
     } catch (error) {
       console.error("Error loading contacts:", error);
       setIsLoading(false);
-      
+
       if (contacts.length === 0) {
         Alert.alert("错误", "加载联系人时出错，请稍后重试");
       }
@@ -122,7 +123,7 @@ export default function ContactsScreen() {
 
     contacts.forEach((contact) => {
       if (!contact.name) return;
-      
+
       // Remove "用户" prefix before getting first character
       const cleanName = contact.name.replace(/^用户/, '');
       const firstChar = cleanName[0]?.toUpperCase() || '#';
@@ -153,11 +154,11 @@ export default function ContactsScreen() {
 
   const filteredContacts = contacts.filter((c) => {
     if (!searchText.trim()) return true;
-    
+
     const searchLower = searchText.toLowerCase();
     const cleanName = c.name.replace(/^用户/, '').toLowerCase();
     const fullName = c.name.toLowerCase();
-    
+
     return (
       cleanName.includes(searchLower) ||
       fullName.includes(searchLower) ||
@@ -177,7 +178,7 @@ export default function ContactsScreen() {
           animated: true,
           viewOffset: 0,
         });
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (error) {
         // Fallback if scrollToLocation fails
       }
@@ -235,7 +236,7 @@ export default function ContactsScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>通讯录</Text>
           </View>
-          
+
           {/* Search Bar */}
           <View style={styles.searchWrapper}>
             <View style={styles.searchContainer}>
@@ -380,28 +381,21 @@ export default function ContactsScreen() {
 }
 
 const styles = StyleSheet.create({
-  gradientContainer: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F5',
-  },
+  gradientContainer: { flex: 1 },
+  container: { flex: 1, backgroundColor: colors.background.grayLight },
 
-  gradientHeader: {
-    paddingBottom: scaleHeight(16),
-  },
+  gradientHeader: { paddingBottom: scaleHeight(16) },
 
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     backgroundColor: 'transparent',
   },
   loadingText: {
     marginTop: scaleHeight(10),
-    fontSize: scaleFont(14),
-    color: "#FFFFFF",
+    fontSize: typography.fontSize14,
+    color: colors.text.white,
   },
 
   /** HEADER */
@@ -411,10 +405,10 @@ const styles = StyleSheet.create({
     paddingBottom: scaleHeight(12),
   },
   headerTitle: {
-    fontSize: scaleFont(17),
-    fontWeight: "600",
-    textAlign: "center",
-    color: "#333",
+    fontSize: typography.fontSize17,
+    fontWeight: typography.fontWeight600,
+    textAlign: 'center',
+    color: colors.text.blackMedium,
   },
 
   /** SEARCH */
@@ -423,176 +417,156 @@ const styles = StyleSheet.create({
     paddingTop: scaleHeight(12),
   },
   searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius8,
     paddingHorizontal: scaleWidth(12),
     height: scaleHeight(40),
   },
   searchIcon: {
     marginRight: scaleWidth(8),
-    color: "#999",
+    color: colors.text.gray,
   },
   searchInput: {
     flex: 1,
-    fontSize: scaleFont(15),
-    color: "#333",
+    fontSize: typography.fontSize15,
+    color: colors.text.black,
     padding: 0,
   },
 
   /** QUICK ACTION BUTTONS */
   actionButtons: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+    flexDirection: 'row',
+    justifyContent: 'space-around',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(16),
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    backgroundColor: colors.background.white,
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.background.grayLight,
   },
-  actionButton: {
-    alignItems: "center",
-    flex: 1,
-  },
-
+  actionButton: { alignItems: 'center', flex: 1 },
   actionIcon: {
     width: scaleWidth(48),
     height: scaleWidth(48),
-    backgroundColor: "#F5F5F5",
-    borderRadius: scaleWidth(8),
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: colors.background.grayLight,
+    borderRadius: borders.radius8,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: scaleHeight(8),
   },
   actionLabel: {
-    fontSize: scaleFont(13),
-    color: "#333",
-    textAlign: "center",
+    fontSize: typography.fontSize13,
+    color: colors.text.blackMedium,
+    textAlign: 'center',
   },
 
   /** CONTACT LIST */
-  listContainer: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "#FFFFFF",
-  },
-
-  listContent: {
-    flexGrow: 1,
-  },
-
+  listContainer: { flex: 1, position: 'relative', backgroundColor: colors.background.white },
+  listContent: { flexGrow: 1 },
   sectionHeader: {
-    backgroundColor: "#F0F0F0",
+    backgroundColor: colors.background.grayPale,
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(4),
   },
   sectionHeaderText: {
-    fontSize: scaleFont(13),
-    color: "#666",
-    fontWeight: "500",
+    fontSize: typography.fontSize13,
+    color: colors.text.grayDark,
+    fontWeight: typography.fontWeight500,
   },
-
   contactItem: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 0.5,
-    borderBottomColor: "#E5E5E5",
+    backgroundColor: colors.background.white,
+    borderBottomWidth: borders.width05,
+    borderBottomColor: colors.border.grayLight,
   },
-
-  avatarContainer: {
-    position: "relative",
-    marginRight: scaleWidth(12),
-  },
+  avatarContainer: { position: 'relative', marginRight: scaleWidth(12) },
   avatarImage: {
     width: scaleWidth(40),
     height: scaleWidth(40),
-    borderRadius: scaleWidth(4),
-    backgroundColor: "#E0E0E0",
+    borderRadius: borders.radius4,
+    backgroundColor: colors.background.gray,
   },
   onlineDot: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 0,
     right: 0,
     width: scaleWidth(10),
     height: scaleWidth(10),
-    backgroundColor: "#4CAF50",
-    borderRadius: scaleWidth(5),
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
+    backgroundColor: colors.functional.greenSuccess,
+    borderRadius: borders.radius50 / 5,
+    borderWidth: borders.width1,
+    borderColor: colors.background.white,
   },
-  contactInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
+  contactInfo: { flex: 1, justifyContent: 'center' },
   contactName: {
-    fontSize: scaleFont(16),
-    color: "#333",
-    fontWeight: "400",
+    fontSize: typography.fontSize16,
+    color: colors.text.black,
+    fontWeight: typography.fontWeight400,
   },
 
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: scaleHeight(80),
   },
   emptyText: {
-    fontSize: scaleFont(18),
-    color: "#333",
-    fontWeight: "600",
-    textAlign: "center",
+    fontSize: typography.fontSize18,
+    color: colors.text.black,
+    fontWeight: typography.fontWeight600,
+    textAlign: 'center',
     marginTop: scaleHeight(15),
     marginBottom: scaleHeight(8),
   },
   emptySubtext: {
-    fontSize: scaleFont(14),
-    color: "#999",
-    textAlign: "center",
+    fontSize: typography.fontSize14,
+    color: colors.text.gray,
+    textAlign: 'center',
     marginBottom: scaleHeight(25),
   },
 
   addFriendButton: {
-    flexDirection: "row",
-    backgroundColor: "#FFD700",
+    flexDirection: 'row',
+    backgroundColor: colors.functional.yellow,
     paddingHorizontal: scaleWidth(24),
     paddingVertical: scaleHeight(12),
-    borderRadius: 25,
-    alignItems: "center",
+    borderRadius: borders.radius25,
+    alignItems: 'center',
     gap: scaleWidth(8),
   },
   addFriendButtonText: {
-    color: "#333",
-    fontSize: scaleFont(15),
-    fontWeight: "600",
+    color: colors.text.black,
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight600,
     marginLeft: scaleWidth(4),
   },
 
   /** ALPHABET INDEX */
   alphabetIndex: {
-    position: "absolute",
+    position: 'absolute',
     right: scaleWidth(2),
     top: 0,
     bottom: 0,
-    justifyContent: "center",
+    justifyContent: 'center',
     paddingVertical: scaleHeight(4),
   },
   alphabetItem: {
     paddingVertical: scaleHeight(1),
     paddingHorizontal: scaleWidth(4),
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   alphabetText: {
-    fontSize: scaleFont(9),
-    color: "#666",
-    fontWeight: "600",
+    fontSize: typography.fontSize11,
+    color: colors.text.grayDark,
+    fontWeight: typography.fontWeight600,
     letterSpacing: -0.5,
   },
   alphabetTextDisabled: {
-    color: "#D0D0D0",
+    color: colors.text.grayLight,
   },
 });

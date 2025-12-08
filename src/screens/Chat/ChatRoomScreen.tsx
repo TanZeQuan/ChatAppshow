@@ -21,6 +21,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages } from '../../api/Chat';
+import { colors, borders, typography } from "../../styles";
 import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useChatStore } from '../../store/chatStore';
@@ -444,14 +445,20 @@ const roomStyles = RNStyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFF9E6',
+    backgroundColor: colors.background.gradientYellow[1],
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.border.grayLight,
   },
   backButton: { padding: 4 },
-  headerTitle: { fontSize: 16, fontWeight: '500', color: '#333333', flex: 1, textAlign: 'center' },
+  headerTitle: { 
+    fontSize: typography.fontSize16, 
+    fontWeight: typography.fontWeight500, 
+    color: colors.text.blackMedium, 
+    flex: 1, 
+    textAlign: 'center' 
+  },
   moreButton: { padding: 4 },
   loadingContainer: {
     flex: 1,
@@ -460,72 +467,98 @@ const roomStyles = RNStyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    fontSize: 14,
-    color: '#666',
+    fontSize: typography.fontSize14,
+    color: colors.text.grayDark,
   },
   keyboardAvoidingView: { flex: 1 },
   chatList: { paddingHorizontal: 12, paddingVertical: 16 },
   messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
   messageRowLeft: { justifyContent: 'flex-start' },
   messageRowRight: { justifyContent: 'flex-end' },
-  avatar: { width: 40, height: 40, borderRadius: 4, backgroundColor: '#E0E0E0', marginHorizontal: 8, overflow: 'hidden' },
+  avatar: { 
+    width: 40, 
+    height: 40, 
+    borderRadius: borders.radius4, 
+    backgroundColor: colors.background.grayLight, 
+    marginHorizontal: 8, 
+    overflow: 'hidden' 
+  },
   avatarImage: { width: 40, height: 40 },
-  bubble: { maxWidth: '60%', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10 },
-  bubbleLeft: { backgroundColor: '#FFFFFF' },
-  bubbleRight: { backgroundColor: '#95EC69' },
-  senderName: { fontWeight: 'bold', marginBottom: 2, fontSize: 14, color: '#333333' },
-  messageText: { fontSize: 16, color: '#333333', lineHeight: 22 },
-  timestamp: { fontSize: 10, color: '#666666', marginTop: 4, opacity: 0.7 },
+  bubble: { 
+    maxWidth: '60%', 
+    borderRadius: borders.radius4, 
+    paddingHorizontal: 12, 
+    paddingVertical: 10 
+  },
+  bubbleLeft: { backgroundColor: colors.background.white },
+  bubbleRight: { backgroundColor: colors.functional.green },
+  senderName: { 
+    fontWeight: typography.fontWeight600, 
+    marginBottom: 2, 
+    fontSize: typography.fontSize14, 
+    color: colors.text.blackMedium 
+  },
+  messageText: { 
+    fontSize: typography.fontSize16, 
+    color: colors.text.blackMedium, 
+    lineHeight: typography.lineHeight22 
+  },
+  timestamp: { 
+    fontSize: typography.fontSize11, 
+    color: colors.text.grayDark, 
+    marginTop: 4, 
+    opacity: 0.7 
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingVertical: 60,
-    transform: [{ scaleY: -1 }], // Flip back since FlatList is inverted
+    transform: [{ scaleY: -1 }],
   },
   emptyText: {
-    fontSize: 16,
-    color: '#999',
+    fontSize: typography.fontSize16,
+    color: colors.text.grayLight,
     marginTop: 12,
   },
   emptySubtext: {
-    fontSize: 14,
-    color: '#CCC',
+    fontSize: typography.fontSize14,
+    color: colors.text.grayMedium,
     marginTop: 6,
   },
-  inputSection: { backgroundColor: '#F5F5F5' },
+  inputSection: { backgroundColor: colors.background.grayLight },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF9E6',
+    backgroundColor: colors.background.gradientYellow[1],
     paddingHorizontal: 10,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    borderTopWidth: borders.width1,
+    borderTopColor: colors.border.grayLight,
   },
   iconButton: { padding: 8 },
   input: {
     flex: 1,
     minHeight: 36,
     maxHeight: 100,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius10,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    fontSize: 16,
-    color: '#333333',
+    fontSize: typography.fontSize16,
+    color: colors.text.blackMedium,
   },
-  toolbar: { backgroundColor: '#F5F5F5', paddingVertical: 25, paddingHorizontal: 15 },
+  toolbar: { backgroundColor: colors.background.grayLight, paddingVertical: 25, paddingHorizontal: 15 },
   toolbarRow: { flexDirection: 'row', justifyContent: 'space-around' },
   toolbarButton: { alignItems: 'center', width: 70, margin: 10 },
   toolbarIconContainer: {
     width: 50,
     height: 50,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    borderRadius: borders.radius8,
+    backgroundColor: colors.background.white,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 6,
   },
-  toolbarLabel: { fontSize: 12, color: '#333333' },
+  toolbarLabel: { fontSize: typography.fontSize12, color: colors.text.blackMedium },
 });

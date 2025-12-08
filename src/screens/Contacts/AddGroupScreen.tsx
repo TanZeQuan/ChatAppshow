@@ -14,9 +14,11 @@ import {
   Platform,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { colors, borders, typography } from "../../styles";
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
@@ -33,6 +35,7 @@ export default function AddGroupScreen() {
   const { contacts, setContacts } = useContactStore();
   const { token } = useUserStore();
   const { addChat } = useChatStore();
+  const insets = useSafeAreaInsets();
 
   const [searchText, setSearchText] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
@@ -40,10 +43,26 @@ export default function AddGroupScreen() {
   const [groupName, setGroupName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      // Hide tab bar when screen is focused
+      navigation.getParent()?.setOptions({
+        tabBarStyle: { display: 'none' }
+      });
+
+      // Show tab bar when leaving the screen with ORIGINAL STYLE
+      return () => {
+        navigation.getParent()?.setOptions({
+          tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
+        });
+      };
+    }, [navigation, insets])
+  );
+
   // Load contacts when screen mounts
   useEffect(() => {
     loadContacts();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadContacts = async () => {
@@ -356,241 +375,216 @@ export default function AddGroupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F8F9FA",
+    backgroundColor: colors.background.grayLight,
   },
 
   /** HEADER */
   header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: "#F5C842",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5B830",
+    backgroundColor: colors.functional.yellow,
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.functional.yellowBright,
   },
-  backButton: {
-    padding: scaleWidth(8),
-  },
+  backButton: { padding: scaleWidth(8) },
   headerTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
   },
   confirmButton: {
     paddingHorizontal: scaleWidth(12),
     paddingVertical: scaleHeight(6),
   },
   confirmButtonText: {
-    fontSize: scaleFont(16),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
   },
   confirmButtonDisabled: {
-    color: "#999",
+    color: colors.text.grayLight,
   },
 
   /** SEARCH */
   searchSection: {
-    backgroundColor: "#FFF8DC",
+    backgroundColor: colors.background.yellowPale,
     padding: scaleWidth(16),
   },
   searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius10,
     paddingHorizontal: scaleWidth(12),
   },
-  searchIcon: {
-    marginRight: scaleWidth(8),
-  },
+  searchIcon: { marginRight: scaleWidth(8) },
   searchInput: {
     flex: 1,
-    fontSize: scaleFont(14),
-    color: "#333",
+    fontSize: typography.fontSize14,
+    color: colors.text.black,
     paddingVertical: scaleHeight(10),
   },
 
   /** SELECTED PREVIEW */
   selectedPreview: {
-    backgroundColor: "#FFF8DC",
+    backgroundColor: colors.background.yellowPale,
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(8),
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5B830",
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.functional.yellowBright,
   },
   selectedText: {
-    fontSize: scaleFont(13),
-    color: "#666",
+    fontSize: typography.fontSize13,
+    color: colors.text.grayDark,
   },
 
   /** LOADING */
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: scaleHeight(60),
   },
   loadingText: {
     marginTop: scaleHeight(12),
-    fontSize: scaleFont(14),
-    color: "#666",
+    fontSize: typography.fontSize14,
+    color: colors.text.grayDark,
   },
 
   /** CONTACTS LIST */
   contactsSection: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.background.white,
     flex: 1,
   },
   contactItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.background.gray,
   },
-  contactLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
+  contactLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   contactAvatar: {
     width: scaleWidth(40),
     height: scaleHeight(40),
-    borderRadius: scaleWidth(20),
+    borderRadius: borders.radius50,
     marginRight: scaleWidth(12),
-    backgroundColor: "#E0E0E0",
+    backgroundColor: colors.background.grayLight,
   },
-  contactInfo: {
-    flex: 1,
-  },
+  contactInfo: { flex: 1 },
   contactName: {
-    fontSize: scaleFont(15),
-    fontWeight: "400",
-    color: "#333",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight400,
+    color: colors.text.blackMedium,
   },
   checkbox: {
     width: scaleWidth(22),
     height: scaleHeight(22),
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: "#34C759",
-    backgroundColor: "#34C759",
-    justifyContent: "center",
-    alignItems: "center",
+    borderRadius: borders.radius4,
+    borderWidth: borders.width2,
+    borderColor: colors.functional.green,
+    backgroundColor: colors.functional.green,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   checkboxUnchecked: {
-    backgroundColor: "transparent",
-    borderColor: "#CCCCCC",
+    backgroundColor: 'transparent',
+    borderColor: colors.border.grayMedium,
   },
 
   /** EMPTY STATE */
   emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: scaleHeight(60),
   },
   emptyText: {
-    fontSize: scaleFont(16),
-    color: "#666",
+    fontSize: typography.fontSize16,
+    color: colors.text.grayDark,
     marginTop: scaleHeight(12),
     marginBottom: scaleHeight(4),
   },
   emptySubtext: {
-    fontSize: scaleFont(13),
-    color: "#999",
+    fontSize: typography.fontSize13,
+    color: colors.text.gray,
   },
 
   /** MODAL */
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   modalBackground: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    width: "100%",
+    backgroundColor: colors.background.transparentBlack50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '100%',
   },
   modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 16,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius16,
     width: scaleWidth(320),
-    maxWidth: "90%",
-    overflow: "hidden",
+    maxWidth: '90%',
+    overflow: 'hidden',
   },
   modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: scaleWidth(20),
     paddingVertical: scaleHeight(16),
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0F0F0",
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.background.gray,
   },
   modalTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
   },
-  modalCloseButton: {
-    padding: scaleWidth(4),
-  },
-  modalBody: {
-    padding: scaleWidth(20),
-  },
+  modalCloseButton: { padding: scaleWidth(4) },
+  modalBody: { padding: scaleWidth(20) },
   inputLabel: {
-    fontSize: scaleFont(14),
-    color: "#666",
+    fontSize: typography.fontSize14,
+    color: colors.text.grayDark,
     marginBottom: scaleHeight(8),
-    fontWeight: "500",
+    fontWeight: typography.fontWeight500,
   },
   groupNameInput: {
-    backgroundColor: "#F5F5F5",
-    borderRadius: 8,
+    backgroundColor: colors.background.grayLight,
+    borderRadius: borders.radius8,
     paddingHorizontal: scaleWidth(12),
     paddingVertical: scaleHeight(12),
-    fontSize: scaleFont(15),
-    color: "#333",
-    borderWidth: 1,
-    borderColor: "#E0E0E0",
+    fontSize: typography.fontSize15,
+    color: colors.text.blackMedium,
+    borderWidth: borders.width1,
+    borderColor: colors.background.gray,
   },
   memberCount: {
-    fontSize: scaleFont(13),
-    color: "#999",
+    fontSize: typography.fontSize13,
+    color: colors.text.gray,
     marginTop: scaleHeight(12),
     marginBottom: scaleHeight(20),
   },
-  modalButtons: {
-    flexDirection: "row",
-    gap: scaleWidth(12),
-  },
+  modalButtons: { flexDirection: 'row', gap: scaleWidth(12) },
   modalButton: {
     flex: 1,
     paddingVertical: scaleHeight(12),
-    borderRadius: 8,
-    alignItems: "center",
+    borderRadius: borders.radius8,
+    alignItems: 'center',
   },
-  cancelButton: {
-    backgroundColor: "#F5F5F5",
-  },
+  cancelButton: { backgroundColor: colors.background.grayLight },
   cancelButtonText: {
-    fontSize: scaleFont(16),
-    fontWeight: "600",
-    color: "#666",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.grayDark,
   },
-  createButton: {
-    backgroundColor: "#F5C842",
-  },
+  createButton: { backgroundColor: colors.functional.yellow },
   createButtonText: {
-    fontSize: scaleFont(16),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium,
   },
 });

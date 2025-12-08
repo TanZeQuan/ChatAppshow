@@ -11,9 +11,11 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
+import { colors, borders, typography } from "../../styles";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
 import { useUserStore } from "../../store/userStore";
@@ -37,12 +39,30 @@ export default function AddFriendScreen() {
   const [isSending, setIsSending] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
-  
+  const insets = useSafeAreaInsets();
+
   const { addRequest } = useFriendRequestStore();
   const currentUser = useUserStore((state) => state.user);
-  
+
   // Prevent memory leaks
   const isMounted = useRef(true);
+  
+  useFocusEffect(
+    React.useCallback(() => {
+      // Hide tab bar when screen is focused
+      navigation.getParent()?.setOptions({
+        tabBarStyle: { display: 'none' }
+      });
+
+      // Show tab bar when leaving the screen with ORIGINAL STYLE
+      return () => {
+        navigation.getParent()?.setOptions({
+          tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
+        });
+      };
+    }, [navigation, insets])
+  );
+
 
   useEffect(() => {
     return () => {
@@ -68,23 +88,23 @@ export default function AddFriendScreen() {
 
     try {
       const result = await searchUser(searchText.trim());
-      
+
       console.log("=== Search Result Debug ===");
       console.log("Full result:", JSON.stringify(result, null, 2));
       console.log("result.success:", result.success);
       console.log("result.user:", result.user);
       console.log("Is array:", Array.isArray(result.user));
       console.log("Array length:", result.user?.length);
-      
+
       if (!isMounted.current) return;
-      
+
       // API returns response as an array, get the first item
       if (result.success && result.user && Array.isArray(result.user) && result.user.length > 0) {
         const userData = result.user[0]; // Get first result
         console.log("✅ User found:", userData);
         console.log("Friend status (isstatus):", userData.isstatus);
         console.log("Status meaning: 0=not friends, 1=pending, 2=already friends");
-        
+
         setSearchResult(userData);
       } else {
         console.log("❌ No user found");
@@ -135,7 +155,7 @@ export default function AddFriendScreen() {
 
         setRequestSent(true);
         Alert.alert("成功", "好友请求已发送", [
-          { 
+          {
             text: "确定",
             onPress: () => {
               // Optionally navigate to FriendRequest screen
@@ -146,7 +166,7 @@ export default function AddFriendScreen() {
       } else {
         // Handle specific error cases
         const errorMessage = result.message || "发送请求失败";
-        
+
         if (errorMessage.includes("已经是好友") || errorMessage.includes("already friends")) {
           Alert.alert("提示", "你们已经是好友了");
           setRequestSent(true);
@@ -190,7 +210,7 @@ export default function AddFriendScreen() {
   // Helper function to get button status
   const getButtonStatus = () => {
     if (!searchResult) return { type: 'add', disabled: true };
-    
+
     // isstatus: 0 = not friends, 1 = pending request, 2 = already friends (accepted)
     if (searchResult.isstatus === 2) {
       // Already friends (request was accepted)
@@ -274,7 +294,7 @@ export default function AddFriendScreen() {
                 source={{ uri: searchResult.image }}
                 style={styles.resultAvatar}
               />
-              
+
               {/* Middle: User Info */}
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>
@@ -401,25 +421,25 @@ const styles = StyleSheet.create({
     left: 0,
     width: 36,
     height: 36,
-    backgroundColor: "rgba(255, 255, 255, 0.5)",
-    borderRadius: 18,
+    backgroundColor: colors.background.transparentWhite50,
+    borderRadius: borders.radius18,
     alignItems: "center",
     justifyContent: "center",
   },
   title: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#78350f",
+    fontSize: typography.fontSize20,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.dark,
   },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 12,
     marginTop: 10,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -430,18 +450,18 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: "#1f2937",
+    fontSize: typography.fontSize14,
+    color: colors.text.dark,
   },
   searchButton: {
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
     marginTop: 12,
     marginBottom: 20,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -451,19 +471,18 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   searchButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#78350f",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.dark,
   },
-  // Compact Result Card Styles
   resultCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     padding: 12,
     marginBottom: 12,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -472,8 +491,8 @@ const styles = StyleSheet.create({
   resultAvatar: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    backgroundColor: "#f3f4f6",
+    borderRadius: borders.radius28,
+    backgroundColor: colors.background.grayPale,
     marginRight: 12,
   },
   resultInfo: {
@@ -481,25 +500,25 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   resultName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.dark,
     marginBottom: 4,
   },
   resultId: {
-    fontSize: 13,
-    color: "#6b7280",
+    fontSize: typography.fontSize13,
+    color: colors.text.gray,
     marginBottom: 2,
   },
   resultPhone: {
-    fontSize: 12,
-    color: "#9ca3af",
+    fontSize: typography.fontSize12,
+    color: colors.text.grayLight,
   },
   addIconButton: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "#fbbf24",
+    borderRadius: borders.radius24,
+    backgroundColor: colors.background.yellowLight,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
@@ -510,8 +529,8 @@ const styles = StyleSheet.create({
   addedIconButton: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "#fed7aa",
+    borderRadius: borders.radius24,
+    backgroundColor: colors.background.yellowPale,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
@@ -519,8 +538,8 @@ const styles = StyleSheet.create({
   friendIconButton: {
     width: 48,
     height: 48,
-    borderRadius: 24,
-    backgroundColor: "#dcfce7",
+    borderRadius: borders.radius24,
+    backgroundColor: colors.functional.greenLight,
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
@@ -529,33 +548,33 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#dcfce7",
-    borderRadius: 8,
+    backgroundColor: colors.functional.greenLight,
+    borderRadius: borders.radius8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 20,
     gap: 6,
   },
   friendBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#16a34a",
+    fontSize: typography.fontSize13,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.white,
   },
   pendingBadge: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fed7aa",
-    borderRadius: 8,
+    backgroundColor: colors.background.yellowPale,
+    borderRadius: borders.radius8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     marginBottom: 20,
     gap: 6,
   },
   pendingBadgeText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#ea580c",
+    fontSize: typography.fontSize13,
+    fontWeight: typography.fontWeight600,
+    color: colors.functional.redMedium,
   },
   noResultContainer: {
     alignItems: "center",
@@ -564,14 +583,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   noResultText: {
-    fontSize: 14,
-    color: "#9ca3af",
+    fontSize: typography.fontSize14,
+    color: colors.text.grayLight,
     marginTop: 12,
-    fontWeight: "500",
+    fontWeight: typography.fontWeight500,
   },
   noResultSubtext: {
-    fontSize: 12,
-    color: "#d1d5db",
+    fontSize: typography.fontSize12,
+    color: colors.text.gray,
     marginTop: 4,
   },
   actionsContainer: {
@@ -581,11 +600,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "white",
-    borderRadius: 12,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius12,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    shadowColor: "#000",
+    shadowColor: colors.shadow.black,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
     shadowRadius: 3,
@@ -599,13 +618,13 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borders.radius20,
     alignItems: "center",
     justifyContent: "center",
   },
   actionLabel: {
-    fontSize: 15,
-    fontWeight: "500",
-    color: "#1f2937",
+    fontSize: typography.fontSize15,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.dark,
   },
 });

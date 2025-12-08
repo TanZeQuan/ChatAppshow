@@ -18,6 +18,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
+import { colors, borders, typography } from "../../styles";
 import { useChatStore } from '../../store/chatStore';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useUserStore } from '@/src/store/userStore';
@@ -492,89 +493,116 @@ export default function GroupRoomScreen() {
 }
 
 const roomStyles = RNStyleSheet.create({
-    safeArea: { flex: 1 },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        backgroundColor: '#FFF9E6',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#E0E0E0',
-    },
-    backButton: { padding: 4 },
-    headerCenter: {
-        flex: 1,
-        alignItems: 'center',
-    },
-    headerTitle: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333333',
-    },
-    headerSubtitle: {
-        fontSize: 12,
-        color: '#666666',
-        marginTop: 2,
-    },
-    moreButton: { padding: 4 },
-    keyboardAvoidingView: { flex: 1 },
-    chatList: { paddingHorizontal: 12, paddingVertical: 16 },
-    messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
-    messageRowLeft: { justifyContent: 'flex-start' },
-    messageRowRight: { justifyContent: 'flex-end' },
-    avatar: { width: 40, height: 40, borderRadius: 4, backgroundColor: '#E0E0E0', marginHorizontal: 8, overflow: 'hidden' },
-    avatarImage: { width: 40, height: 40 },
-    bubble: { maxWidth: '60%', borderRadius: 4, paddingHorizontal: 12, paddingVertical: 10 },
-    bubbleLeft: { backgroundColor: '#FFFFFF' },
-    bubbleRight: { backgroundColor: '#95EC69' },
-    senderName: { fontWeight: 'bold', marginBottom: 2, fontSize: 12, color: '#666666' },
-    messageText: { fontSize: 16, color: '#333333', lineHeight: 22 },
-    timestamp: { fontSize: 10, color: '#666666', marginTop: 4, opacity: 0.7 },
-    inputSection: { backgroundColor: '#F5F5F5' },
-    inputContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFF9E6',
-        paddingHorizontal: 10,
-        paddingVertical: 12,
-        borderTopWidth: 1,
-        borderTopColor: '#E0E0E0',
-    },
-    iconButton: { padding: 8 },
-    input: {
-        flex: 1,
-        minHeight: 36,
-        maxHeight: 100,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 10,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        fontSize: 16,
-        color: '#333333',
-    },
-    toolbar: { backgroundColor: '#F5F5F5', paddingVertical: 25, paddingHorizontal: 15 },
-    toolbarRow: { flexDirection: 'row', justifyContent: 'space-around' },
-    toolbarButton: { alignItems: 'center', width: 70, margin: 10 },
-    toolbarIconContainer: {
-        width: 50,
-        height: 50,
-        borderRadius: 8,
-        backgroundColor: '#FFFFFF',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    toolbarLabel: { fontSize: 12, color: '#333333' },
-    loadingFooter: {
-        paddingVertical: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    loadingText: {
-        marginTop: 8,
-        fontSize: 12,
-        color: '#666666',
-    },
+  safeArea: { flex: 1 },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background.yellowPale,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.background.grayLight,
+  },
+  backButton: { padding: 4 },
+  headerCenter: { flex: 1, alignItems: 'center' },
+  headerTitle: {
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight500,
+    color: colors.text.blackMedium,
+  },
+  headerSubtitle: {
+    fontSize: typography.fontSize12,
+    color: colors.text.grayDark,
+    marginTop: 2,
+  },
+  moreButton: { padding: 4 },
+
+  keyboardAvoidingView: { flex: 1 },
+  chatList: { paddingHorizontal: 12, paddingVertical: 16 },
+
+  messageRow: { flexDirection: 'row', marginVertical: 6, alignItems: 'flex-start' },
+  messageRowLeft: { justifyContent: 'flex-start' },
+  messageRowRight: { justifyContent: 'flex-end' },
+
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: borders.radius4,
+    backgroundColor: colors.background.grayLight,
+    marginHorizontal: 8,
+    overflow: 'hidden',
+  },
+  avatarImage: { width: 40, height: 40 },
+
+  bubble: { maxWidth: '60%', borderRadius: borders.radius4, paddingHorizontal: 12, paddingVertical: 10 },
+  bubbleLeft: { backgroundColor: colors.background.white },
+  bubbleRight: { backgroundColor: colors.functional.green },
+
+  senderName: {
+    fontWeight: typography.fontWeight600,
+    marginBottom: 2,
+    fontSize: typography.fontSize12,
+    color: colors.text.grayDark,
+  },
+  messageText: {
+    fontSize: typography.fontSize16,
+    color: colors.text.blackMedium,
+    lineHeight: typography.lineHeight22,
+  },
+  timestamp: {
+    fontSize: typography.fontSize11,
+    color: colors.text.grayDark,
+    marginTop: 4,
+    opacity: 0.7,
+  },
+
+  inputSection: { backgroundColor: colors.background.grayLight },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background.yellowPale,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderTopWidth: borders.width1,
+    borderTopColor: colors.background.grayLight,
+  },
+  iconButton: { padding: 8 },
+  input: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 100,
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: typography.fontSize16,
+    color: colors.text.blackMedium,
+  },
+
+  toolbar: { backgroundColor: colors.background.grayLight, paddingVertical: 25, paddingHorizontal: 15 },
+  toolbarRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  toolbarButton: { alignItems: 'center', width: 70, margin: 10 },
+  toolbarIconContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: borders.radius8,
+    backgroundColor: colors.background.white,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  toolbarLabel: { fontSize: typography.fontSize12, color: colors.text.blackMedium },
+
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: typography.fontSize12,
+    color: colors.text.grayDark,
+  },
 });

@@ -3,6 +3,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View, Dimensions, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, borders, typography } from "../../../styles";
 import { ProfileStackParamList } from "../../../navigation/types";
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "Notification">;
@@ -77,7 +78,7 @@ export default function NotificationSettingsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF8DC",
+    backgroundColor: colors.background.yellowPale, // 原 #FFF8DC
   },
 
   /** HEADER */
@@ -85,40 +86,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: scaleWidth(16),
-    paddingVertical: scaleHeight(12),
-    backgroundColor: "#F5C842",
-    borderBottomWidth: 1,
-    borderBottomColor: "#E5B830",
+    paddingHorizontal: 16, // scaleWidth(16)
+    paddingVertical: 12, // scaleHeight(12)
+    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.functional.yellowBright, // 原 #E5B830
   },
   backButton: {
-    padding: scaleWidth(8),
+    padding: 8, // scaleWidth(8)
   },
   headerTitle: {
-    fontSize: scaleFont(18),
-    fontWeight: "600",
-    color: "#333",
+    fontSize: typography.fontSize18, // scaleFont(18)
+    fontWeight: typography.fontWeight600,
+    color: colors.text.blackMedium, // 原 #333
   },
   placeholder: {
-    width: scaleWidth(40),
+    width: 40, // scaleWidth(40)
   },
 
   /** CONTENT */
   content: {
-    paddingTop: scaleHeight(8),
+    paddingTop: 8, // scaleHeight(8)
   },
   settingItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: scaleWidth(20),
-    paddingVertical: scaleHeight(16),
-    marginBottom: scaleHeight(1),
+    backgroundColor: colors.background.white,
+    paddingHorizontal: 20, // scaleWidth(20)
+    paddingVertical: 16, // scaleHeight(16)
+    marginBottom: 1, // scaleHeight(1)
   },
   settingLabel: {
-    fontSize: scaleFont(16),
-    color: "#333",
-    fontWeight: "400",
+    fontSize: typography.fontSize16, // scaleFont(16)
+    fontWeight: typography.fontWeight400,
+    color: colors.text.blackMedium, // 原 #333
   },
 });

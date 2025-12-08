@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { colors, borders, typography } from "../../../styles";
 import { useUserStore } from '../../../store/userStore';
 import { readUsers } from '../../../api/User';
 
@@ -122,12 +123,12 @@ export default function EditProfileScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#ffefb4ff",
+    backgroundColor: colors.background.gradientYellow[0], // 原 #ffefb4ff
   },
 
   header: {
     height: 50,
-    backgroundColor: "#ffe070ff",
+    backgroundColor: colors.functional.yellowBright, // 原 #ffe070ff
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -135,13 +136,13 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#000",
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight600,
+    color: colors.text.black,
   },
-  
+
   listBox: {
-    backgroundColor: "#fff6d8c5",
+    backgroundColor: colors.background.yellowPale, // 原 #fff6d8c5
   },
 
   row: {
@@ -149,14 +150,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     height: 60,
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderColor: "#eee",
+    borderBottomWidth: borders.width1,
+    borderColor: colors.border.lightGray, // 原 #eee
     justifyContent: "space-between",
   },
 
   rowLabel: {
-    fontSize: 15,
-    color: "#333",
+    fontSize: typography.fontSize15,
+    color: colors.text.blackMedium, // 原 #333
   },
 
   rightContent: {
@@ -166,13 +167,14 @@ const styles = StyleSheet.create({
   },
 
   value: {
-    fontSize: 15,
-    color: "#777",
+    fontSize: typography.fontSize15,
+    color: colors.text.grayMedium, // 原 #777
   },
 
   avatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: borders.radius20,
+    backgroundColor: colors.functional.avatarBg,
   },
 });
