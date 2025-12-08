@@ -1,27 +1,29 @@
-import React, { useState, useLayoutEffect, useEffect } from 'react';
+import { useUserStore } from '@/src/store/userStore';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { Audio } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  StyleSheet as RNStyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  StyleSheet as RNStyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Image,
-  Alert,
-  ActivityIndicator,
-  RefreshControl,
+  View,
 } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
-import { useChatStore } from '../../store/chatStore';
-import { getOriginalTabBarStyle } from "../../components/tabstyle";
-import { useUserStore } from '@/src/store/userStore';
 import { readChatMessages } from '../../api/Chat';
+import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
+import { useChatStore } from '../../store/chatStore';
 
 interface DisplayMessage {
   id: string;
@@ -61,6 +63,11 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offset, setOffset] = useState(0);
+
+  // Voice message state
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Load messages on mount
   useEffect(() => {
@@ -115,6 +122,58 @@ export default function ChatRoomScreen() {
     setRefreshing(true);
     await loadMessages(false);
     setRefreshing(false);
+  };
+
+  const startRecording = async () => {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission not granted', 'Failed to get recording permissions');
+        return;
+      }
+  
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+  
+      const { recording } = await Audio.Recording.createAsync(
+         Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true);
+      console.log('Recording started');
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (!recording) {
+      return;
+    }
+  
+    console.log('Stopping recording..');
+    setIsRecording(false);
+    setIsUploading(true);
+  
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      console.log('Recording stopped and stored at', uri);
+  
+      if (uri) {
+        // Now, send the voice message
+        // const result = await sendVoiceMessageToApi(uri);
+        console.log('Simulating sending voice message with URI:', uri);
+        // console.log('Voice message sent, result:', result);
+      }
+    } catch (error) {
+      console.error('Failed to send voice message', error);
+    } finally {
+      setIsUploading(false);
+      setRecording(null);
+    }
   };
 
   const messages: DisplayMessage[] = storedMessages.map(msg => ({
@@ -295,19 +354,28 @@ export default function ChatRoomScreen() {
                 tintColor="#FFD966"
               />
             }
-            ListEmptyComponent={
-              <View style={roomStyles.emptyContainer}>
-                <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
-                <Text style={roomStyles.emptyText}>暂无消息</Text>
-                <Text style={roomStyles.emptySubtext}>发送第一条消息开始聊天</Text>
-              </View>
-            }
+            // ListEmptyComponent={
+            //   <View style={roomStyles.emptyContainer}>
+            //     <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />
+            //     <Text style={roomStyles.emptyText}>暂无消息</Text>
+            //     <Text style={roomStyles.emptySubtext}>发送第一条消息开始聊天</Text>
+            //   </View>
+            // }
           />
 
           <View style={roomStyles.inputSection}>
             <View style={roomStyles.inputContainer}>
-              <TouchableOpacity style={roomStyles.iconButton}>
-                <Ionicons name="mic" size={22} color="#333" />
+              <TouchableOpacity
+                style={roomStyles.iconButton}
+                onPressIn={startRecording}
+                onPressOut={stopRecording}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <ActivityIndicator color="#333" />
+                ) : (
+                  <Ionicons name="mic" size={22} color={isRecording ? 'red' : '#333'} />
+                )}
               </TouchableOpacity>
               <TextInput
                 style={roomStyles.input}
