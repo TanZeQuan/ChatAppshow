@@ -26,7 +26,7 @@ interface SearchResult {
   image: string;
   phone: string;
   about?: string;
-  isstatus: number;
+  isstatus: number; // 0 = not friends, 1 = pending request, 2 = already friends (accepted)
 }
 
 export default function AddFriendScreen() {
@@ -82,6 +82,9 @@ export default function AddFriendScreen() {
       if (result.success && result.user && Array.isArray(result.user) && result.user.length > 0) {
         const userData = result.user[0]; // Get first result
         console.log("✅ User found:", userData);
+        console.log("Friend status (isstatus):", userData.isstatus);
+        console.log("Status meaning: 0=not friends, 1=pending, 2=already friends");
+        
         setSearchResult(userData);
       } else {
         console.log("❌ No user found");
@@ -101,6 +104,18 @@ export default function AddFriendScreen() {
 
   const handleSendRequest = async () => {
     if (!searchResult) return;
+
+    // If already friends (accepted), don't send request
+    if (searchResult.isstatus === 2) {
+      Alert.alert("提示", "你们已经是好友了");
+      return;
+    }
+
+    // If pending request, inform user
+    if (searchResult.isstatus === 1) {
+      Alert.alert("提示", "已有待处理的好友请求");
+      return;
+    }
 
     setIsSending(true);
 
@@ -134,6 +149,7 @@ export default function AddFriendScreen() {
         
         if (errorMessage.includes("已经是好友") || errorMessage.includes("already friends")) {
           Alert.alert("提示", "你们已经是好友了");
+          setRequestSent(true);
         } else if (errorMessage.includes("已发送") || errorMessage.includes("pending")) {
           Alert.alert("提示", "已有待处理的好友请求");
           setRequestSent(true);
@@ -170,6 +186,25 @@ export default function AddFriendScreen() {
     setHasSearched(false);
     setRequestSent(false);
   };
+
+  // Helper function to get button status
+  const getButtonStatus = () => {
+    if (!searchResult) return { type: 'add', disabled: true };
+    
+    // isstatus: 0 = not friends, 1 = pending request, 2 = already friends (accepted)
+    if (searchResult.isstatus === 2) {
+      // Already friends (request was accepted)
+      return { type: 'friend', disabled: true };
+    } else if (searchResult.isstatus === 1 || requestSent) {
+      // Pending request (waiting for acceptance)
+      return { type: 'sent', disabled: true };
+    } else {
+      // Not friends yet, can send request
+      return { type: 'add', disabled: false };
+    }
+  };
+
+  const buttonStatus = getButtonStatus();
 
   return (
     <LinearGradient colors={["#fcd34d", "#fef3c7"]} style={styles.container}>
@@ -255,12 +290,20 @@ export default function AddFriendScreen() {
                 )}
               </View>
 
-              {/* Right: Add Button */}
-              {!requestSent ? (
+              {/* Right: Status Button */}
+              {buttonStatus.type === 'friend' ? (
+                <View style={styles.friendIconButton}>
+                  <Ionicons name="people" size={24} color="#16a34a" />
+                </View>
+              ) : buttonStatus.type === 'sent' ? (
+                <View style={styles.addedIconButton}>
+                  <Ionicons name="checkmark-circle" size={24} color="#ea580c" />
+                </View>
+              ) : (
                 <TouchableOpacity
-                  style={[styles.addIconButton, isSending && styles.addIconButtonDisabled]}
+                  style={[styles.addIconButton, (isSending || buttonStatus.disabled) && styles.addIconButtonDisabled]}
                   onPress={handleSendRequest}
-                  disabled={isSending}
+                  disabled={isSending || buttonStatus.disabled}
                 >
                   {isSending ? (
                     <ActivityIndicator color="#78350f" size="small" />
@@ -268,11 +311,23 @@ export default function AddFriendScreen() {
                     <Ionicons name="person-add" size={24} color="#78350f" />
                   )}
                 </TouchableOpacity>
-              ) : (
-                <View style={styles.addedIconButton}>
-                  <Ionicons name="checkmark-circle" size={24} color="#16a34a" />
-                </View>
               )}
+            </View>
+          )}
+
+          {/* Friend Status Badge */}
+          {hasSearched && searchResult && searchResult.isstatus === 2 && (
+            <View style={styles.friendBadge}>
+              <Ionicons name="checkmark-circle" size={16} color="#16a34a" />
+              <Text style={styles.friendBadgeText}>已经是好友</Text>
+            </View>
+          )}
+
+          {/* Pending Request Badge */}
+          {hasSearched && searchResult && searchResult.isstatus === 1 && (
+            <View style={styles.pendingBadge}>
+              <Ionicons name="time-outline" size={16} color="#ea580c" />
+              <Text style={styles.pendingBadgeText}>待处理的好友请求</Text>
             </View>
           )}
 
@@ -407,7 +462,7 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 12,
     padding: 12,
-    marginBottom: 20,
+    marginBottom: 12,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -456,235 +511,51 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    backgroundColor: "#fed7aa",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
+  },
+  friendIconButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: "#dcfce7",
     alignItems: "center",
     justifyContent: "center",
     marginLeft: 8,
   },
-  // Profile Card Styles
-  profileCard: {
-    backgroundColor: "white",
-    borderRadius: 16,
-    marginBottom: 20,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  profileHeader: {
-    height: 100,
-    position: "relative",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  profileHeaderGradient: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  avatarContainer: {
-    marginTop: 40,
-    position: "relative",
-  },
-  profileAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 4,
-    borderColor: "white",
-    backgroundColor: "#f3f4f6",
-  },
-  avatarBorder: {
-    position: "absolute",
-    top: -2,
-    left: -2,
-    right: -2,
-    bottom: -2,
-    borderRadius: 42,
-    borderWidth: 2,
-    borderColor: "#fbbf24",
-  },
-  profileInfo: {
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    alignItems: "center",
-  },
-  profileName: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#1f2937",
-    marginBottom: 6,
-    textAlign: "center",
-  },
-  profileId: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 16,
-    fontWeight: "500",
-  },
-  detailsContainer: {
-    width: "100%",
-    backgroundColor: "#f9fafb",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    gap: 10,
-  },
-  detailRow: {
+  friendBadge: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  detailText: {
-    fontSize: 14,
-    color: "#374151",
-    flex: 1,
-  },
-  actionButtonsContainer: {
-    width: "100%",
-    gap: 10,
-  },
-  primaryButton: {
-    flexDirection: "row",
-    backgroundColor: "#fbbf24",
-    borderRadius: 12,
-    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    shadowColor: "#fbbf24",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
-  },
-  primaryButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#ffffff",
-  },
-  successButton: {
-    flexDirection: "row",
     backgroundColor: "#dcfce7",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 2,
-    borderColor: "#86efac",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 20,
+    gap: 6,
   },
-  successButtonText: {
-    fontSize: 16,
+  friendBadgeText: {
+    fontSize: 13,
     fontWeight: "600",
     color: "#16a34a",
   },
-  secondaryButton: {
+  pendingBadge: {
     flexDirection: "row",
-    backgroundColor: "white",
-    borderRadius: 12,
-    paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    borderWidth: 2,
-    borderColor: "#fbbf24",
-  },
-  secondaryButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#78350f",
-  },
-  resultContainer: {
-    backgroundColor: "white",
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: "#fed7aa",
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 6,
   },
-  resultTitle: {
+  pendingBadgeText: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#78350f",
-    marginBottom: 12,
-  },
-  userCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  userAvatar: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "#f3f4f6",
-    marginRight: 12,
-  },
-  userInfo: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#1f2937",
-    marginBottom: 4,
-  },
-  userId: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 4,
-  },
-  userBio: {
-    fontSize: 12,
-    color: "#9ca3af",
-    marginBottom: 2,
-  },
-  userPhone: {
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  addButton: {
-    flexDirection: "row",
-    backgroundColor: "#fbbf24",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  addButtonDisabled: {
-    opacity: 0.6,
-  },
-  addButtonText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#78350f",
-  },
-  sentContainer: {
-    flexDirection: "row",
-    backgroundColor: "#dcfce7",
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  sentText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#16a34a",
+    color: "#ea580c",
   },
   noResultContainer: {
     alignItems: "center",

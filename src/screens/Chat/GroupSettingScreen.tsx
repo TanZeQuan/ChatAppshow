@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
+import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
 
 const { width } = Dimensions.get('window');
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -34,6 +35,7 @@ interface Member {
     id: string;
     name: string;
     avatar?: string;
+    phone?: string;
 }
 
 export default function GroupSettingScreen() {
@@ -46,16 +48,14 @@ export default function GroupSettingScreen() {
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    // Get real-time data from store instead of route params
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '';
     
-    // 确保当前用户总是在成员列表中
-    const allMembers: Member[] = React.useMemo(() => {
+    // Memoized members list
+    const allMembers: Member[] = useMemo(() => {
         const storeMembers = groupChat?.members || [];
         const storeMemberIds = groupChat?.memberIds || [];
         
-        // 如果当前用户不在成员列表中，则添加
         if (currentUser && !storeMemberIds.includes(currentUserId)) {
             return [
                 ...storeMembers,
@@ -69,32 +69,26 @@ export default function GroupSettingScreen() {
         return storeMembers;
     }, [groupChat?.members, groupChat?.memberIds, currentUser, currentUserId]);
 
-    const allMemberIds = React.useMemo(() => {
-        return allMembers.map(member => member.id);
-    }, [allMembers]);
+    const allMemberIds = useMemo(() => allMembers.map(member => member.id), [allMembers]);
 
-    const [muteNotifications, setMuteNotifications] = useState(
-        groupChat?.rawData?.push_notification || false
-    );
-    const [pinToTop, setPinToTop] = useState(
-        groupChat?.rawData?.top_notification || false
-    );
-    const [showOnTop, setShowOnTop] = useState(
-        groupChat?.rawData?.show_nicknames || false
-    );
+    // State
+    const [muteNotifications, setMuteNotifications] = useState(groupChat?.rawData?.push_notification || false);
+    const [pinToTop, setPinToTop] = useState(groupChat?.rawData?.top_notification || false);
+    const [showOnTop, setShowOnTop] = useState(groupChat?.rawData?.show_nicknames || false);
     const [showGroupNameModal, setShowGroupNameModal] = useState(false);
     const [newGroupName, setNewGroupName] = useState(chatName);
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
+    const [friendsList, setFriendsList] = useState<string[]>([]);
+    const [loadingFriends, setLoadingFriends] = useState(false);
 
-    // Update newGroupName when chatName changes
-    React.useEffect(() => {
+    // Sync state with store
+    useEffect(() => {
         setNewGroupName(chatName);
     }, [chatName]);
 
-    // Sync state with store
-    React.useEffect(() => {
+    useEffect(() => {
         if (groupChat) {
             setMuteNotifications(groupChat.rawData?.push_notification || false);
             setPinToTop(groupChat.rawData?.top_notification || false);
@@ -102,77 +96,78 @@ export default function GroupSettingScreen() {
         }
     }, [groupChat]);
 
-    const handleRefresh = async () => {
+    useEffect(() => {
+        loadFriendsList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // Load friends list
+    const loadFriendsList = useCallback(async () => {
+        if (!currentUserId) return;
+        
+        setLoadingFriends(true);
+        try {
+            const result = await readFriends({ user_id: currentUserId } as any);
+            
+            if (result.success && result.data) {
+                const allFriends = [
+                    ...(result.data.request || []),
+                    ...(result.data.approve || [])
+                ];
+                const friendIds = allFriends.map((friend: any) => friend.user_id || friend.id);
+                setFriendsList(friendIds);
+            }
+        } catch (error) {
+            console.error('Failed to load friends:', error);
+        } finally {
+            setLoadingFriends(false);
+        }
+    }, [currentUserId]);
+
+    // Refresh handler
+    const handleRefresh = useCallback(async () => {
         setRefreshing(true);
-
-        // Refresh by getting latest data from store
-        const latestChat = getChatById(chatId);
-        if (latestChat) {
-            // Data is already updated from store, just need to re-render
-        }
-
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
-
+        await loadFriendsList();
         setRefreshing(false);
-    };
+    }, [loadFriendsList]);
 
-    const handleToggleMuteNotifications = (value: boolean) => {
+    // Update chat helper
+    const updateChatData = useCallback((updates: any) => {
+        if (groupChat) {
+            const updatedChat = {
+                ...groupChat,
+                ...updates,
+                rawData: {
+                    ...groupChat.rawData,
+                    ...updates.rawData,
+                }
+            };
+            addChat(updatedChat);
+        }
+    }, [groupChat, addChat]);
+
+    // Toggle handlers
+    const handleToggleMuteNotifications = useCallback((value: boolean) => {
         setMuteNotifications(value);
+        updateChatData({ rawData: { push_notification: value } });
+    }, [updateChatData]);
 
-        // Update local store
-        if (groupChat) {
-            const updatedChat = {
-                ...groupChat,
-                rawData: {
-                    ...groupChat.rawData,
-                    push_notification: value,
-                }
-            };
-            addChat(updatedChat);
-        }
-    };
-
-    const handleTogglePinToTop = (value: boolean) => {
+    const handleTogglePinToTop = useCallback((value: boolean) => {
         setPinToTop(value);
+        updateChatData({ rawData: { top_notification: value } });
+    }, [updateChatData]);
 
-        // Update local store
-        if (groupChat) {
-            const updatedChat = {
-                ...groupChat,
-                rawData: {
-                    ...groupChat.rawData,
-                    top_notification: value,
-                }
-            };
-            addChat(updatedChat);
-        }
-    };
-
-    const handleToggleShowNicknames = (value: boolean) => {
+    const handleToggleShowNicknames = useCallback((value: boolean) => {
         setShowOnTop(value);
+        updateChatData({ rawData: { show_nicknames: value } });
+    }, [updateChatData]);
 
-        // Update local store
-        if (groupChat) {
-            const updatedChat = {
-                ...groupChat,
-                rawData: {
-                    ...groupChat.rawData,
-                    show_nicknames: value,
-                }
-            };
-            addChat(updatedChat);
-        }
-    };
+    // Navigation handlers
+    const handleSearchHistory = useCallback(() => {
+        navigation.navigate('SearchMessages', { chatId, chatName });
+    }, [navigation, chatId, chatName]);
 
-    const handleSearchHistory = () => {
-        navigation.navigate('SearchMessages', {
-            chatId,
-            chatName,
-        });
-    };
-
-    const handleClearHistory = () => {
+    const handleClearHistory = useCallback(() => {
         Alert.alert(
             '清空聊天记录',
             `确定要清空群 "${chatName}" 的所有聊天记录吗？此操作不可恢复。`,
@@ -188,16 +183,15 @@ export default function GroupSettingScreen() {
                 }
             ]
         );
-    };
+    }, [chatId, chatName, clearChat]);
 
-    // 检查是否有权限踢人（群主或管理员）
-    const checkKickPermission = (targetMemberId: string) => {
+    // Permission check
+    const checkKickPermission = useCallback((targetMemberId: string) => {
         const isOwner = groupChat?.ownerId === currentUserId;
         const isAdmin = groupChat?.admins?.includes(currentUserId);
         const isTargetOwner = groupChat?.ownerId === targetMemberId;
         const isTargetAdmin = groupChat?.admins?.includes(targetMemberId);
         
-        // 群主可以踢所有人，但不能踢自己
         if (isOwner) {
             if (targetMemberId === currentUserId) {
                 return { hasPermission: false, message: '群主不能踢出自己' };
@@ -205,7 +199,6 @@ export default function GroupSettingScreen() {
             return { hasPermission: true, message: '' };
         }
         
-        // 管理员可以踢普通成员，但不能踢群主和其他管理员
         if (isAdmin) {
             if (isTargetOwner || isTargetAdmin) {
                 return { hasPermission: false, message: '管理员不能踢出群主或其他管理员' };
@@ -216,11 +209,11 @@ export default function GroupSettingScreen() {
             return { hasPermission: true, message: '' };
         }
         
-        // 普通成员没有踢人权限
         return { hasPermission: false, message: '只有群主或管理员可以踢人' };
-    };
+    }, [groupChat, currentUserId]);
 
-    const handleKickMember = async (memberId: string, memberName: string) => {
+    // Kick member
+    const handleKickMember = useCallback(async (memberId: string, memberName: string) => {
         const permission = checkKickPermission(memberId);
         if (!permission.hasPermission) {
             Alert.alert('权限不足', permission.message);
@@ -239,69 +232,139 @@ export default function GroupSettingScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            // TODO: 调用后端 API 踢人
-                            // await kickGroupMember({ 
-                            //     group_id: chatId, 
-                            //     user_id: memberId,
-                            //     kicked_by: currentUserId 
-                            // });
-
-                            // 更新本地 store
-                            if (groupChat) {
-                                const updatedMembers = allMembers.filter(m => m.id !== memberId);
-                                const updatedMemberIds = allMemberIds.filter(id => id !== memberId);
-                                const updatedChat = {
-                                    ...groupChat,
-                                    members: updatedMembers,
-                                    memberIds: updatedMemberIds,
-                                };
-                                addChat(updatedChat);
-                            }
+                            // TODO: Call backend API
+                            const updatedMembers = allMembers.filter(m => m.id !== memberId);
+                            const updatedMemberIds = allMemberIds.filter(id => id !== memberId);
+                            updateChatData({
+                                members: updatedMembers,
+                                memberIds: updatedMemberIds,
+                            });
 
                             Alert.alert('成功', `已成功将 ${memberName} 踢出群聊`);
-                            setKickingMemberId(null);
                         } catch (error) {
                             console.error('Kick member error:', error);
                             Alert.alert('错误', '踢出成员失败，请重试');
+                        } finally {
                             setKickingMemberId(null);
                         }
                     }
                 }
             ]
         );
-    };
+    }, [checkKickPermission, allMembers, allMemberIds, updateChatData]);
 
-    const handleViewMemberProfile = (member: Member) => {
-        if (member.id === currentUserId) {
-            // 点击自己，不显示操作菜单
-            return;
-        }
+    // Delete friend
+    const handleDeleteFriend = useCallback(async (memberId: string, memberName: string) => {
+        Alert.alert(
+            '删除好友',
+            `确定要删除好友 ${memberName} 吗？`,
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '删除',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setIsLoading(true);
+                            const result = await deleteFriend({
+                                user_id: currentUserId,
+                                friend_id: memberId,
+                            } as any);
+
+                            if (result.success) {
+                                setFriendsList(prev => prev.filter(id => id !== memberId));
+                                Alert.alert('成功', '已删除好友');
+                            } else {
+                                Alert.alert('错误', result.message || '删除好友失败');
+                            }
+                        } catch (error) {
+                            console.error('Delete friend error:', error);
+                            Alert.alert('错误', '删除好友失败，请重试');
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    }, [currentUserId]);
+
+    // Block user
+    const handleBlockUser = useCallback(async (memberId: string, memberName: string) => {
+        Alert.alert(
+            '拉黑用户',
+            `确定要拉黑 ${memberName} 吗？拉黑后将无法接收对方消息。`,
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '拉黑',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            setIsLoading(true);
+                            const result = await blockUser({
+                                user_id: currentUserId,
+                                blocked_user_id: memberId,
+                            } as any);
+
+                            if (result.success) {
+                                Alert.alert('成功', '已拉黑该用户');
+                                setFriendsList(prev => prev.filter(id => id !== memberId));
+                            } else {
+                                Alert.alert('错误', result.message || '拉黑用户失败');
+                            }
+                        } catch (error) {
+                            console.error('Block user error:', error);
+                            Alert.alert('错误', '拉黑用户失败，请重试');
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    }, [currentUserId]);
+
+    // View member profile
+    const handleViewMemberProfile = useCallback((member: Member) => {
+        if (member.id === currentUserId) return;
 
         const permission = checkKickPermission(member.id);
         const canKick = permission.hasPermission;
+        const isFriend = friendsList.includes(member.id);
 
         const options: any[] = [
             { text: '取消', style: 'cancel' },
             {
                 text: '查看资料',
-                onPress: () => {
-                    navigation.navigate('UserProfile', {
-                        userId: member.id,
-                        userName: member.name,
-                    });
-                },
+                onPress: () => navigation.navigate('UserProfile', {
+                    userId: member.id,
+                    userName: member.name,
+                }),
             },
             {
                 text: '发送消息',
-                onPress: () => {
-                    navigation.navigate('ChatRoom', {
-                        chatId: member.id,
-                        chatName: member.name,
-                        avatar: member.avatar,
-                    });
-                },
+                onPress: () => navigation.navigate('ChatRoom', {
+                    chatId: member.id,
+                    chatName: member.name,
+                    avatar: member.avatar,
+                }),
             },
         ];
+
+        if (isFriend) {
+            options.push({
+                text: '删除好友',
+                style: 'destructive',
+                onPress: () => handleDeleteFriend(member.id, member.name),
+            });
+        }
+
+        options.push({
+            text: '拉黑',
+            style: 'destructive',
+            onPress: () => handleBlockUser(member.id, member.name),
+        });
 
         if (canKick) {
             options.push({
@@ -311,40 +374,33 @@ export default function GroupSettingScreen() {
             });
         }
 
-        Alert.alert(member.name, '选择操作', options);
-    };
+        Alert.alert(member.name, isFriend ? '好友 • 群成员' : '群成员', options);
+    }, [currentUserId, checkKickPermission, friendsList, navigation, handleDeleteFriend, handleBlockUser, handleKickMember]);
 
-    const handleAddMembers = () => {
+    // Add members
+    const handleAddMembers = useCallback(() => {
         navigation.navigate('AddGroupMembers', {
             chatId,
             chatName,
             currentMembers: allMemberIds,
         });
-    };
+    }, [navigation, chatId, chatName, allMemberIds]);
 
-    const handleUpdateGroupName = () => {
+    // Update group name
+    const handleUpdateGroupName = useCallback(() => {
         if (!newGroupName.trim()) {
             Alert.alert('错误', '群聊名称不能为空');
             return;
         }
 
         // TODO: Call API to update group name
-        // await updateGroupName({ group_id: chatId, name: newGroupName.trim() });
-
-        // Update group chat name in local store
-        if (groupChat) {
-            const updatedChat = {
-                ...groupChat,
-                name: newGroupName.trim(),
-            };
-            addChat(updatedChat);
-        }
-
+        updateChatData({ name: newGroupName.trim() });
         setShowGroupNameModal(false);
         Alert.alert('成功', '群聊名称已更新');
-    };
+    }, [newGroupName, updateChatData]);
 
-    const handleLeaveGroup = () => {
+    // Leave group
+    const handleLeaveGroup = useCallback(() => {
         Alert.alert(
             '退出群聊',
             `确定要退出群聊 "${chatName}" 吗？`,
@@ -356,23 +412,17 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-
                             // TODO: Call API to leave group
-                            // await leaveGroup({ group_id: chatId, user_id: currentUserId });
-
                             removeChat(chatId);
-
                             setIsLoading(false);
 
                             Alert.alert('成功', '已退出群聊', [
                                 {
                                     text: '确定',
-                                    onPress: () => {
-                                        navigation.reset({
-                                            index: 0,
-                                            routes: [{ name: 'ChatList' }],
-                                        });
-                                    },
+                                    onPress: () => navigation.reset({
+                                        index: 0,
+                                        routes: [{ name: 'ChatList' }],
+                                    }),
                                 },
                             ]);
                         } catch (error) {
@@ -384,10 +434,10 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    };
+    }, [chatName, chatId, removeChat, navigation]);
 
-    const handleDismissGroup = () => {
-        // 只有群主才能解散群聊
+    // Dismiss group
+    const handleDismissGroup = useCallback(() => {
         if (groupChat?.ownerId !== currentUserId) {
             Alert.alert('权限不足', '只有群主才能解散群聊');
             return;
@@ -404,23 +454,17 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-
                             // TODO: Call API to dismiss group
-                            // await dismissGroup({ group_id: chatId, user_id: currentUserId });
-
                             removeChat(chatId);
-
                             setIsLoading(false);
 
                             Alert.alert('成功', '群聊已解散', [
                                 {
                                     text: '确定',
-                                    onPress: () => {
-                                        navigation.reset({
-                                            index: 0,
-                                            routes: [{ name: 'ChatList' }],
-                                        });
-                                    },
+                                    onPress: () => navigation.reset({
+                                        index: 0,
+                                        routes: [{ name: 'ChatList' }],
+                                    }),
                                 },
                             ]);
                         } catch (error) {
@@ -432,13 +476,15 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    };
+    }, [groupChat, currentUserId, chatName, chatId, removeChat, navigation]);
 
-    const renderMemberItem = (member: Member, index: number) => {
+    // Render member item
+    const renderMemberItem = useCallback((member: Member, index: number) => {
         const isCurrentUser = member.id === currentUserId;
         const isKicking = kickingMemberId === member.id;
         const permission = checkKickPermission(member.id);
         const showKickBadge = permission.hasPermission && !isCurrentUser;
+        const isFriend = friendsList.includes(member.id);
 
         return (
             <TouchableOpacity
@@ -452,6 +498,11 @@ export default function GroupSettingScreen() {
                         source={{ uri: member.avatar || `https://i.pravatar.cc/150?img=${index}` }}
                         style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
                     />
+                    {isFriend && !isCurrentUser && (
+                        <View style={styles.friendBadge}>
+                            <Ionicons name="heart" size={10} color="#FF3B30" />
+                        </View>
+                    )}
                     {showKickBadge && (
                         <View style={styles.kickBadge}>
                             <Ionicons name="close" size={12} color="#FF3B30" />
@@ -465,37 +516,31 @@ export default function GroupSettingScreen() {
                 </View>
                 <Text style={[styles.memberName, isCurrentUser && styles.currentUserName]} numberOfLines={1}>
                     {isCurrentUser ? '我' : member.name}
-                    {member.id === groupChat?.ownerId && (
-                        <Text style={styles.ownerLabel}> (群主)</Text>
-                    )}
+                    {member.id === groupChat?.ownerId && <Text style={styles.ownerLabel}> (群主)</Text>}
                     {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
                         <Text style={styles.adminLabel}> (管理员)</Text>
                     )}
                 </Text>
             </TouchableOpacity>
         );
-    };
+    }, [currentUserId, kickingMemberId, checkKickPermission, friendsList, groupChat, handleViewMemberProfile]);
 
-    const renderAddMemberButton = () => (
-        <TouchableOpacity
-            style={styles.memberItem}
-            onPress={handleAddMembers}
-        >
+    // Render add member button
+    const renderAddMemberButton = useCallback(() => (
+        <TouchableOpacity style={styles.memberItem} onPress={handleAddMembers}>
             <View style={styles.addMemberButton}>
                 <Ionicons name="person-add" size={24} color="#666" />
             </View>
             <Text style={styles.memberName}>添加</Text>
         </TouchableOpacity>
-    );
+    ), [handleAddMembers]);
 
+    // Loading screen
     if (isLoading) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => navigation.goBack()}
-                    >
+                    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                         <Ionicons name="arrow-back" size={24} color="#333" />
                     </TouchableOpacity>
                     <Text style={styles.headerTitle}>群聊设置</Text>
@@ -513,10 +558,7 @@ export default function GroupSettingScreen() {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
-                <TouchableOpacity
-                    style={styles.backButton}
-                    onPress={() => navigation.goBack()}
-                >
+                <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                     <Ionicons name="arrow-back" size={24} color="#333" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>群聊设置</Text>
@@ -562,10 +604,7 @@ export default function GroupSettingScreen() {
                                 )}
                             </Text>
                         </View>
-                        <TouchableOpacity
-                            style={styles.editButton}
-                            onPress={() => setShowGroupNameModal(true)}
-                        >
+                        <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
                             <Ionicons name="create-outline" size={20} color="#666" />
                         </TouchableOpacity>
                     </View>
@@ -577,7 +616,8 @@ export default function GroupSettingScreen() {
                         <Text style={styles.sectionTitle}>群成员</Text>
                         <Text style={styles.sectionSubtitle}>
                             共 {allMembers.length} 人
-                            {groupChat?.ownerId === currentUserId && ' • 您有踢人权限'}
+                            {loadingFriends && ' • 加载中...'}
+                            {!loadingFriends && friendsList.length > 0 && ` • ${friendsList.length} 位好友`}
                         </Text>
                     </View>
                     <View style={styles.membersGrid}>
@@ -627,10 +667,7 @@ export default function GroupSettingScreen() {
                         />
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={handleSearchHistory}
-                    >
+                    <TouchableOpacity style={styles.settingItem} onPress={handleSearchHistory}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="search-outline" size={22} color="#333" />
                             <Text style={styles.settingLabel}>查找聊天记录</Text>
@@ -638,10 +675,7 @@ export default function GroupSettingScreen() {
                         <Ionicons name="chevron-forward" size={20} color="#999" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                        style={styles.settingItem}
-                        onPress={handleClearHistory}
-                    >
+                    <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
                         <View style={styles.settingLeft}>
                             <Ionicons name="trash-outline" size={22} color="#333" />
                             <Text style={styles.settingLabel}>清空聊天记录</Text>
@@ -660,10 +694,7 @@ export default function GroupSettingScreen() {
 
                 {/* Danger Zone */}
                 <View style={styles.section}>
-                    <TouchableOpacity
-                        style={styles.dangerButton}
-                        onPress={handleLeaveGroup}
-                    >
+                    <TouchableOpacity style={styles.dangerButton} onPress={handleLeaveGroup}>
                         <Ionicons name="exit-outline" size={22} color="#FF3B30" />
                         <Text style={styles.dangerButtonText}>退出群聊</Text>
                     </TouchableOpacity>
@@ -695,48 +726,41 @@ export default function GroupSettingScreen() {
                         activeOpacity={1}
                         onPress={() => setShowGroupNameModal(false)}
                     >
-                        <TouchableOpacity
-                            activeOpacity={1}
-                            onPress={(e) => e.stopPropagation()}
-                        >
-                            <View style={styles.modalContent}>
-                                <View style={styles.modalHeader}>
-                                    <Text style={styles.modalTitle}>修改群聊名称</Text>
+                        <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>修改群聊名称</Text>
+                                <TouchableOpacity onPress={() => setShowGroupNameModal(false)}>
+                                    <Ionicons name="close" size={24} color="#666" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <View style={styles.modalBody}>
+                                <TextInput
+                                    style={styles.groupNameInput}
+                                    placeholder="请输入群聊名称"
+                                    value={newGroupName}
+                                    onChangeText={setNewGroupName}
+                                    autoFocus={true}
+                                    maxLength={30}
+                                />
+
+                                <View style={styles.modalButtons}>
                                     <TouchableOpacity
+                                        style={[styles.modalButton, styles.cancelButton]}
                                         onPress={() => setShowGroupNameModal(false)}
                                     >
-                                        <Ionicons name="close" size={24} color="#666" />
+                                        <Text style={styles.cancelButtonText}>取消</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.modalButton, styles.confirmButton]}
+                                        onPress={handleUpdateGroupName}
+                                    >
+                                        <Text style={styles.confirmButtonText}>确定</Text>
                                     </TouchableOpacity>
                                 </View>
-
-                                <View style={styles.modalBody}>
-                                    <TextInput
-                                        style={styles.groupNameInput}
-                                        placeholder="请输入群聊名称"
-                                        value={newGroupName}
-                                        onChangeText={setNewGroupName}
-                                        autoFocus={true}
-                                        maxLength={30}
-                                    />
-
-                                    <View style={styles.modalButtons}>
-                                        <TouchableOpacity
-                                            style={[styles.modalButton, styles.cancelButton]}
-                                            onPress={() => setShowGroupNameModal(false)}
-                                        >
-                                            <Text style={styles.cancelButtonText}>取消</Text>
-                                        </TouchableOpacity>
-
-                                        <TouchableOpacity
-                                            style={[styles.modalButton, styles.confirmButton]}
-                                            onPress={handleUpdateGroupName}
-                                        >
-                                            <Text style={styles.confirmButtonText}>确定</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
                             </View>
-                        </TouchableOpacity>
+                        </View>
                     </TouchableOpacity>
                 </View>
             </Modal>
@@ -895,6 +919,19 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#E0E0E0',
         borderStyle: 'dashed',
+    },
+    friendBadge: {
+        position: 'absolute',
+        top: -4,
+        left: -4,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#FFF',
+        borderWidth: 1,
+        borderColor: '#FF3B30',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     kickBadge: {
         position: 'absolute',

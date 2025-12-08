@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
@@ -9,7 +9,9 @@ import {
     KeyboardAvoidingView,
     Platform,
     Image,
-    Alert
+    Alert,
+    ActivityIndicator,
+    RefreshControl
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,6 +21,7 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import { useChatStore } from '../../store/chatStore';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useUserStore } from '@/src/store/userStore';
+import { readChatMessages } from '../../api/Chat';
 
 interface DisplayMessage {
     id: string;
@@ -48,11 +51,12 @@ export default function GroupRoomScreen() {
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    const { chats, addMessage, clearChat, getChatById } = useChatStore();
+    const { chats, addMessage, clearChat, getChatById, setMessages } = useChatStore();
 
     // Get real-time data from store
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '群聊';
+    
     // 生成包含自己的成员列表
     const membersWithSelf = [
         ...(groupChat?.members || params.members || []),
@@ -76,20 +80,115 @@ export default function GroupRoomScreen() {
     const [inputText, setInputText] = useState('');
     const [showToolbar, setShowToolbar] = useState(false);
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const [offset, setOffset] = useState(0);
+    const [hasMoreMessages, setHasMoreMessages] = useState(true);
 
     const messages: DisplayMessage[] = storedMessages.map(msg => {
-        const member = uniqueMembers.find(m => m.id === msg.senderId); // ⚡用 uniqueMembers
+        const member = uniqueMembers.find(m => m.id === msg.senderId);
         return {
             ...msg,
             sender: msg.senderId === currentUserId ? 'me' : 'other',
             senderName: msg.senderId === currentUserId
-                ? `${currentUser?.name || '我'} (我)` // ⚡显示自己
+                ? `${currentUser?.name || '我'} (我)`
                 : (member?.name || msg.name || '未知成员'),
             avatar: msg.senderId === currentUserId
                 ? currentUser?.avatar
                 : (member?.avatar || msg.avatar),
         };
     });
+
+    // Load initial messages
+    const loadMessages = useCallback(async (isRefresh = false) => {
+        if (!currentUserId || !chatId) return;
+        
+        const currentOffset = isRefresh ? 0 : offset;
+        
+        if (isRefresh) {
+            setIsRefreshing(true);
+        } else {
+            setIsLoading(true);
+        }
+
+        try {
+            const result = await readChatMessages({
+                chat_id: chatId,
+                user_id: currentUserId,
+                offset: currentOffset,
+            });
+
+            console.log('✅ Messages loaded:', result);
+
+            if (result.success && result.data) {
+                // API returns { chat: [], group: [] }
+                // Determine which array to use based on chat type
+                const isGroupChat = chatId.startsWith('group_') || params.isGroup;
+                const apiMessages = isGroupChat 
+                    ? (result.data.group || [])
+                    : (result.data.chat || []);
+                
+                console.log('📨 API Messages:', apiMessages);
+                console.log('📊 Message count:', apiMessages.length);
+                console.log('🏷️ Is group chat:', isGroupChat);
+                
+                // Check if there are more messages to load
+                if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
+                    setHasMoreMessages(false);
+                    console.log('❌ No more messages to load');
+                } else {
+                    // Transform API messages to app format
+                    const transformedMessages = apiMessages.map((msg: any) => ({
+                        id: msg.message_id || msg.id || String(Date.now() + Math.random()),
+                        senderId: msg.sender_id || msg.senderId,
+                        senderName: msg.sender_name || msg.senderName || '未知',
+                        text: msg.message || msg.text || '',
+                        createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
+                        name: msg.sender_name || msg.name,
+                        avatar: msg.sender_avatar || msg.avatar,
+                    }));
+
+                    console.log('✅ Transformed messages:', transformedMessages.length);
+
+                    if (isRefresh) {
+                        // Replace all messages on refresh
+                        setMessages(chatId, transformedMessages);
+                        setOffset(transformedMessages.length);
+                        console.log('🔄 Messages refreshed');
+                    } else {
+                        // Append messages when loading more
+                        const existingMessages = chats[chatId] || [];
+                        const allMessages = [...existingMessages, ...transformedMessages];
+                        // Remove duplicates based on message id
+                        const uniqueMessages = Array.from(
+                            new Map(allMessages.map(m => [m.id, m])).values()
+                        );
+                        setMessages(chatId, uniqueMessages);
+                        setOffset(uniqueMessages.length);
+                        console.log('➕ Messages appended, total:', uniqueMessages.length);
+                    }
+                }
+            } else {
+                console.warn('⚠️ Failed to load messages:', result.message);
+                if (!isRefresh) {
+                    Alert.alert('提示', result.message || '加载消息失败');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading messages:', error);
+            if (!isRefresh) {
+                Alert.alert('错误', '加载消息失败，请重试');
+            }
+        } finally {
+            setIsLoading(false);
+            setIsRefreshing(false);
+        }
+    }, [currentUserId, chatId, offset, params.isGroup, setMessages, chats]);
+
+    // Load messages on mount
+    useEffect(() => {
+        loadMessages(true);
+    }, [chatId, currentUserId, loadMessages]);
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
@@ -117,6 +216,8 @@ export default function GroupRoomScreen() {
                 style: 'destructive',
                 onPress: () => {
                     clearChat(chatId);
+                    setOffset(0);
+                    setHasMoreMessages(true);
                     Alert.alert('成功', '聊天记录已清除');
                 }
             }
@@ -144,6 +245,18 @@ export default function GroupRoomScreen() {
 
     const handleEmojiSelect = (emoji: any) => {
         setInputText((prev) => prev + emoji.emoji);
+    };
+
+    const handleLoadMore = () => {
+        if (!isLoading && hasMoreMessages) {
+            loadMessages(false);
+        }
+    };
+
+    const handleRefresh = () => {
+        setOffset(0);
+        setHasMoreMessages(true);
+        loadMessages(true);
     };
 
     const renderItem = ({ item }: { item: DisplayMessage }) => (
@@ -185,6 +298,16 @@ export default function GroupRoomScreen() {
         </View>
     );
 
+    const renderFooter = () => {
+        if (!isLoading) return null;
+        return (
+            <View style={roomStyles.loadingFooter}>
+                <ActivityIndicator size="small" color="#666" />
+                <Text style={roomStyles.loadingText}>加载更多消息...</Text>
+            </View>
+        );
+    };
+
     const ToolbarButton = ({ icon, label, onPress }: any) => (
         <TouchableOpacity style={roomStyles.toolbarButton} onPress={onPress}>
             <View style={roomStyles.toolbarIconContainer}>
@@ -222,6 +345,16 @@ export default function GroupRoomScreen() {
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={roomStyles.chatList}
                         inverted
+                        onEndReached={handleLoadMore}
+                        onEndReachedThreshold={0.5}
+                        ListFooterComponent={renderFooter}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isRefreshing}
+                                onRefresh={handleRefresh}
+                                tintColor="#666"
+                            />
+                        }
                     />
 
                     <View style={roomStyles.inputSection}>
@@ -366,4 +499,14 @@ const roomStyles = RNStyleSheet.create({
         marginBottom: 6,
     },
     toolbarLabel: { fontSize: 12, color: '#333333' },
+    loadingFooter: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    loadingText: {
+        marginTop: 8,
+        fontSize: 12,
+        color: '#666666',
+    },
 });

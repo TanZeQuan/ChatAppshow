@@ -49,6 +49,7 @@ type ChatStore = {
   settings: Settings;
 
   addMessage: (chatId: string, text: string) => void;
+  setMessages: (chatId: string, messages: Message[]) => void; // ⭐ 新增
   addChat: (chat: ChatListItem) => void;
   setChats: (chats: ChatListItem[]) => void;
   updateChatLastMessage: (chatId: string, message: string, timestamp: string) => void;
@@ -100,6 +101,22 @@ export const useChatStore = create<ChatStore>()(
 
         // Update chat list with last message
         get().updateChatLastMessage(chatId, text, newMessage.createdAt);
+      },
+
+      // ⭐ 新增：直接设置某个聊天的所有消息（用于 API 加载）
+      setMessages: (chatId, messages) => {
+        set({
+          chats: {
+            ...get().chats,
+            [chatId]: messages,
+          },
+        });
+
+        // 如果有消息，更新聊天列表的最后一条消息
+        if (messages.length > 0) {
+          const lastMsg = messages[messages.length - 1];
+          get().updateChatLastMessage(chatId, lastMsg.text, lastMsg.createdAt);
+        }
       },
 
       // ⭐ Add new chat to chat list (for groups or new conversations)

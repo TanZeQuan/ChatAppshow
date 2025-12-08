@@ -61,7 +61,7 @@ export default function ChatSettingScreen() {
         // Load settings from chat object
         setPushNotification(chat.rawData?.push_notification || false);
         setTopNotification(chat.rawData?.top_notification || false);
-        setStrongReminder(chat.rawData?.strong_reminder || false);
+        setStrongReminder((chat.rawData as any)?.strong_reminder || false);
       }
 
       // Get contact info if it's a personal chat
@@ -159,7 +159,7 @@ export default function ChatSettingScreen() {
         rawData: {
           ...chat.rawData,
           strong_reminder: value,
-        }
+        } as any
       };
       addChat(updatedChat);
     }
