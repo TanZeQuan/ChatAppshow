@@ -364,7 +364,7 @@ export default function ChatRoomScreen() {
   }
 
   return (
-    <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
+    <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
         <View style={roomStyles.header}>
           <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
@@ -477,7 +477,7 @@ const roomStyles = RNStyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colors.background.gradientYellow[1],
+    backgroundColor: colors.background.yellowBright,
     paddingHorizontal: scaleWidth(12),
     paddingVertical: scaleHeight(10),
     borderBottomWidth: borders.width1,

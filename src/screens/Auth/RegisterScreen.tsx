@@ -156,8 +156,8 @@ export default function RegisterScreen() {
   return (
     <LinearGradient colors={["#FFE194", "#FFF9E5", "#FFFFFF"]} style={styles.safeArea}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <View style={styles.bgShape1} />
-        <View style={styles.bgShape2} />
+        {/* <View style={styles.bgShape1} />
+        <View style={styles.bgShape2} /> */}
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -282,7 +282,7 @@ export default function RegisterScreen() {
                 style={[styles.registerButtonWrapper, isButtonDisabled && styles.disabledButton]}
               >
                 <LinearGradient
-                  colors={["#FFFFFF", "#F8F8F8"]}
+                  colors={["#FFEFB0", "#FFF9E5"]}
                   style={styles.registerButtonGradient}
                 >
                   <Text style={styles.registerButtonText}>
@@ -355,26 +355,26 @@ const styles = StyleSheet.create({
   },
 
   // Background shapes
-  bgShape1: {
-    position: "absolute",
-    width: scaleWidth(350),
-    height: scaleWidth(350),
-    borderRadius: borders.radius60,
-    backgroundColor: colors.background.transparentWhite50,
-    top: scaleHeight(-100),
-    right: scaleWidth(-120),
-    transform: [{ rotate: "45deg" }],
-  },
-  bgShape2: {
-    position: "absolute",
-    width: scaleWidth(300),
-    height: scaleWidth(300),
-    borderRadius: borders.radius60,
-    backgroundColor: colors.background.transparentWhite70,
-    top: scaleHeight(50),
-    left: scaleWidth(-150),
-    transform: [{ rotate: "30deg" }],
-  },
+  // bgShape1: {
+  //   position: "absolute",
+  //   width: scaleWidth(350),
+  //   height: scaleWidth(350),
+  //   borderRadius: borders.radius60,
+  //   backgroundColor: colors.background.transparentWhite50,
+  //   top: scaleHeight(-100),
+  //   right: scaleWidth(-120),
+  //   transform: [{ rotate: "45deg" }],
+  // },
+  // bgShape2: {
+  //   position: "absolute",
+  //   width: scaleWidth(300),
+  //   height: scaleWidth(300),
+  //   borderRadius: borders.radius60,
+  //   backgroundColor: colors.background.transparentWhite70,
+  //   top: scaleHeight(50),
+  //   left: scaleWidth(-150),
+  //   transform: [{ rotate: "30deg" }],
+  // },
 
   // Title
   title: {

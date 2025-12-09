@@ -227,7 +227,7 @@ export default function AddFriendScreen() {
   const buttonStatus = getButtonStatus();
 
   return (
-    <LinearGradient colors={["#fcd34d", "#fef3c7"]} style={styles.container}>
+    <LinearGradient colors={["#FFEFB0", "#FFF9E5"]} style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <SafeAreaView style={styles.safeArea}>
         <ScrollView

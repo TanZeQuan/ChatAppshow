@@ -296,7 +296,7 @@ export default function ChatListScreen() {
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['#FFD966', '#FFB84D']}
+        colors={['#FFD860', '#FFD860']}
         style={styles.gradientHeader}
       >
         <SafeAreaView edges={['top']}>
@@ -360,7 +360,7 @@ export default function ChatListScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.lightGray, // 替换 #F5F5F5
+    backgroundColor: colors.background.gradientYellow[0],
   },
   gradientHeader: {
     paddingBottom: scaleHeight(16),
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     flex: 1,
-    backgroundColor: colors.background.lightGray,
+    backgroundColor: colors.background.gradientYellow[0],
     paddingTop: scaleHeight(12),
   },
   listContent: {
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     padding: scaleWidth(12),
     marginBottom: scaleHeight(8),
     shadowColor: colors.shadow.black,
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 4, height: 4 },
     shadowOpacity: 0.05,
     shadowRadius: 2,
     elevation: 1,

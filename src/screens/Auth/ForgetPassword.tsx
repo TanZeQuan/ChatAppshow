@@ -194,7 +194,7 @@ export default function ForgetPasswordScreen() {
                             disabled={submitting}
                         >
                             <LinearGradient
-                                colors={['#FFFFFF', '#F8F8F8']}
+                                colors={["#FFEFB0", "#FFF9E5"]}
                                 style={styles.submitGradient}
                             >
                                 <Text style={styles.submitText}>

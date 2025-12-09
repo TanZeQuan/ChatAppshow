@@ -1,7 +1,7 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { Dimensions } from "react-native";
+import { Dimensions, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MainTabParamList } from "./types";
 
@@ -19,26 +19,26 @@ const isTablet = width >= 768;
 const getResponsiveSize = () => {
   if (isTablet) {
     return {
-      iconSize: 32,        // Increased from 28
+      iconSize: 32,
       tabBarHeight: 70,
-      paddingBottom: 8,    // Reduced from 12
-      paddingTop: 16,      // Increased from 12
+      paddingBottom: 8,
+      paddingTop: 16,
       fontSize: 14,
     };
   } else if (isMediumDevice) {
     return {
-      iconSize: 30,        // Increased from 26
+      iconSize: 30,
       tabBarHeight: 60,
-      paddingBottom: 4,    // Reduced from 8
-      paddingTop: 8,       // Increased from 4
+      paddingBottom: 4,
+      paddingTop: 8,
       fontSize: 12,
     };
   } else {
     return {
-      iconSize: 26,        // Increased from 22
+      iconSize: 26,
       tabBarHeight: 55,
-      paddingBottom: 2,    // Reduced from 6
-      paddingTop: 10,      // Increased from 6
+      paddingBottom: 2,
+      paddingTop: 10,
       fontSize: 11,
     };
   }
@@ -46,17 +46,25 @@ const getResponsiveSize = () => {
 
 const responsiveSizes = getResponsiveSize();
 
-// ⭐ 导出原始 tabBar style（让子页面恢复时不变形）
-export const getOriginalTabBarStyle = (insets: any) => ({
-  backgroundColor: "#FFD966",
+/** ⭐ 原始 TabBar Style（含顶部左右圆角） */
+export const getOriginalTabBarStyle = (insets: any): ViewStyle => ({
+  backgroundColor: "#FFD860",
   borderTopWidth: 0,
   height: responsiveSizes.tabBarHeight + insets.bottom,
   paddingBottom: Math.max(insets.bottom, responsiveSizes.paddingBottom),
   paddingTop: responsiveSizes.paddingTop,
   paddingHorizontal: isTablet ? 20 : 0,
   elevation: 0,
-});
 
+  // ⭐ 新增：顶部左右圆角 + 悬浮生效
+  borderTopLeftRadius: 22,
+  borderTopRightRadius: 22,
+  overflow: "hidden" as const,         // 必须，不然圆角不显示
+  position: "absolute" as const,       // 必须，不然圆角被父容器裁掉
+  left: 0,
+  right: 0,
+  bottom: 0,
+});
 
 function MainTabsContent() {
   const insets = useSafeAreaInsets();
@@ -66,6 +74,7 @@ function MainTabsContent() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
+
         tabBarIcon: ({ focused, color }) => {
           let iconName: keyof typeof Ionicons.glyphMap;
 
@@ -79,46 +88,29 @@ function MainTabsContent() {
             iconName = "help-outline";
           }
 
-          return (
-            <Ionicons
-              name={iconName}
-              size={responsiveSizes.iconSize}
-              color={color}
-            />
-          );
+          return <Ionicons name={iconName} size={responsiveSizes.iconSize} color={color} />;
         },
 
         tabBarActiveTintColor: "#0c0c0cff",
         tabBarInactiveTintColor: "#8E8E93",
 
-        // ⭐ 使用原始 TabBar style
+        // ⭐ 使用带圆角的 Tab Bar Style
         tabBarStyle: originalTabBarStyle,
 
         tabBarLabelStyle: {
           fontSize: responsiveSizes.fontSize,
           fontWeight: "600",
-          marginTop: 2,  // Reduced from 2 to bring label closer to icon
+          marginTop: 2,
         },
         tabBarItemStyle: {
-          paddingVertical: 2,  // Reduced from 4 to move everything up
+          paddingVertical: 2,
+          paddingTop: -4,     // ⭐ 图标 + 文字整体往上移
         },
       })}
     >
-      <Tab.Screen
-        name="ChatStack"
-        component={ChatStack}
-        options={{ title: "消息" }}
-      />
-      <Tab.Screen
-        name="ContactsStack"
-        component={ContactsStack}
-        options={{ title: "好友" }}
-      />
-      <Tab.Screen
-        name="ProfileStack"
-        component={ProfileStack}
-        options={{ title: "我的" }}
-      />
+      <Tab.Screen name="ChatStack" component={ChatStack} options={{ title: "消息" }} />
+      <Tab.Screen name="ContactsStack" component={ContactsStack} options={{ title: "好友" }} />
+      <Tab.Screen name="ProfileStack" component={ProfileStack} options={{ title: "我的" }} />
     </Tab.Navigator>
   );
 }

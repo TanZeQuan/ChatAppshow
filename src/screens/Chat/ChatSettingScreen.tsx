@@ -496,7 +496,7 @@ export default function ChatSettingScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.yellowPale,
+    backgroundColor: colors.background.gradientYellow[0],
   },
 
   /** HEADER */
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: colors.background.yellowLight,
+    backgroundColor: colors.background.yellowBright,
     borderBottomWidth: borders.width1,
     borderBottomColor: colors.background.yellowBright,
   },

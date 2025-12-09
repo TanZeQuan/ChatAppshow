@@ -221,7 +221,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={profileStyles.container}>
-      <LinearGradient colors={['#FFD966', '#FFB84D']} style={profileStyles.gradientHeader}>
+      <LinearGradient colors={['#FFD860', '#FFD860']} style={profileStyles.gradientHeader}>
         <SafeAreaView edges={['top']}>
           <TouchableOpacity
             style={profileStyles.profileHeader}
@@ -311,7 +311,7 @@ const profileStyles = RNStyleSheet.create({
 
   whiteSection: {
     flex: 1,
-    backgroundColor: colors.background.white,
+    backgroundColor: colors.background.gradientYellow[0],
   },
 
   scrollContent: {

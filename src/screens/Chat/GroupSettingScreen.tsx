@@ -51,12 +51,12 @@ export default function GroupSettingScreen() {
 
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '';
-    
+
     // Memoized members list
     const allMembers: Member[] = useMemo(() => {
         const storeMembers = groupChat?.members || [];
         const storeMemberIds = groupChat?.memberIds || [];
-        
+
         if (currentUser && !storeMemberIds.includes(currentUserId)) {
             return [
                 ...storeMembers,
@@ -99,17 +99,16 @@ export default function GroupSettingScreen() {
 
     useEffect(() => {
         loadFriendsList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Load friends list
     const loadFriendsList = useCallback(async () => {
         if (!currentUserId) return;
-        
         setLoadingFriends(true);
         try {
-            const result = await readFriends({ user_id: currentUserId } as any);
-            
+            // Pass user_id directly, not as an object
+            const result = await readFriends(parseInt(currentUserId, 10));
             if (result.success && result.data) {
                 const allFriends = [
                     ...(result.data.request || []),
@@ -192,14 +191,14 @@ export default function GroupSettingScreen() {
         const isAdmin = groupChat?.admins?.includes(currentUserId);
         const isTargetOwner = groupChat?.ownerId === targetMemberId;
         const isTargetAdmin = groupChat?.admins?.includes(targetMemberId);
-        
+
         if (isOwner) {
             if (targetMemberId === currentUserId) {
                 return { hasPermission: false, message: '群主不能踢出自己' };
             }
             return { hasPermission: true, message: '' };
         }
-        
+
         if (isAdmin) {
             if (isTargetOwner || isTargetAdmin) {
                 return { hasPermission: false, message: '管理员不能踢出群主或其他管理员' };
@@ -209,7 +208,7 @@ export default function GroupSettingScreen() {
             }
             return { hasPermission: true, message: '' };
         }
-        
+
         return { hasPermission: false, message: '只有群主或管理员可以踢人' };
     }, [groupChat, currentUserId]);
 
@@ -222,7 +221,7 @@ export default function GroupSettingScreen() {
         }
 
         setKickingMemberId(memberId);
-        
+
         Alert.alert(
             '踢出成员',
             `确定要将 ${memberName} 踢出群聊吗？`,
@@ -771,248 +770,248 @@ export default function GroupSettingScreen() {
 
 const styles = StyleSheet.create({
     container: {
-    flex: 1,
-    backgroundColor: colors.background.grayLight,
-  },
+        flex: 1,
+        backgroundColor: "#FFEFB0",
+    },
 
-  /** HEADER */
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: scaleWidth(16),
-    paddingVertical: 12,
-    backgroundColor: colors.background.white,
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.grayLight,
-  },
-  backButton: { padding: 8 },
-  headerTitle: {
-    fontSize: typography.fontSize18,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
-  },
+    /** HEADER */
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: scaleWidth(16),
+        paddingVertical: 12,
+        backgroundColor: colors.background.yellowBright,
+        borderBottomWidth: borders.width1,
+        borderBottomColor: colors.background.grayLight,
+    },
+    backButton: { padding: 8 },
+    headerTitle: {
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.blackMedium,
+    },
 
-  /** LOADING */
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: {
-    marginTop: 12,
-    fontSize: typography.fontSize14,
-    color: colors.text.grayDark,
-  },
+    /** LOADING */
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingText: {
+        marginTop: 12,
+        fontSize: typography.fontSize14,
+        color: colors.text.grayDark,
+    },
 
-  scrollView: { flex: 1 },
+    scrollView: { flex: 1 },
 
-  /** SECTION */
-  section: {
-    backgroundColor: colors.background.white,
-    marginTop: 12,
-    paddingVertical: 16,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: scaleWidth(16),
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: typography.fontSize14,
-    color: colors.text.grayDark,
-    fontWeight: typography.fontWeight500,
-  },
-  sectionSubtitle: {
-    fontSize: typography.fontSize12,
-    color: colors.text.gray,
-  },
+    /** SECTION */
+    section: {
+        backgroundColor: colors.background.white,
+        marginTop: 12,
+        paddingVertical: 16,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: scaleWidth(16),
+        marginBottom: 12,
+    },
+    sectionTitle: {
+        fontSize: typography.fontSize14,
+        color: colors.text.grayDark,
+        fontWeight: typography.fontWeight500,
+    },
+    sectionSubtitle: {
+        fontSize: typography.fontSize12,
+        color: colors.text.gray,
+    },
 
-  /** GROUP INFO */
-  groupInfoContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16) },
-  groupAvatarContainer: { width: scaleWidth(60), height: scaleWidth(60), marginRight: 12 },
-  groupAvatarGrid: {
-    width: '100%',
-    height: '100%',
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    borderRadius: borders.radius8,
-    overflow: 'hidden',
-  },
-  groupAvatarImage: { width: '50%', height: '50%' },
-  groupInfo: { flex: 1 },
-  groupName: {
-    fontSize: typography.fontSize18,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
-    marginBottom: 4,
-  },
-  groupMemberCount: {
-    fontSize: typography.fontSize14,
-    color: colors.text.grayDark,
-  },
-  ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
+    /** GROUP INFO */
+    groupInfoContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16) },
+    groupAvatarContainer: { width: scaleWidth(60), height: scaleWidth(60), marginRight: 12 },
+    groupAvatarGrid: {
+        width: '100%',
+        height: '100%',
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        borderRadius: borders.radius8,
+        overflow: 'hidden',
+    },
+    groupAvatarImage: { width: '50%', height: '50%' },
+    groupInfo: { flex: 1 },
+    groupName: {
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.blackMedium,
+        marginBottom: 4,
+    },
+    groupMemberCount: {
+        fontSize: typography.fontSize14,
+        color: colors.text.grayDark,
+    },
+    ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
 
-  editButton: { padding: 8 },
+    editButton: { padding: 8 },
 
-  /** MEMBERS GRID */
-  membersGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: scaleWidth(8) },
-  memberItem: { width: scaleWidth(70), alignItems: 'center', marginHorizontal: scaleWidth(8), marginBottom: 16 },
-  memberAvatarContainer: { position: 'relative', marginBottom: 6 },
-  memberAvatar: {
-    width: scaleWidth(50),
-    height: scaleWidth(50),
-    borderRadius: borders.radius8,
-    backgroundColor: colors.background.grayLight,
-  },
-  memberAvatarKicking: { opacity: 0.5 },
-  memberName: { fontSize: typography.fontSize12, color: colors.text.blackMedium, textAlign: 'center' },
-  currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },
-  ownerLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
-  adminLabel: { fontSize: typography.fontSize11, color: colors.functional.green },
+    /** MEMBERS GRID */
+    membersGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: scaleWidth(8) },
+    memberItem: { width: scaleWidth(70), alignItems: 'center', marginHorizontal: scaleWidth(8), marginBottom: 16 },
+    memberAvatarContainer: { position: 'relative', marginBottom: 6 },
+    memberAvatar: {
+        width: scaleWidth(50),
+        height: scaleWidth(50),
+        borderRadius: borders.radius8,
+        backgroundColor: colors.background.grayLight,
+    },
+    memberAvatarKicking: { opacity: 0.5 },
+    memberName: { fontSize: typography.fontSize12, color: colors.text.blackMedium, textAlign: 'center' },
+    currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },
+    ownerLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
+    adminLabel: { fontSize: typography.fontSize11, color: colors.functional.green },
 
-  addMemberButton: {
-    width: scaleWidth(50),
-    height: scaleWidth(50),
-    borderRadius: borders.radius8,
-    backgroundColor: colors.background.grayLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 6,
-    borderWidth: borders.width1,
-    borderColor: colors.background.gray,
-    borderStyle: 'dashed',
-  },
+    addMemberButton: {
+        width: scaleWidth(50),
+        height: scaleWidth(50),
+        borderRadius: borders.radius8,
+        backgroundColor: colors.background.grayLight,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 6,
+        borderWidth: borders.width1,
+        borderColor: colors.background.gray,
+        borderStyle: 'dashed',
+    },
 
-  /** BADGES */
-  friendBadge: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.background.white,
-    borderWidth: borders.width1,
-    borderColor: colors.functional.red,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kickBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.background.white,
-    borderWidth: borders.width1,
-    borderColor: colors.functional.red,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  kickingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.background.transparentWhite50,
-    borderRadius: borders.radius8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+    /** BADGES */
+    friendBadge: {
+        position: 'absolute',
+        top: -4,
+        left: -4,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: colors.background.white,
+        borderWidth: borders.width1,
+        borderColor: colors.functional.red,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    kickBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: colors.background.white,
+        borderWidth: borders.width1,
+        borderColor: colors.functional.red,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    kickingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: colors.background.transparentWhite50,
+        borderRadius: borders.radius8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
 
-  /** SETTINGS */
-  settingItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: scaleWidth(16),
-    paddingVertical: 12,
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.grayLight,
-  },
-  settingLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  settingLabel: { fontSize: typography.fontSize15, color: colors.text.blackMedium, marginLeft: 12 },
+    /** SETTINGS */
+    settingItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: scaleWidth(16),
+        paddingVertical: 12,
+        borderBottomWidth: borders.width1,
+        borderBottomColor: colors.background.grayLight,
+    },
+    settingLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    settingLabel: { fontSize: typography.fontSize15, color: colors.text.blackMedium, marginLeft: 12 },
 
-  /** DANGER BUTTON */
-  dangerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    marginHorizontal: scaleWidth(16),
-    backgroundColor: colors.background.redLight,
-    borderRadius: borders.radius8,
-    borderWidth: borders.width1,
-    borderColor: colors.functional.red,
-  },
-  dismissButton: { marginTop: 12 },
-  dangerButtonText: {
-    fontSize: typography.fontSize15,
-    fontWeight: typography.fontWeight500,
-    color: colors.functional.red,
-    marginLeft: 8,
-  },
+    /** DANGER BUTTON */
+    dangerButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        marginHorizontal: scaleWidth(16),
+        backgroundColor: colors.background.redLight,
+        borderRadius: borders.radius8,
+        borderWidth: borders.width1,
+        borderColor: colors.functional.red,
+    },
+    dismissButton: { marginTop: 12 },
+    dangerButtonText: {
+        fontSize: typography.fontSize15,
+        fontWeight: typography.fontWeight500,
+        color: colors.functional.red,
+        marginLeft: 8,
+    },
 
-  /** MODAL */
-  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: colors.background.transparentBlack50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  modalContent: {
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius16,
-    width: scaleWidth(320),
-    maxWidth: '90%',
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.grayLight,
-  },
-  modalTitle: {
-    fontSize: typography.fontSize18,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
-  },
-  modalBody: { padding: 20 },
-  groupNameInput: {
-    backgroundColor: colors.background.grayLight,
-    borderRadius: borders.radius8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: typography.fontSize15,
-    color: colors.text.blackMedium,
-    borderWidth: borders.width1,
-    borderColor: colors.background.gray,
-    marginBottom: 20,
-  },
-  modalButtons: { flexDirection: 'row', gap: 12 },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: borders.radius8,
-    alignItems: 'center',
-  },
-  cancelButton: { backgroundColor: colors.background.grayLight },
-  cancelButtonText: {
-    fontSize: typography.fontSize16,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.grayDark,
-  },
-  confirmButton: { backgroundColor: colors.functional.yellowBright },
-  confirmButtonText: {
-    fontSize: typography.fontSize16,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
-  },
+    /** MODAL */
+    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    modalBackground: {
+        flex: 1,
+        backgroundColor: colors.background.transparentBlack50,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+    },
+    modalContent: {
+        backgroundColor: colors.background.white,
+        borderRadius: borders.radius16,
+        width: scaleWidth(320),
+        maxWidth: '90%',
+        overflow: 'hidden',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        borderBottomWidth: borders.width1,
+        borderBottomColor: colors.background.grayLight,
+    },
+    modalTitle: {
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.blackMedium,
+    },
+    modalBody: { padding: 20 },
+    groupNameInput: {
+        backgroundColor: colors.background.grayLight,
+        borderRadius: borders.radius8,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        fontSize: typography.fontSize15,
+        color: colors.text.blackMedium,
+        borderWidth: borders.width1,
+        borderColor: colors.background.gray,
+        marginBottom: 20,
+    },
+    modalButtons: { flexDirection: 'row', gap: 12 },
+    modalButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: borders.radius8,
+        alignItems: 'center',
+    },
+    cancelButton: { backgroundColor: colors.background.grayLight },
+    cancelButtonText: {
+        fontSize: typography.fontSize16,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.grayDark,
+    },
+    confirmButton: { backgroundColor: colors.functional.yellowBright },
+    confirmButtonText: {
+        fontSize: typography.fontSize16,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.blackMedium,
+    },
 });

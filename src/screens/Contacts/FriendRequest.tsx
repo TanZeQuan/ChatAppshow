@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: colors.functional.yellow,
+    backgroundColor: colors.background.yellowBright,
   },
   backButton: { padding: scaleWidth(8) },
   headerTitle: {

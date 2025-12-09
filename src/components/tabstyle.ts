@@ -8,26 +8,26 @@ const isTablet = width >= 768;
 const getResponsiveSize = () => {
   if (isTablet) {
     return {
-      iconSize: 32,        // Increased from 28
+      iconSize: 32,
       tabBarHeight: 70,
-      paddingBottom: 8,    // Reduced from 12
-      paddingTop: 16,      // Increased from 12
+      paddingBottom: 8,
+      paddingTop: 16,
       fontSize: 14,
     };
   } else if (isMediumDevice) {
     return {
-      iconSize: 30,        // Increased from 26
+      iconSize: 30,
       tabBarHeight: 60,
-      paddingBottom: 4,    // Reduced from 8
-      paddingTop: 8,       // Increased from 4
+      paddingBottom: 4,
+      paddingTop: 8,
       fontSize: 12,
     };
   } else {
     return {
-      iconSize: 26,        // Increased from 22
+      iconSize: 26,
       tabBarHeight: 55,
-      paddingBottom: 2,    // Reduced from 6
-      paddingTop: 10,      // Increased from 6
+      paddingBottom: 2,
+      paddingTop: 10,
       fontSize: 11,
     };
   }
@@ -35,7 +35,7 @@ const getResponsiveSize = () => {
 
 const responsiveSizes = getResponsiveSize();
 
-// ⭐ 只导出 tab bar 样式
+// ⭐ TabBar 样式（新增顶部左右圆角）
 export const getOriginalTabBarStyle = (insets: any) => ({
   backgroundColor: "#FFD860",
   borderTopWidth: 0,
@@ -44,6 +44,17 @@ export const getOriginalTabBarStyle = (insets: any) => ({
   paddingTop: responsiveSizes.paddingTop,
   paddingHorizontal: isTablet ? 20 : 0,
   elevation: 0,
+
+  // ⭐ 顶部左右圆角
+  borderTopLeftRadius: 22,
+  borderTopRightRadius: 22,
+  overflow: "hidden",
+
+  // ⭐ 必须：让圆角生效
+  position: "absolute",
+  left: 0,
+  right: 0,
+  bottom: 0,
 });
 
 // Export iconSize for use in tab bar icons

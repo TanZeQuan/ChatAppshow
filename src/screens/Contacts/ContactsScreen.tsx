@@ -229,7 +229,7 @@ export default function ContactsScreen() {
     <View style={styles.container}>
       {/* Header with Gradient */}
       <LinearGradient
-        colors={['#FFD700', '#FFA500']}
+        colors={['#FFD860', '#FFD860']}
         style={styles.gradientHeader}
       >
         <SafeAreaView edges={['top']}>
@@ -382,7 +382,7 @@ export default function ContactsScreen() {
 
 const styles = StyleSheet.create({
   gradientContainer: { flex: 1 },
-  container: { flex: 1, backgroundColor: colors.background.grayLight },
+  container: { flex: 1, backgroundColor: colors.background.gradientYellow[0] },
 
   gradientHeader: { paddingBottom: scaleHeight(16) },
 
@@ -420,9 +420,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.background.white,
-    borderRadius: borders.radius8,
+    borderRadius: borders.radius30,
     paddingHorizontal: scaleWidth(12),
-    height: scaleHeight(40),
+    height: scaleHeight(38),
   },
   searchIcon: {
     marginRight: scaleWidth(8),
@@ -441,15 +441,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(16),
-    backgroundColor: colors.background.white,
+    backgroundColor: colors.background.gradientYellow[0],
     borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.grayLight,
+    borderBottomColor: colors.background.gradientYellow[1],
   },
   actionButton: { alignItems: 'center', flex: 1 },
   actionIcon: {
     width: scaleWidth(48),
     height: scaleWidth(48),
-    backgroundColor: colors.background.grayLight,
+    backgroundColor: colors.background.white,
     borderRadius: borders.radius8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
   listContainer: { flex: 1, position: 'relative', backgroundColor: colors.background.white },
   listContent: { flexGrow: 1 },
   sectionHeader: {
-    backgroundColor: colors.background.grayPale,
+    backgroundColor: colors.background.gradientYellow[0],
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(4),
   },
@@ -546,25 +546,28 @@ const styles = StyleSheet.create({
   },
 
   /** ALPHABET INDEX */
-  alphabetIndex: {
+   alphabetIndex: {
     position: 'absolute',
-    right: scaleWidth(2),
-    top: 0,
-    bottom: 0,
+    right: scaleWidth(4),
+    top: scaleHeight(20),
     justifyContent: 'center',
-    paddingVertical: scaleHeight(4),
+    paddingVertical: scaleHeight(8),
+    width: scaleWidth(20),
+    backgroundColor: 'transparent',
   },
   alphabetItem: {
     paddingVertical: scaleHeight(1),
-    paddingHorizontal: scaleWidth(4),
+    paddingHorizontal: scaleWidth(2),
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: scaleHeight(14),
   },
   alphabetText: {
-    fontSize: typography.fontSize11,
+    fontSize: scaleFont(10),
     color: colors.text.grayDark,
     fontWeight: typography.fontWeight600,
-    letterSpacing: -0.5,
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
   alphabetTextDisabled: {
     color: colors.text.grayLight,

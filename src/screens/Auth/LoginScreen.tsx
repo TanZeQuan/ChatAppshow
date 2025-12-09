@@ -62,8 +62,8 @@ export default function LoginScreen() {
     <LinearGradient colors={['#FFE194', '#FFF9E5', '#FFFFFF']} style={styles.safeArea}>
       <SafeAreaView style={styles.safeArea}>
         {/* 背景装饰 */}
-        <View style={styles.bgShape1} />
-        <View style={styles.bgShape2} />
+        {/* <View style={styles.bgShape1} />
+        <View style={styles.bgShape2} /> */}
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -137,7 +137,7 @@ export default function LoginScreen() {
             ]}
           >
             <LinearGradient
-              colors={['#FFFFFF', '#F8F8F8']}
+              colors={["#FFEFB0", "#FFF9E5"]}
               style={styles.loginButtonGradient}
             >
               <Text style={styles.loginButtonText}>登录</Text>
@@ -196,26 +196,26 @@ const styles = StyleSheet.create({
   logoImage: { width: 130, height: 130 },
 
   // 背景装饰
-  bgShape1: {
-    position: 'absolute',
-    width: 350,
-    height: 350,
-    borderRadius: borders.radius60,
-    backgroundColor: colors.background.transparentWhite50,
-    top: -100,
-    right: -120,
-    transform: [{ rotate: '45deg' }],
-  },
-  bgShape2: {
-    position: 'absolute',
-    width: 300,
-    height: 300,
-    borderRadius: borders.radius60,
-    backgroundColor: colors.background.transparentWhite70,
-    top: 50,
-    left: -150,
-    transform: [{ rotate: '30deg' }],
-  },
+  // bgShape1: {
+  //   position: 'absolute',
+  //   width: 350,
+  //   height: 350,
+  //   borderRadius: borders.radius60,
+  //   backgroundColor: colors.background.transparentWhite50,
+  //   top: -100,
+  //   right: -120,
+  //   transform: [{ rotate: '45deg' }],
+  // },
+  // bgShape2: {
+  //   position: 'absolute',
+  //   width: 300,
+  //   height: 300,
+  //   borderRadius: borders.radius60,
+  //   backgroundColor: colors.background.transparentWhite70,
+  //   top: 50,
+  //   left: -150,
+  //   transform: [{ rotate: '30deg' }],
+  // },
 
   title: {
     fontSize: typography.fontSize28,

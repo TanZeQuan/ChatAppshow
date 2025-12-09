@@ -187,7 +187,6 @@ export default function GroupRoomScreen() {
                 offset: currentOffset,
             });
 
-            console.log('✅ Messages loaded:', result);
 
             if (result.success && result.data) {
                 // API returns { chat: [], group: [] }
@@ -197,14 +196,9 @@ export default function GroupRoomScreen() {
                     ? (result.data.group || [])
                     : (result.data.chat || []);
 
-                console.log('📨 API Messages:', apiMessages);
-                console.log('📊 Message count:', apiMessages.length);
-                console.log('🏷️ Is group chat:', isGroupChat);
-
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
                     setHasMoreMessages(false);
-                    console.log('❌ No more messages to load');
                 } else {
                     // Transform API messages to app format
                     const transformedMessages = apiMessages.map((msg: any) => ({
@@ -217,13 +211,11 @@ export default function GroupRoomScreen() {
                         avatar: msg.sender_avatar || msg.avatar,
                     }));
 
-                    console.log('✅ Transformed messages:', transformedMessages.length);
 
                     if (isRefresh) {
                         // Replace all messages on refresh
                         setMessages(chatId, transformedMessages);
                         setOffset(transformedMessages.length);
-                        console.log('🔄 Messages refreshed');
                     } else {
                         // Append messages when loading more
                         const existingMessages = chats[chatId] || [];
@@ -234,7 +226,6 @@ export default function GroupRoomScreen() {
                         );
                         setMessages(chatId, uniqueMessages);
                         setOffset(uniqueMessages.length);
-                        console.log('➕ Messages appended, total:', uniqueMessages.length);
                     }
                 }
             } else {
@@ -413,7 +404,7 @@ export default function GroupRoomScreen() {
     );
 
     return (
-        <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
+        <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
             <SafeAreaView style={{ flex: 1 }}>
                 <View style={roomStyles.header}>
                     <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
@@ -534,7 +525,7 @@ const roomStyles = RNStyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        backgroundColor: colors.background.yellowPale,
+        backgroundColor: colors.background.yellowBright,
         paddingHorizontal: 12,
         paddingVertical: 10,
         borderBottomWidth: borders.width1,
