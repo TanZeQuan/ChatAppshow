@@ -302,37 +302,34 @@ export default function ChatSettingScreen() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
-        <SafeAreaView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
           <View style={styles.header}>
             <TouchableOpacity 
               style={styles.backButton}
               onPress={() => navigation.goBack()}
             >
-              <Ionicons name="arrow-back" size={24} color="#333" />
+              <Ionicons name="arrow-back" size={24} color={colors.text.black} />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>聊天设置</Text>
             <View style={styles.placeholder} />
           </View>
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#F5C842" />
+            <ActivityIndicator size="large" color={colors.functional.yellow} />
             <Text style={styles.loadingText}>加载中...</Text>
           </View>
-        </SafeAreaView>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity 
             style={styles.backButton}
             onPress={() => navigation.goBack()}
           >
-            <Ionicons name="arrow-back" size={24} color="#333" />
+            <Ionicons name="arrow-back" size={24} color={colors.text.black} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>聊天设置</Text>
           <View style={styles.placeholder} />
@@ -356,173 +353,169 @@ export default function ChatSettingScreen() {
           </View>
 
           {/* Quick Actions Section */}
-          <Text style={styles.sectionLabel}>快捷操作</Text>
+          <Text style={styles.sectionHeader}>快捷操作</Text>
           <View style={styles.section}>
-            <TouchableOpacity style={styles.item} onPress={handleSearchHistory}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FFF4CC' }]}>
-                <Ionicons name="search" size={20} color="#F5C842" />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={styles.itemTitle}>查找聊天记录</Text>
-                <Text style={styles.itemSubtitle}>搜索历史消息</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
+            <View style={styles.card}>
+              <TouchableOpacity style={styles.settingItem} onPress={handleSearchHistory}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="search-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>查找聊天记录</Text>
+                  <Text style={styles.settingSubtitle}>搜索历史消息</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Chat Settings Section */}
-          <Text style={styles.sectionLabel}>聊天设置</Text>
+          <Text style={styles.sectionHeader}>聊天设置</Text>
           <View style={styles.section}>
-            <View style={styles.item}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FFF4CC' }]}>
-                <Ionicons name="notifications-outline" size={20} color="#F5C842" />
+            <View style={styles.card}>
+              <View style={[styles.settingItem, styles.borderBottom]}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="notifications-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>消息免打扰</Text>
+                  <Text style={styles.settingSubtitle}>关闭消息通知</Text>
+                </View>
+                <Switch
+                  value={pushNotification}
+                  onValueChange={handleTogglePushNotification}
+                  trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                  thumbColor={colors.background.white}
+                />
               </View>
-              <View style={styles.textContainer}>
-                <Text style={styles.itemTitle}>消息免打扰</Text>
-                <Text style={styles.itemSubtitle}>关闭消息通知</Text>
-              </View>
-              <Switch
-                value={pushNotification}
-                onValueChange={handleTogglePushNotification}
-                trackColor={{ false: "#D1D1D6", true: "#34C759" }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#D1D1D6"
-              />
-            </View>
 
-            <View style={styles.separator} />
+              <View style={[styles.settingItem, styles.borderBottom]}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="pin-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>置顶聊天</Text>
+                  <Text style={styles.settingSubtitle}>在聊天列表置顶</Text>
+                </View>
+                <Switch
+                  value={topNotification}
+                  onValueChange={handleToggleTopNotification}
+                  trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                  thumbColor={colors.background.white}
+                />
+              </View>
 
-            <View style={styles.item}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FFF4CC' }]}>
-                <Ionicons name="star" size={20} color="#F5C842" />
+              <View style={styles.settingItem}>
+                <View style={styles.iconContainer}>
+                  <Ionicons name="warning-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>强提醒</Text>
+                  <Text style={styles.settingSubtitle}>特别提醒新消息</Text>
+                </View>
+                <Switch
+                  value={strongReminder}
+                  onValueChange={handleToggleStrongReminder}
+                  trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                  thumbColor={colors.background.white}
+                />
               </View>
-              <View style={styles.textContainer}>
-                <Text style={styles.itemTitle}>置顶聊天</Text>
-                <Text style={styles.itemSubtitle}>在聊天列表置顶</Text>
-              </View>
-              <Switch
-                value={topNotification}
-                onValueChange={handleToggleTopNotification}
-                trackColor={{ false: "#D1D1D6", true: "#34C759" }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#D1D1D6"
-              />
-            </View>
-
-            <View style={styles.separator} />
-
-            <View style={styles.item}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FFF4CC' }]}>
-                <Ionicons name="warning" size={20} color="#F5C842" />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={styles.itemTitle}>强提醒</Text>
-                <Text style={styles.itemSubtitle}>特别提醒新消息</Text>
-              </View>
-              <Switch
-                value={strongReminder}
-                onValueChange={handleToggleStrongReminder}
-                trackColor={{ false: "#D1D1D6", true: "#34C759" }}
-                thumbColor="#FFFFFF"
-                ios_backgroundColor="#D1D1D6"
-              />
             </View>
           </View>
 
           {/* Privacy Section */}
-          <Text style={styles.sectionLabel}>隐私设置</Text>
+          <Text style={styles.sectionHeader}>隐私设置</Text>
           <View style={styles.section}>
-            <TouchableOpacity 
-              style={styles.item} 
-              onPress={handleBlockUser}
-              disabled={!friendListId}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: '#FFE5E5' }]}>
-                <Ionicons name="ban-outline" size={20} color="#FF4444" />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.itemTitle, { color: friendListId ? '#FF4444' : '#CCC' }]}>
-                  拉黑用户
-                </Text>
-                <Text style={styles.itemSubtitle}>
-                  {friendListId ? '不再接收该用户消息' : '无法获取好友关系'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#999" />
-            </TouchableOpacity>
+            <View style={styles.card}>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                onPress={handleBlockUser}
+                disabled={!friendListId}
+              >
+                <View style={[styles.iconContainer, styles.dangerIcon]}>
+                  <Ionicons name="ban-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingTitle, { color: friendListId ? colors.functional.redMedium : colors.text.grayLight }]}>
+                    拉黑用户
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: friendListId ? colors.functional.redLight : colors.text.grayLight }]}>
+                    {friendListId ? '不再接收该用户消息' : '无法获取好友关系'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Danger Zone Section */}
-          <Text style={styles.sectionLabel}>危险操作</Text>
+          <Text style={styles.sectionHeader}>危险操作</Text>
           <View style={styles.section}>
-            <TouchableOpacity style={styles.item} onPress={handleClearHistory}>
-              <View style={[styles.iconContainer, { backgroundColor: '#FFE5E5' }]}>
-                <Ionicons name="trash-outline" size={20} color="#FF4444" />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.itemTitle, { color: '#FF4444' }]}>清空聊天记录</Text>
-                <Text style={styles.itemSubtitle}>删除所有消息（仅本地）</Text>
-              </View>
-            </TouchableOpacity>
+            <View style={styles.card}>
+              <TouchableOpacity style={[styles.settingItem, styles.borderBottom]} onPress={handleClearHistory}>
+                <View style={[styles.iconContainer, styles.dangerIcon]}>
+                  <Ionicons name="trash-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingTitle, { color: colors.functional.redMedium }]}>清空聊天记录</Text>
+                  <Text style={[styles.settingSubtitle, { color: colors.functional.redLight }]}>删除所有消息（仅本地）</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+              </TouchableOpacity>
 
-            <View style={styles.separator} />
-
-            <TouchableOpacity 
-              style={styles.item} 
-              onPress={handleDeleteContact}
-              disabled={!friendListId}
-            >
-              <View style={[styles.iconContainer, { backgroundColor: '#FFE5E5' }]}>
-                <Ionicons name="person-remove-outline" size={20} color="#FF4444" />
-              </View>
-              <View style={styles.textContainer}>
-                <Text style={[styles.itemTitle, { color: friendListId ? '#FF4444' : '#CCC' }]}>
-                  删除联系人
-                </Text>
-                <Text style={styles.itemSubtitle}>
-                  {friendListId ? '从通讯录中删除' : '无法获取好友关系'}
-                </Text>
-              </View>
-            </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.settingItem} 
+                onPress={handleDeleteContact}
+                disabled={!friendListId}
+              >
+                <View style={[styles.iconContainer, styles.dangerIcon]}>
+                  <Ionicons name="person-remove-outline" size={20} color={colors.text.white} />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={[styles.settingTitle, { color: friendListId ? colors.functional.redMedium : colors.text.grayLight }]}>
+                    删除联系人
+                  </Text>
+                  <Text style={[styles.settingSubtitle, { color: friendListId ? colors.functional.redLight : colors.text.grayLight }]}>
+                    {friendListId ? '从通讯录中删除' : '无法获取好友关系'}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={{ height: 40 }} />
         </ScrollView>
       </SafeAreaView>
-    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background.yellowPale,
+    backgroundColor: colors.background.chatBg,
   },
 
-  /** HEADER */
+  // --- Header ---
   header: {
+    backgroundColor: colors.background.yellowLight,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: colors.background.yellowLight,
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.background.yellowBright,
   },
   backButton: {
-    padding: 8,
+    marginRight: 16,
   },
   headerTitle: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
+    color: colors.text.black,
   },
   placeholder: {
     width: 40,
   },
 
-  /** LOADING */
+  // --- Loading ---
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -534,12 +527,12 @@ const styles = StyleSheet.create({
     color: colors.text.grayDark,
   },
 
-  /** CONTENT */
+  // --- Content ---
   scrollView: {
     flex: 1,
   },
-  
-  /** PROFILE SECTION */
+
+  // --- Profile Section ---
   profileSection: {
     alignItems: "center",
     paddingVertical: 24,
@@ -548,7 +541,7 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: borders.radius8,
-    backgroundColor: colors.background.iconBg,
+    backgroundColor: colors.functional.avatarBg, // Consistent with GroupDetails
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 12,
@@ -557,16 +550,17 @@ const styles = StyleSheet.create({
   avatarImage: {
     width: 100,
     height: 100,
+    borderRadius: borders.radius8, // Consistent
   },
   profileName: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
+    color: colors.text.black, // Consistent
     marginBottom: 4,
   },
   profileSubtext: {
     fontSize: typography.fontSize14,
-    color: colors.text.grayLight,
+    color: colors.text.gray, // Consistent
   },
   aboutText: {
     fontSize: typography.fontSize13,
@@ -576,51 +570,68 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  /** SECTION */
-  sectionLabel: {
-    fontSize: typography.fontSize13,
-    color: colors.text.grayLight,
-    marginLeft: 20,
+  // --- Section Header & Card ---
+  sectionHeader: { // Renamed from sectionLabel
+    fontSize: typography.fontSize14,
+    color: colors.text.gray,
     marginBottom: 8,
     marginTop: 16,
+    paddingHorizontal: 16, // Added for consistency with GroupDetails sectionTitle
   },
   section: {
-    backgroundColor: colors.background.white,
     marginHorizontal: 16,
+  },
+  card: {
+    backgroundColor: colors.background.white,
     borderRadius: borders.radius12,
     overflow: "hidden",
   },
-  item: {
+
+  // --- Setting Item ---
+  settingItem: { // Renamed from item
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    minHeight: 60,
+    padding: 16, // Consistent
+  },
+  borderBottom: { // For separators
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.border.light,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: borders.radius18,
-    justifyContent: "center",
+    width: 40, // Consistent
+    height: 40, // Consistent
+    backgroundColor: colors.functional.yellow, // Default color for icons, consistent with GroupDetails.tsx
+    borderRadius: borders.radius20, // Consistent
     alignItems: "center",
-    marginRight: 12,
+    justifyContent: "center",
+    marginRight: 12, // Consistent
   },
-  textContainer: {
+  settingContent: { // Renamed from textContainer
     flex: 1,
   },
-  itemTitle: {
-    fontSize: typography.fontSize15,
-    fontWeight: typography.fontWeight500,
-    color: colors.text.blackMedium,
+  settingTitle: { // Renamed from itemTitle
+    fontSize: typography.fontSize16, // Consistent
+    fontWeight: typography.fontWeight500, // Consistent
+    color: colors.text.dark, // Consistent
     marginBottom: 2,
   },
-  itemSubtitle: {
-    fontSize: typography.fontSize12,
-    color: colors.text.grayLight,
+  settingSubtitle: { // Renamed from itemSubtitle
+    fontSize: typography.fontSize12, // Consistent
+    color: colors.text.grayLight, // Consistent
   },
-  separator: {
-    height: 1,
-    backgroundColor: colors.background.grayLight,
-    marginLeft: 64,
+
+  // --- Danger Styles ---
+  dangerIcon: {
+    backgroundColor: colors.functional.redMedium, // Consistent
+  },
+  dangerTitle: {
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight500,
+    color: colors.functional.redMedium, // Consistent
+    marginBottom: 2,
+  },
+  dangerSubtitle: {
+    fontSize: typography.fontSize12,
+    color: colors.functional.redLight, // Consistent
   },
 });
