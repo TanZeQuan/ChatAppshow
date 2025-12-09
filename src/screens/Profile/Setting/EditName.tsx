@@ -158,7 +158,7 @@ export default function EditNameScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
    container: {
     flex: 1,
-    backgroundColor: colors.background.yellowPale, // 原 #FFF8DC
+    backgroundColor: colors.background.gradientYellow[0], // 原 #FFF8DC
   },
 
   /** HEADER */
@@ -167,10 +167,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
-    paddingVertical: scaleHeight(12),
-    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    paddingVertical: scaleHeight(8),
+    backgroundColor: colors.background.yellowBright, 
     borderBottomWidth: borders.width1,
-    borderBottomColor: colors.functional.yellowBright, // 原 #E5B830
+    borderBottomColor: colors.functional.yellowBright,
   },
   backButton: {
     padding: scaleWidth(8),
@@ -214,9 +214,9 @@ const styles = StyleSheet.create({
     marginLeft: scaleWidth(4),
   },
   confirmButton: {
-    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    backgroundColor: colors.background.yellowBright, // 原 #F5C842
     borderRadius: borders.radius25,
-    paddingVertical: scaleHeight(14),
+    paddingVertical: scaleHeight(12),
     alignItems: "center",
     borderWidth: borders.width1,
     borderColor: colors.functional.yellowBright, // 原 #E5B830

@@ -1,26 +1,26 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    View,
-    Text,
-    TouchableOpacity,
-    StyleSheet,
-    Image,
-    ScrollView,
-    Switch,
+    ActivityIndicator,
     Alert,
     Dimensions,
-    TextInput,
+    Image,
     Modal,
     RefreshControl,
-    ActivityIndicator,
+    ScrollView,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, borders, typography } from "../../styles";
+import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
-import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
+import { borders, colors, typography } from "../../styles";
 
 const { width } = Dimensions.get('window');
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -559,10 +559,9 @@ export default function GroupSettingScreen() {
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-                    <Ionicons name="arrow-back" size={24} color="#333" />
+                    <Ionicons name="arrow-back" size={24} color="#000" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>群聊设置</Text>
-                <View style={{ width: 40 }} />
             </View>
 
             <ScrollView
@@ -579,11 +578,10 @@ export default function GroupSettingScreen() {
                     />
                 }
             >
-                {/* Group Info Section */}
                 <View style={styles.section}>
-                    <View style={styles.groupInfoContainer}>
-                        <View style={styles.groupAvatarContainer}>
-                            <View style={styles.groupAvatarGrid}>
+                    <View style={styles.profileCard}>
+                        <View style={[styles.groupInfoContainer, { borderBottomWidth: 0 }]}>
+                            <View style={styles.groupAvatarGridContainer}>
                                 {allMembers.slice(0, 4).map((member, index) => (
                                     <Image
                                         key={index}
@@ -592,122 +590,154 @@ export default function GroupSettingScreen() {
                                     />
                                 ))}
                             </View>
+                            <View style={styles.groupInfo}>
+                                <Text style={styles.groupName}>{chatName}</Text>
+                                <Text style={styles.groupMemberCount}>
+                                    {allMembers.length} 位成员
+                                    {groupChat?.ownerId && (
+                                        <Text style={styles.ownerInfo}>
+                                            • 群主: {allMembers.find(m => m.id === groupChat.ownerId)?.name || '未知'}
+                                        </Text>
+                                    )}
+                                </Text>
+                            </View>
+                            <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
+                                <Ionicons name="create-outline" size={20} color={colors.text.gray} />
+                            </TouchableOpacity>
                         </View>
-                        <View style={styles.groupInfo}>
-                            <Text style={styles.groupName}>{chatName}</Text>
-                            <Text style={styles.groupMemberCount}>
-                                {allMembers.length} 位成员
-                                {groupChat?.ownerId && (
-                                    <Text style={styles.ownerInfo}>
-                                        • 群主: {allMembers.find(m => m.id === groupChat.ownerId)?.name || '未知'}
-                                    </Text>
-                                )}
-                            </Text>
+                    </View>
+                </View>
+
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>群成员</Text>
+                    <View style={styles.card}>
+                        <View style={styles.gridContainer}>
+                            {allMembers.map((member, index) => renderMemberItem(member, index))}
+                            {renderAddMemberButton()}
                         </View>
-                        <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
-                            <Ionicons name="create-outline" size={20} color="#666" />
+                        <TouchableOpacity
+                            style={styles.viewMoreBtn}
+                            onPress={() => navigation.navigate('GroupMemberList', { groupId: chatId })}
+                        >
+                            <Text style={styles.viewMoreText}>查看全部成员 ({allMembers.length})</Text>
+                            <Ionicons name="chevron-forward" size={16} color={colors.text.grayLight} />
                         </TouchableOpacity>
                     </View>
                 </View>
 
-                {/* Members Section */}
                 <View style={styles.section}>
-                    <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>群成员</Text>
-                        <Text style={styles.sectionSubtitle}>
-                            共 {allMembers.length} 人
-                            {loadingFriends && ' • 加载中...'}
-                            {!loadingFriends && friendsList.length > 0 && ` • ${friendsList.length} 位好友`}
-                        </Text>
-                    </View>
-                    <View style={styles.membersGrid}>
-                        {allMembers.map((member, index) => renderMemberItem(member, index))}
-                        {renderAddMemberButton()}
+                    <Text style={styles.sectionTitle}>通知设置</Text>
+                    <View style={styles.card}>
+                        {/* 消息免打扰 */}
+                        <View style={[styles.settingItem, styles.borderBottom]}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="notifications-off-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>消息免打扰</Text>
+                            </View>
+                            <Switch
+                                value={muteNotifications}
+                                onValueChange={handleToggleMuteNotifications}
+                                trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                                thumbColor={colors.background.white}
+                            />
+                        </View>
+
+                        {/* 置顶聊天 */}
+                        <View style={[styles.settingItem, styles.borderBottom]}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="pin-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>置顶聊天</Text>
+                            </View>
+                            <Switch
+                                value={pinToTop}
+                                onValueChange={handleTogglePinToTop}
+                                trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                                thumbColor={colors.background.white}
+                            />
+                        </View>
+
+                        {/* 显示群成员昵称 */}
+                        <View style={styles.settingItem}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="eye-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>显示群成员昵称</Text>
+                            </View>
+                            <Switch
+                                value={showOnTop}
+                                onValueChange={handleToggleShowNicknames}
+                                trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
+                                thumbColor={colors.background.white}
+                            />
+                        </View>
                     </View>
                 </View>
 
-                {/* Settings Section */}
+                {/* Chat History and Management */}
                 <View style={styles.section}>
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="notifications-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>消息免打扰</Text>
-                        </View>
-                        <Switch
-                            value={muteNotifications}
-                            onValueChange={handleToggleMuteNotifications}
-                            trackColor={{ false: '#E0E0E0', true: '#FFD700' }}
-                            thumbColor="#FFFFFF"
-                        />
+                    <Text style={styles.sectionTitle}>聊天管理</Text>
+                    <View style={styles.card}>
+                        <TouchableOpacity style={[styles.settingItem, styles.borderBottom]} onPress={handleSearchHistory}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="search-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>查找聊天记录</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="trash-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>清空聊天记录</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+                        </TouchableOpacity>
                     </View>
+                </View>
 
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="pin-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>置顶聊天</Text>
-                        </View>
-                        <Switch
-                            value={pinToTop}
-                            onValueChange={handleTogglePinToTop}
-                            trackColor={{ false: '#E0E0E0', true: '#FFD700' }}
-                            thumbColor="#FFFFFF"
-                        />
+                {/* Other Settings */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>其他</Text>
+                    <View style={styles.card}>
+                        <TouchableOpacity style={[styles.settingItem, styles.borderBottom]}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="shield-checkmark-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>群聊权限</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+                        </TouchableOpacity>
                     </View>
-
-                    <View style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="eye-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>显示群成员昵称</Text>
-                        </View>
-                        <Switch
-                            value={showOnTop}
-                            onValueChange={handleToggleShowNicknames}
-                            trackColor={{ false: '#E0E0E0', true: '#FFD700' }}
-                            thumbColor="#FFFFFF"
-                        />
-                    </View>
-
-                    <TouchableOpacity style={styles.settingItem} onPress={handleSearchHistory}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="search-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>查找聊天记录</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color="#999" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="trash-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>清空聊天记录</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color="#999" />
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.settingItem}>
-                        <View style={styles.settingLeft}>
-                            <Ionicons name="shield-checkmark-outline" size={22} color="#333" />
-                            <Text style={styles.settingLabel}>群聊权限</Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={20} color="#999" />
-                    </TouchableOpacity>
                 </View>
 
                 {/* Danger Zone */}
                 <View style={styles.section}>
-                    <TouchableOpacity style={styles.dangerButton} onPress={handleLeaveGroup}>
-                        <Ionicons name="exit-outline" size={22} color="#FF3B30" />
-                        <Text style={styles.dangerButtonText}>退出群聊</Text>
-                    </TouchableOpacity>
-
-                    {groupChat?.ownerId === currentUserId && (
-                        <TouchableOpacity
-                            style={[styles.dangerButton, styles.dismissButton]}
-                            onPress={handleDismissGroup}
-                        >
-                            <Ionicons name="trash-outline" size={22} color="#FF3B30" />
-                            <Text style={styles.dangerButtonText}>解散群聊</Text>
+                    <View style={styles.card}>
+                        <TouchableOpacity style={[styles.dangerButton, styles.borderBottom]} onPress={handleLeaveGroup}>
+                            <Ionicons name="exit-outline" size={20} color={colors.text.white} />
+                            <Text style={styles.dangerButtonText}>退出群聊</Text>
                         </TouchableOpacity>
-                    )}
+
+                        {groupChat?.ownerId === currentUserId && (
+                            <TouchableOpacity
+                                style={styles.dangerButton}
+                                onPress={handleDismissGroup}
+                            >
+                                <Ionicons name="trash-outline" size={20} color={colors.text.white} />
+                                <Text style={styles.dangerButtonText}>解散群聊</Text>
+                            </TouchableOpacity>
+                        )}
+                    </View>
                 </View>
 
                 <View style={{ height: 20 }} />
@@ -730,7 +760,7 @@ export default function GroupSettingScreen() {
                             <View style={styles.modalHeader}>
                                 <Text style={styles.modalTitle}>修改群聊名称</Text>
                                 <TouchableOpacity onPress={() => setShowGroupNameModal(false)}>
-                                    <Ionicons name="close" size={24} color="#666" />
+                                    <Ionicons name="close" size={24} color={colors.text.gray} />
                                 </TouchableOpacity>
                             </View>
 
@@ -738,6 +768,7 @@ export default function GroupSettingScreen() {
                                 <TextInput
                                     style={styles.groupNameInput}
                                     placeholder="请输入群聊名称"
+                                    placeholderTextColor={colors.text.placeholder}
                                     value={newGroupName}
                                     onChangeText={setNewGroupName}
                                     autoFocus={true}
@@ -771,28 +802,27 @@ export default function GroupSettingScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#FFEFB0",
+        backgroundColor: colors.background.chatBg,
     },
+    scrollView: { flex: 1 },
 
-    /** HEADER */
+    // --- Header ---
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: scaleWidth(16),
-        paddingVertical: 12,
-        backgroundColor: colors.background.yellowBright,
-        borderBottomWidth: borders.width1,
-        borderBottomColor: colors.background.grayLight,
+        backgroundColor: colors.background.yellowLight,
+        padding: 16,
+        flexDirection: "row",
+        alignItems: "center",
     },
-    backButton: { padding: 8 },
+    backButton: {
+        marginRight: 16,
+    },
     headerTitle: {
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
-        color: colors.text.blackMedium,
+        color: colors.text.black,
     },
 
-    /** LOADING */
+    // --- Loading ---
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: {
         marginTop: 12,
@@ -800,88 +830,110 @@ const styles = StyleSheet.create({
         color: colors.text.grayDark,
     },
 
-    scrollView: { flex: 1 },
-
-    /** SECTION */
-    section: {
+    // --- Profile Card (群成员网格) ---
+    profileCard: {
         backgroundColor: colors.background.white,
-        marginTop: 12,
-        paddingVertical: 16,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: scaleWidth(16),
-        marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: typography.fontSize14,
-        color: colors.text.grayDark,
-        fontWeight: typography.fontWeight500,
-    },
-    sectionSubtitle: {
-        fontSize: typography.fontSize12,
-        color: colors.text.gray,
+        // marginHorizontal: 10,
+        marginTop: 16,
+        borderRadius: borders.radius12,
+        paddingTop: 15,
+        paddingBottom: 0,
     },
 
-    /** GROUP INFO */
-    groupInfoContainer: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16) },
-    groupAvatarContainer: { width: scaleWidth(60), height: scaleWidth(60), marginRight: 12 },
-    groupAvatarGrid: {
-        width: '100%',
-        height: '100%',
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+    // --- 网格样式 ---
+    gridContainer: {
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "center",
+        justifyContent: "flex-start", // Changed from center to flex-start
+        paddingHorizontal: 20,
+        paddingVertical: 20,
+    },
+    gridItem: {
+        width: (width - 10) / 5, // Adjusted width for 5 items per row
+        alignItems: "center",
+        marginBottom: 15,
+        justifyContent: 'center', // Added to center content
+    },
+    avatarContainer: {
+        width: 48,
+        height: 48,
+        backgroundColor: colors.functional.avatarBg,
+        borderRadius: borders.radius8,
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 6,
+        overflow: "hidden",
+    },
+    avatarImage: {
+        width: 48,
+        height: 48,
+        borderRadius: borders.radius8, // Added for consistency
+    },
+    memberName: {
+        fontSize: typography.fontSize11,
+        color: colors.text.gray,
+        textAlign: "center",
+    },
+
+    // Specific to GroupSettingScreen member display
+    memberItem: { // Adjusted from GroupDetails gridItem
+        width: (width - 10) / 5, // Keep original
+        alignItems: 'center',
+        marginBottom: 15,
+        justifyContent: 'center',
+    },
+    memberAvatarContainer: { // Adjusted from GroupDetails avatarContainer
+        position: 'relative',
+        marginBottom: 6,
+        width: 48, // Fixed size
+        height: 48, // Fixed size
         borderRadius: borders.radius8,
         overflow: 'hidden',
-    },
-    groupAvatarImage: { width: '50%', height: '50%' },
-    groupInfo: { flex: 1 },
-    groupName: {
-        fontSize: typography.fontSize18,
-        fontWeight: typography.fontWeight600,
-        color: colors.text.blackMedium,
-        marginBottom: 4,
-    },
-    groupMemberCount: {
-        fontSize: typography.fontSize14,
-        color: colors.text.grayDark,
-    },
-    ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
-
-    editButton: { padding: 8 },
-
-    /** MEMBERS GRID */
-    membersGrid: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: scaleWidth(8) },
-    memberItem: { width: scaleWidth(70), alignItems: 'center', marginHorizontal: scaleWidth(8), marginBottom: 16 },
-    memberAvatarContainer: { position: 'relative', marginBottom: 6 },
-    memberAvatar: {
-        width: scaleWidth(50),
-        height: scaleWidth(50),
-        borderRadius: borders.radius8,
         backgroundColor: colors.background.grayLight,
     },
+    memberAvatar: { // Adjusted from GroupDetails avatarImage
+        width: '100%',
+        height: '100%',
+        borderRadius: borders.radius8,
+    },
     memberAvatarKicking: { opacity: 0.5 },
-    memberName: { fontSize: typography.fontSize12, color: colors.text.blackMedium, textAlign: 'center' },
     currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },
     ownerLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
     adminLabel: { fontSize: typography.fontSize11, color: colors.functional.green },
 
-    addMemberButton: {
-        width: scaleWidth(50),
-        height: scaleWidth(50),
+    addMemberButton: { // Adjusted from GroupDetails actionBtn
+        width: 48,
+        height: 48,
         borderRadius: borders.radius8,
-        backgroundColor: colors.background.grayLight,
+        backgroundColor: colors.background.grayPale,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 6,
         borderWidth: borders.width1,
-        borderColor: colors.background.gray,
+        borderColor: colors.border.light,
+        borderStyle: 'solid', // Ensure solid border for consistency
+    },
+    // Original addMemberButton had dashed border, keeping it
+    addMemberButtonDashed: {
         borderStyle: 'dashed',
     },
 
-    /** BADGES */
+    viewMoreBtn: {
+        flexDirection: "row",
+        justifyContent: "center",
+        alignItems: "center",
+        paddingVertical: 12,
+        borderTopWidth: borders.width1,
+        borderTopColor: colors.border.light,
+    },
+    viewMoreText: {
+        color: colors.text.grayLight,
+        fontSize: typography.fontSize14,
+        marginRight: 4,
+    },
+
+    // --- BADGES ---
     friendBadge: {
         position: 'absolute',
         top: -4,
@@ -894,6 +946,7 @@ const styles = StyleSheet.create({
         borderColor: colors.functional.red,
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 1, // Ensure badge is on top
     },
     kickBadge: {
         position: 'absolute',
@@ -907,6 +960,7 @@ const styles = StyleSheet.create({
         borderColor: colors.functional.red,
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 1, // Ensure badge is on top
     },
     kickingOverlay: {
         position: 'absolute',
@@ -918,53 +972,156 @@ const styles = StyleSheet.create({
         borderRadius: borders.radius8,
         justifyContent: 'center',
         alignItems: 'center',
+        zIndex: 2, // Ensure overlay is on top of badges
     },
 
-    /** SETTINGS */
-    settingItem: {
+
+    // --- Section ---
+    section: {
+        marginTop: 16,
+        marginHorizontal: 16,
+    },
+    sectionTitle: {
+        fontSize: typography.fontSize14,
+        color: colors.text.gray,
+        marginBottom: 8,
+        paddingHorizontal: 8,
+    },
+    // Styles from GroupSettingScreen that map to new structure
+    sectionHeader: { // Used for "群成员" and "共 X 人"
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+        paddingHorizontal: 8,
+    },
+    sectionSubtitle: { // Used for "共 X 人"
+        fontSize: typography.fontSize12,
+        color: colors.text.gray,
+    },
+
+    // --- Card ---
+    card: {
+        backgroundColor: colors.background.white,
+        borderRadius: borders.radius12,
+        overflow: "hidden",
+    },
+
+    // --- Group Info Section (adapted from GroupSettingScreen) ---
+    groupInfoContainer: { // This will now be inside a card
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: scaleWidth(16),
-        paddingVertical: 12,
+        padding: 20,
+        paddingTop:8,
         borderBottomWidth: borders.width1,
-        borderBottomColor: colors.background.grayLight,
+        borderBottomColor: colors.border.light,
     },
-    settingLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    settingLabel: { fontSize: typography.fontSize15, color: colors.text.blackMedium, marginLeft: 12 },
+    groupAvatarGridContainer: { // New container for the grid itself
+        width: 60,
+        height: 60,
+        borderRadius: borders.radius8,
+        overflow: 'hidden',
+        marginRight: 15,
+        backgroundColor: colors.background.grayLight, // Default background
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    groupAvatarImage: {
+        width: '50%',
+        height: '50%',
+    },
+    groupInfo: { flex: 1 },
+    groupName: {
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+        color: colors.text.black,
+        marginBottom: 4,
+    },
+    groupMemberCount: {
+        fontSize: typography.fontSize14,
+        color: colors.text.gray,
+    },
+    ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
+    editButton: { padding: 8 },
 
-    /** DANGER BUTTON */
+    // --- Setting Item (used for general settings) ---
+    settingItem: {
+        flexDirection: "row",
+        alignItems: "center",
+        padding: 16,
+    },
+    borderBottom: {
+        borderBottomWidth: borders.width1,
+        borderBottomColor: colors.border.light,
+    },
+    iconContainer: {
+        width: 40,
+        height: 40,
+        backgroundColor: colors.functional.yellow, // Default color for icons, consistent with GroupDetails.tsx
+        borderRadius: borders.radius20,
+        alignItems: "center",
+        justifyContent: "center",
+        marginRight: 12,
+    },
+    dangerIcon: {
+        backgroundColor: colors.functional.redMedium,
+    },
+    settingContent: {
+        flex: 1,
+    },
+    settingTitle: {
+        fontSize: typography.fontSize16,
+        fontWeight: typography.fontWeight500,
+        color: colors.text.dark,
+        marginBottom: 2,
+    },
+    settingSubtitle: {
+        fontSize: typography.fontSize12,
+        color: colors.text.grayLight,
+    },
+    settingLeft: { // Retained from original GroupSettingScreen for switch items
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    settingLabel: { // Retained from original GroupSettingScreen for switch items
+        fontSize: typography.fontSize15,
+        color: colors.text.dark,
+        marginLeft: 12,
+    },
+
+    // --- Danger Buttons (adapted from GroupSettingScreen) ---
     dangerButton: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 14,
-        marginHorizontal: scaleWidth(16),
-        backgroundColor: colors.background.redLight,
-        borderRadius: borders.radius8,
-        borderWidth: borders.width1,
-        borderColor: colors.functional.red,
+        marginHorizontal: 0, // Removed horizontal margin, will be handled by section padding
+        backgroundColor: colors.functional.redMedium, // Solid red background
+        borderRadius: borders.radius12, // Match card radius
+        borderWidth: 0, // No border
     },
     dismissButton: { marginTop: 12 },
     dangerButtonText: {
-        fontSize: typography.fontSize15,
-        fontWeight: typography.fontWeight500,
-        color: colors.functional.red,
+        fontSize: typography.fontSize16, // Slightly larger font
+        fontWeight: typography.fontWeight600, // Bolder
+        color: colors.text.white, // White text for contrast
         marginLeft: 8,
     },
 
-    /** MODAL */
-    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    modalBackground: {
+    // --- MODAL ---
+    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background.transparentBlack50 }, // Added background
+    modalBackground: { // Renamed from modalOverlay in GroupSettingScreen, adapted
         flex: 1,
-        backgroundColor: colors.background.transparentBlack50,
         justifyContent: 'center',
         alignItems: 'center',
         width: '100%',
     },
     modalContent: {
         backgroundColor: colors.background.white,
-        borderRadius: borders.radius16,
+        borderRadius: borders.radius12, // Match GroupDetails card radius
         width: scaleWidth(320),
         maxWidth: '90%',
         overflow: 'hidden',
@@ -976,23 +1133,23 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         paddingVertical: 16,
         borderBottomWidth: borders.width1,
-        borderBottomColor: colors.background.grayLight,
+        borderBottomColor: colors.border.light, // Consistent border color
     },
     modalTitle: {
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
-        color: colors.text.blackMedium,
+        color: colors.text.dark, // Consistent text color
     },
     modalBody: { padding: 20 },
     groupNameInput: {
-        backgroundColor: colors.background.grayLight,
+        backgroundColor: colors.background.grayPale, // Consistent with other backgrounds
         borderRadius: borders.radius8,
         paddingHorizontal: 12,
         paddingVertical: 12,
         fontSize: typography.fontSize15,
-        color: colors.text.blackMedium,
+        color: colors.text.dark, // Consistent text color
         borderWidth: borders.width1,
-        borderColor: colors.background.gray,
+        borderColor: colors.border.light, // Consistent border color
         marginBottom: 20,
     },
     modalButtons: { flexDirection: 'row', gap: 12 },
@@ -1008,10 +1165,10 @@ const styles = StyleSheet.create({
         fontWeight: typography.fontWeight600,
         color: colors.text.grayDark,
     },
-    confirmButton: { backgroundColor: colors.functional.yellowBright },
+    confirmButton: { backgroundColor: colors.functional.blue }, // Changed to functional.blue
     confirmButtonText: {
         fontSize: typography.fontSize16,
         fontWeight: typography.fontWeight600,
-        color: colors.text.blackMedium,
+        color: colors.text.white, // Changed to white for contrast
     },
 });

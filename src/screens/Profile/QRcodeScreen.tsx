@@ -10,13 +10,15 @@ import {
     TouchableOpacity,
     View,
     Alert,
-    Button
+    Button,
+    Image
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Line, Rect } from 'react-native-svg';
 import { getOriginalTabBarStyle } from '../../components/tabstyle';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
+import QRCode from 'react-native-qrcode-svg';
+import { useUserStore } from '../../store/userStore';
 
 const { width } = Dimensions.get('window');
 
@@ -26,6 +28,29 @@ export default function QRCodeScreen() {
     const [showScanner, setShowScanner] = useState(false);
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
+
+    // Get user from Zustand store
+    const user = useUserStore((state) => state.user);
+    const userId = user?.id || 'GUEST';
+    const userName = user?.name || 'Guest User';
+    const userAvatar = user?.avatar;
+    const userPhone = user?.phone || '';
+    const userEmail = user?.email || '';
+    const userAbout = user?.about || '';
+
+    // Generate vCard format for contact information
+    const generateVCard = () => {
+        return `BEGIN:VCARD
+VERSION:3.0
+FN:${userName}
+TEL:${userPhone}
+EMAIL:${userEmail}
+NOTE:${userAbout}
+URL:https://yourapp.com/user/${userId}
+END:VCARD`;
+    };
+
+    const qrValue = generateVCard();
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
@@ -43,25 +68,61 @@ export default function QRCodeScreen() {
 
     const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
         setScanned(true);
-        Alert.alert(
-            '扫码成功',
-            `类型: ${type}\n数据: ${data}`,
-            [
-                { text: '确定', onPress: () => setScanned(false) }
-            ]
-        );
+
+        // Check if it's a vCard (contact info)
+        if (data.startsWith('BEGIN:VCARD')) {
+            // Parse vCard data
+            const nameMatch = data.match(/FN:(.*)/);
+            const phoneMatch = data.match(/TEL:(.*)/);
+            const emailMatch = data.match(/EMAIL:(.*)/);
+
+            const contactName = nameMatch ? nameMatch[1] : 'Unknown';
+            const contactPhone = phoneMatch ? phoneMatch[1] : '';
+            const contactEmail = emailMatch ? emailMatch[1] : '';
+
+            Alert.alert(
+                '扫描到联系人',
+                `姓名: ${contactName}\n电话: ${contactPhone}\n邮箱: ${contactEmail}`,
+                [
+                    {
+                        text: '取消',
+                        style: 'cancel',
+                        onPress: () => setScanned(false)
+                    },
+                    {
+                        text: '添加到通讯录',
+                        onPress: () => {
+                            // Here you would implement the logic to add contact
+                            // For now, just show success message
+                            Alert.alert(
+                                '成功',
+                                '联系人已添加到通讯录',
+                                [{ text: '确定', onPress: () => setScanned(false) }]
+                            );
+                        }
+                    }
+                ]
+            );
+        } else {
+            // Regular QR code
+            Alert.alert(
+                '扫码成功',
+                `类型: ${type}\n数据: ${data}`,
+                [
+                    { text: '确定', onPress: () => setScanned(false) }
+                ]
+            );
+        }
     };
 
     const pickImageForScan = async () => {
         try {
-            // 请求相册权限
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
             if (status !== 'granted') {
                 Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
                 return;
             }
 
-            // 打开相册选择图片
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: false,
@@ -70,7 +131,6 @@ export default function QRCodeScreen() {
 
             if (result.canceled) return;
 
-            // 图片已选择，显示提示
             Alert.alert(
                 '图片已选择',
                 '从图片中扫描二维码功能需要重新编译应用。\n\n请运行以下命令：\nnpx expo run:android\n或\nnpx expo run:ios\n\n编译后即可使用相册扫码功能。',
@@ -85,7 +145,6 @@ export default function QRCodeScreen() {
     };
 
     if (showScanner) {
-        // 权限检查
         if (!permission) {
             return (
                 <View style={styles.container}>
@@ -114,9 +173,8 @@ export default function QRCodeScreen() {
             >
                 <StatusBar barStyle="light-content" />
                 <SafeAreaView style={styles.safeArea}>
-                    {/* Scanner Header */}
                     <View style={styles.header}>
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.backButton}
                             onPress={() => setShowScanner(false)}
                         >
@@ -126,9 +184,7 @@ export default function QRCodeScreen() {
                         <View style={styles.placeholder} />
                     </View>
 
-                    {/* Scanner Content */}
                     <View style={styles.scannerContent}>
-                        {/* Camera View - 全屏背景 */}
                         <CameraView
                             style={StyleSheet.absoluteFillObject}
                             facing="back"
@@ -138,32 +194,16 @@ export default function QRCodeScreen() {
                             }}
                         />
 
-                        {/* Scanning Frame - 叠加在相机上 */}
-                        <View style={styles.scannerFrame}>
-                            <Svg width="100%" height="100%" viewBox="0 0 200 200">
-                                {/* Corner brackets */}
-                                {/* Top-left */}
-                                <Line x1="10" y1="50" x2="10" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                <Line x1="10" y1="10" x2="50" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
-
-                                {/* Top-right */}
-                                <Line x1="150" y1="10" x2="190" y2="10" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                <Line x1="190" y1="10" x2="190" y2="50" stroke="white" strokeWidth="4" strokeLinecap="square" />
-
-                                {/* Bottom-left */}
-                                <Line x1="10" y1="150" x2="10" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                <Line x1="10" y1="190" x2="50" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
-
-                                {/* Bottom-right */}
-                                <Line x1="150" y1="190" x2="190" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                                <Line x1="190" y1="150" x2="190" y2="190" stroke="white" strokeWidth="4" strokeLinecap="square" />
-                            </Svg>
+                        <View style={styles.scannerFrameContainer}>
+                            <View style={[styles.scannerCorner, styles.topLeft]} />
+                            <View style={[styles.scannerCorner, styles.topRight]} />
+                            <View style={[styles.scannerCorner, styles.bottomLeft]} />
+                            <View style={[styles.scannerCorner, styles.bottomRight]} />
                         </View>
 
                         <Text style={styles.scannerText}>将扫二维码放入框内即可扫码</Text>
                     </View>
 
-                    {/* Scanner Actions */}
                     <View style={styles.scannerActions}>
                         <TouchableOpacity
                             style={styles.scannerActionButton}
@@ -175,7 +215,7 @@ export default function QRCodeScreen() {
                             <Text style={styles.scannerActionText}>相册扫码</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity 
+                        <TouchableOpacity
                             style={styles.scannerActionButton}
                             onPress={() => setShowScanner(false)}
                         >
@@ -189,7 +229,7 @@ export default function QRCodeScreen() {
             </LinearGradient>
         );
     }
-    
+
     return (
         <LinearGradient
             colors={['#4a5568', '#2d3748']}
@@ -197,9 +237,8 @@ export default function QRCodeScreen() {
         >
             <StatusBar barStyle="light-content" />
             <SafeAreaView style={styles.safeArea}>
-                {/* Header */}
                 <View style={styles.header}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.backButton}
                         onPress={() => navigation.goBack()}
                     >
@@ -209,7 +248,6 @@ export default function QRCodeScreen() {
                     <View style={styles.placeholder} />
                 </View>
 
-                {/* QR Code Card */}
                 <View style={styles.content}>
                     <LinearGradient
                         colors={['#fcd34d', '#fbbf24']}
@@ -221,75 +259,37 @@ export default function QRCodeScreen() {
                                 colors={['#d1d5db', '#9ca3af']}
                                 style={styles.avatarOuter}
                             >
-                                <View style={styles.avatarInner} />
+                                {userAvatar ? (
+                                    <Image
+                                        source={{ uri: userAvatar }}
+                                        style={styles.avatarImage}
+                                    />
+                                ) : (
+                                    <View style={styles.avatarInner}>
+                                        <Ionicons name="person" size={32} color="#9ca3af" />
+                                    </View>
+                                )}
                             </LinearGradient>
                         </View>
 
-                        {/* QR Code */}
+                        {/* Real QR Code with User ID */}
                         <View style={styles.qrContainer}>
-                            <Svg width="100%" height="100%" viewBox="0 0 200 200">
-                                {/* Top-left corner */}
-                                <Rect x="10" y="10" width="60" height="60" fill="none" stroke="black" strokeWidth="6" />
-                                <Rect x="22" y="22" width="36" height="36" fill="black" />
-
-                                {/* Top-right corner */}
-                                <Rect x="130" y="10" width="60" height="60" fill="none" stroke="black" strokeWidth="6" />
-                                <Rect x="142" y="22" width="36" height="36" fill="black" />
-
-                                {/* Bottom-left corner */}
-                                <Rect x="10" y="130" width="60" height="60" fill="none" stroke="black" strokeWidth="6" />
-                                <Rect x="22" y="142" width="36" height="36" fill="black" />
-
-                                {/* Pattern blocks */}
-                                <Rect x="80" y="10" width="10" height="10" fill="black" />
-                                <Rect x="100" y="10" width="10" height="10" fill="black" />
-                                <Rect x="80" y="30" width="10" height="10" fill="black" />
-                                <Rect x="90" y="40" width="10" height="10" fill="black" />
-                                <Rect x="110" y="30" width="10" height="10" fill="black" />
-
-                                <Rect x="10" y="80" width="10" height="10" fill="black" />
-                                <Rect x="30" y="80" width="10" height="10" fill="black" />
-                                <Rect x="50" y="80" width="10" height="10" fill="black" />
-                                <Rect x="20" y="90" width="10" height="10" fill="black" />
-                                <Rect x="40" y="100" width="10" height="10" fill="black" />
-
-                                <Rect x="80" y="80" width="30" height="30" fill="black" />
-                                <Rect x="85" y="85" width="20" height="20" fill="white" />
-                                <Rect x="90" y="90" width="10" height="10" fill="black" />
-
-                                <Rect x="120" y="80" width="10" height="10" fill="black" />
-                                <Rect x="140" y="90" width="10" height="10" fill="black" />
-                                <Rect x="160" y="80" width="10" height="10" fill="black" />
-                                <Rect x="180" y="90" width="10" height="10" fill="black" />
-
-                                <Rect x="80" y="120" width="10" height="10" fill="black" />
-                                <Rect x="100" y="130" width="10" height="10" fill="black" />
-                                <Rect x="120" y="120" width="10" height="10" fill="black" />
-                                <Rect x="90" y="140" width="10" height="10" fill="black" />
-                                <Rect x="110" y="150" width="10" height="10" fill="black" />
-
-                                <Rect x="130" y="130" width="10" height="10" fill="black" />
-                                <Rect x="150" y="140" width="10" height="10" fill="black" />
-                                <Rect x="170" y="130" width="10" height="10" fill="black" />
-                                <Rect x="140" y="160" width="10" height="10" fill="black" />
-                                <Rect x="160" y="170" width="10" height="10" fill="black" />
-                                <Rect x="180" y="160" width="10" height="10" fill="black" />
-
-                                <Rect x="10" y="100" width="10" height="10" fill="black" />
-                                <Rect x="30" y="110" width="10" height="10" fill="black" />
-                                <Rect x="50" y="100" width="10" height="10" fill="black" />
-
-                                <Rect x="80" y="160" width="10" height="10" fill="black" />
-                                <Rect x="100" y="170" width="10" height="10" fill="black" />
-                                <Rect x="90" y="180" width="10" height="10" fill="black" />
-                            </Svg>
+                            <QRCode
+                                value={qrValue}
+                                size={200}
+                                backgroundColor="white"
+                                color="black"
+                            />
                         </View>
+
+                        {/* Optional: Display User ID */}
+                        <Text style={styles.userIdText}>{userName}</Text>
+                        <Text style={styles.userIdSubText}>ID: {userId}</Text>
                     </LinearGradient>
                 </View>
 
-                {/* Bottom Actions */}
                 <View style={styles.actions}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                         style={styles.actionButton}
                         onPress={() => setShowScanner(true)}
                     >
@@ -370,18 +370,41 @@ const styles = StyleSheet.create({
         borderColor: '#6b7280',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    avatarImage: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
     },
     avatarInner: {
         width: 64,
         height: 64,
         borderRadius: 32,
         backgroundColor: 'white',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     qrContainer: {
         backgroundColor: 'white',
         padding: 24,
         borderRadius: 16,
-        aspectRatio: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    userIdText: {
+        marginTop: 16,
+        textAlign: 'center',
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1F2937',
+    },
+    userIdSubText: {
+        marginTop: 4,
+        textAlign: 'center',
+        fontSize: 13,
+        fontWeight: '400',
+        color: '#4B5563',
     },
     actions: {
         flexDirection: 'row',
@@ -406,17 +429,48 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 13,
     },
-    // Scanner styles
     scannerContent: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 24,
     },
-    scannerFrame: {
+    scannerFrameContainer: {
         width: width * 0.7,
         aspectRatio: 1,
         marginBottom: 32,
+        position: 'relative',
+    },
+    scannerCorner: {
+        position: 'absolute',
+        width: 40,
+        height: 40,
+        borderColor: 'white',
+        borderWidth: 4,
+    },
+    topLeft: {
+        top: 0,
+        left: 0,
+        borderRightWidth: 0,
+        borderBottomWidth: 0,
+    },
+    topRight: {
+        top: 0,
+        right: 0,
+        borderLeftWidth: 0,
+        borderBottomWidth: 0,
+    },
+    bottomLeft: {
+        bottom: 0,
+        left: 0,
+        borderRightWidth: 0,
+        borderTopWidth: 0,
+    },
+    bottomRight: {
+        bottom: 0,
+        right: 0,
+        borderLeftWidth: 0,
+        borderTopWidth: 0,
     },
     scannerText: {
         color: 'white',

@@ -31,7 +31,7 @@ type ChatListItem = {
     push_notification?: boolean;
     top_notification?: boolean;
     show_nicknames?: boolean;
-    // 你可以在这里加 ownerId
+    ownerId?: string;
   };
   admins?: string[]; // 可选，保存管理员 ID
 };
@@ -49,7 +49,7 @@ type ChatStore = {
   settings: Settings;
 
   addMessage: (chatId: string, text: string) => void;
-  setMessages: (chatId: string, messages: Message[]) => void; // ⭐ 新增
+  setMessages: (chatId: string, messages: Message[]) => void; 
   addChat: (chat: ChatListItem) => void;
   setChats: (chats: ChatListItem[]) => void;
   updateChatLastMessage: (chatId: string, message: string, timestamp: string) => void;
@@ -123,21 +123,54 @@ export const useChatStore = create<ChatStore>()(
       addChat: (chat) => {
         const currentChatList = get().chatList;
 
+        let processedChat = { ...chat };
+
+        // Process group members to determine ownerId and admins if it's a group and members exist
+        if (processedChat.isGroup && processedChat.members && processedChat.members.length > 0) {
+            let ownerFound = false;
+            let adminIds: string[] = [];
+            
+            // Assuming the API sends GroupMember type here, where isadmin: 2 is admin/owner
+            for (const member of processedChat.members) {
+                if (member.isadmin === 2) {
+                    adminIds.push(member.user_id);
+                    // For simplicity, let's assume the first isadmin:2 found is the owner if ownerId is not explicitly set
+                    if (!processedChat.ownerId) {
+                        processedChat.ownerId = member.user_id; // Assign first admin as owner if not specified
+                    }
+                }
+            }
+            // If ownerId was not set, and there are admins, assign the first admin as owner (heuristic)
+            if (!processedChat.ownerId && adminIds.length > 0) {
+                processedChat.ownerId = adminIds[0];
+            }
+            // Filter out the owner from admins if ownerId is distinct
+            processedChat.admins = adminIds.filter(id => id !== processedChat.ownerId);
+
+            // Also ensure rawData.ownerId is set if it's a group
+            if (processedChat.isGroup && processedChat.ownerId && !processedChat.rawData?.ownerId) {
+                processedChat.rawData = {
+                    ...processedChat.rawData,
+                    ownerId: processedChat.ownerId,
+                };
+            }
+        }
+
         // Check if chat already exists
-        const existingIndex = currentChatList.findIndex(c => c.id === chat.id);
+        const existingIndex = currentChatList.findIndex(c => c.id === processedChat.id);
 
         if (existingIndex !== -1) {
           // Update existing chat
           const updatedChatList = [...currentChatList];
           updatedChatList[existingIndex] = {
             ...updatedChatList[existingIndex],
-            ...chat,
+            ...processedChat, // Use processedChat here
           };
           set({ chatList: updatedChatList });
         } else {
           // Add new chat to the top of the list
           set({
-            chatList: [chat, ...currentChatList],
+            chatList: [processedChat, ...currentChatList], // Use processedChat here
           });
         }
       },
