@@ -1,3 +1,10 @@
+interface Member {
+    id: string;
+    name: string;
+    avatar?: string;
+    phone?: string;
+}
+
 import { NavigatorScreenParams } from "@react-navigation/native";
 
 /**
@@ -53,6 +60,14 @@ export type ChatStackParamList = {
     chatName: string;
     members?: any[];
     memberIds?: string[];
+  };
+  GroupMemberList: {
+    groupId: string;
+  };
+  AddGroupMembers: {
+    chatId: string;
+    chatName: string;
+    currentMembers: Member[]; // Assuming Member type is available globally or imported
   };
 };
 
