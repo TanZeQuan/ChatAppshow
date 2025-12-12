@@ -1,6 +1,6 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-export const API_BASE_URL = 'https://prelabial-lustrously-michaela.ngrok-free.dev/api';
+export const API_BASE_URL = 'https://balkingly-hemitropic-lelah.ngrok-free.dev/api';
 
 // 创建 Axios 实例
 const api = axios.create({

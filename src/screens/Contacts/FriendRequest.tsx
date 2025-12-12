@@ -11,10 +11,12 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useContactStore } from "../../store/contactStore";
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { colors, borders, typography } from "../../styles";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
 import { useUserStore } from "../../store/userStore";
@@ -44,7 +46,8 @@ export default function FriendRequestScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
-  
+  const insets = useSafeAreaInsets();
+
   const { removeRequest } = useFriendRequestStore();
   const { addContact, getContactById } = useContactStore();
   const currentUser = useUserStore((state) => state.user);
@@ -65,10 +68,10 @@ export default function FriendRequestScreen() {
     try {
       // Fetch pending requests (isstatus = 1)
       const pendingResult = await readFriends(1);
-      
+
       // Fetch accepted requests (isstatus = 2)
       const acceptedResult = await readFriends(2);
-      
+
       // Fetch rejected requests (isstatus = 3)
       const rejectedResult = await readFriends(3);
 
@@ -98,12 +101,26 @@ export default function FriendRequestScreen() {
     }
   };
 
+  useFocusEffect(
+    React.useCallback(() => {
+      // Hide tab bar when screen is focused
+      navigation.getParent()?.setOptions({
+        tabBarStyle: { display: 'none' }
+      });
+      // Show tab bar when leaving the screen with ORIGINAL STYLE
+      return () => {
+        navigation.getParent()?.setOptions({
+          tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
+        });
+      };
+    }, [navigation, insets])
+  );
+
   // Load data when screen is focused
   useFocusEffect(
     React.useCallback(() => {
-      console.log('好友请求页面刷新');
-      fetchFriendRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      fetchFriendRequests(); // 仅刷新数据
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentUser?.id])
   );
 
@@ -112,7 +129,6 @@ export default function FriendRequestScreen() {
     await fetchFriendRequests();
     setRefreshing(false);
   };
-
   const handleConfirm = async (item: FriendRequestData) => {
     // Check if already a contact
     const existingContact = getContactById(item.user_id);
@@ -134,7 +150,7 @@ export default function FriendRequestScreen() {
             try {
               // Accept friend request using list_id
               const result = await acceptFriendRequest(item.list_id);
-              
+
               if (result.success) {
                 // Add to contacts
                 addContact({
@@ -153,13 +169,13 @@ export default function FriendRequestScreen() {
                   "成功",
                   `已添加 ${item.name} 为好友`,
                   [
-                    { 
+                    {
                       text: "确定",
                       onPress: () => fetchFriendRequests() // Refresh list
                     },
-                    { 
-                      text: "查看通讯录", 
-                      onPress: () => navigation.goBack() 
+                    {
+                      text: "查看通讯录",
+                      onPress: () => navigation.goBack()
                     },
                   ]
                 );
@@ -192,13 +208,13 @@ export default function FriendRequestScreen() {
             try {
               // Reject friend request using list_id
               const result = await rejectFriendRequest(item.list_id);
-              
+
               if (result.success) {
                 // Remove from local request store if exists
                 removeRequest(item.user_id);
-                
+
                 Alert.alert("已拒绝", `已拒绝 ${item.name} 的好友请求`);
-                
+
                 // Refresh list
                 await fetchFriendRequests();
               } else {
@@ -236,15 +252,15 @@ export default function FriendRequestScreen() {
           <ActivityIndicator color="#FFD700" size="small" />
         ) : (
           <>
-            <TouchableOpacity 
-              style={styles.rejectButton} 
+            <TouchableOpacity
+              style={styles.rejectButton}
               onPress={() => handleReject(item)}
               disabled={processingId !== null}
             >
               <Text style={styles.rejectButtonText}>拒绝</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.confirmButton} 
+            <TouchableOpacity
+              style={styles.confirmButton}
               onPress={() => handleConfirm(item)}
               disabled={processingId !== null}
             >
@@ -315,8 +331,8 @@ export default function FriendRequestScreen() {
       )}
 
       {/* Scrollable Content */}
-      <ScrollView 
-        style={styles.scrollView} 
+      <ScrollView
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -362,6 +378,7 @@ export default function FriendRequestScreen() {
           sentPending.length,
           sentPending,
           "还没有发送待处理的请求～",
+          
           (item) => renderStatusItem(item, "等待回应", "#FF9800")
         )}
 
@@ -388,7 +405,7 @@ export default function FriendRequestScreen() {
 }
 
 const styles = StyleSheet.create({
-   container: { flex: 1, backgroundColor: colors.background.grayLight },
+  container: { flex: 1, backgroundColor: colors.background.grayLight },
 
   /** HEADER */
   header: {

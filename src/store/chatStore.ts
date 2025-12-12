@@ -127,7 +127,6 @@ export const useChatStore = create<ChatStore>()(
 
         // Process group members to determine ownerId and admins if it's a group and members exist
         if (processedChat.isGroup && processedChat.members && processedChat.members.length > 0) {
-            let ownerFound = false;
             let adminIds: string[] = [];
             
             // Assuming the API sends GroupMember type here, where isadmin: 2 is admin/owner

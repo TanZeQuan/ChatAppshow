@@ -27,6 +27,7 @@ import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useChatStore } from '../../store/chatStore';
 import * as ImagePicker from 'expo-image-picker';
+import { useWebSocket } from '../../services/websocket'; // Import WebSocket hook
 
 const { width, height } = Dimensions.get("window");
 
@@ -66,6 +67,9 @@ export default function ChatRoomScreen() {
 
   const { getChatById, chats, addMessage, clearChat } = useChatStore();
   const storedMessages = chats[chatId] || [];
+
+  // Initialize WebSocket hook
+  const { sendMessage: sendWebSocketMessage } = useWebSocket();
 
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
@@ -211,15 +215,14 @@ export default function ChatRoomScreen() {
 
     const messageText = inputText.trim();
 
-    // Add message to store
-    addMessage(chatId, messageText);
+    // Send message via WebSocket
+    sendWebSocketMessage(chatId, messageText);
 
-    // REMOVE updateChatTimestamp — 已删除
-
+    // Clear input field
     setInputText('');
 
-    // TODO: Send via API
-    // await sendMessage(...)
+    // Note: addMessage is now called in the WebSocket hook,
+    // so we don't need to call it here again
   };
 
   const handleClearChat = () => {

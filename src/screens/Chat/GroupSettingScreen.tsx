@@ -975,7 +975,6 @@ const styles = StyleSheet.create({
         zIndex: 2, // Ensure overlay is on top of badges
     },
 
-
     // --- Section ---
     section: {
         marginTop: 16,
