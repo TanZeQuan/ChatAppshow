@@ -48,11 +48,15 @@ type ChatStore = {
   chatList: ChatListItem[];
   settings: Settings;
 
-  addMessage: (chatId: string, text: string) => void;
-  setMessages: (chatId: string, messages: Message[]) => void; 
+  addMessage: (message: Partial<Message> & { chatId: string }) => void;
+  setMessages: (chatId: string, messages: Message[]) => void;
   addChat: (chat: ChatListItem) => void;
   setChats: (chats: ChatListItem[]) => void;
-  updateChatLastMessage: (chatId: string, message: string, timestamp: string) => void;
+  updateChatLastMessage: (
+    chatId: string,
+    message: string,
+    timestamp: string
+  ) => void;
   removeChat: (chatId: string) => void;
   getChatById: (chatId: string) => ChatListItem | undefined;
   clearChat: (chatId: string) => void;
@@ -76,18 +80,20 @@ export const useChatStore = create<ChatStore>()(
         showPreview: true,
       },
 
-      // ⭐ addMessage 自动取 userStore 的用户
-      addMessage: (chatId, text) => {
+      // ⭐ Refactored addMessage to accept a message object
+      addMessage: (message) => {
         const user = useUserStore.getState().user;
         if (!user) return;
 
+        const { chatId, ...messageData } = message;
+
         const newMessage: Message = {
-          id: Math.random().toString(),
-          text,
-          createdAt: new Date().toISOString(),
-          senderId: user.id,
-          name: user.name,
-          avatar: user.avatar,
+          id: messageData.id || Math.random().toString(),
+          text: messageData.text || '',
+          createdAt: messageData.createdAt || new Date().toISOString(),
+          senderId: messageData.senderId || user.id,
+          name: messageData.name || user.name,
+          avatar: messageData.avatar || user.avatar,
         };
 
         const current = get().chats[chatId] || [];
@@ -100,7 +106,7 @@ export const useChatStore = create<ChatStore>()(
         });
 
         // Update chat list with last message
-        get().updateChatLastMessage(chatId, text, newMessage.createdAt);
+        get().updateChatLastMessage(chatId, newMessage.text, newMessage.createdAt);
       },
 
       // ⭐ 新增：直接设置某个聊天的所有消息（用于 API 加载）

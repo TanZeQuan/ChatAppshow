@@ -36,8 +36,15 @@ export const useWebSocket = () => {
         // 如果消息不是自己发的，增加未读
         const isSelf = data.senderId === user.id;
 
-        // 保存消息到 store
-        addMessage(data.chatId, data.text);
+        // 保存消息到 store - 使用 refactored addMessage
+        addMessage({
+          chatId: data.chatId,
+          text: data.text,
+          senderId: data.senderId,
+          name: data.name,
+          avatar: data.avatar,
+          createdAt: data.createdAt,
+        });
 
         if (!isSelf) {
           incrementUnread(data.chatId);
@@ -79,8 +86,8 @@ export const useWebSocket = () => {
 
     wsRef.current.send(JSON.stringify(msg));
 
-    // 本地立即添加消息
-    addMessage(chatId, text);
+    // 本地立即添加消息 - 使用 refactored addMessage
+    addMessage(msg);
   };
 
   return { sendMessage };
