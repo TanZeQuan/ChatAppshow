@@ -4,7 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useLayoutEffect, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -64,8 +64,12 @@ export default function ChatRoomScreen() {
   const currentUserAvatar = currentUser?.avatar || '';
   const currentUserName = currentUser?.name || '我';
 
-  const { getChatById, chats, addMessage, clearChat } = useChatStore();
-  const storedMessages = chats[chatId] || [];
+  const { getChatById, addMessage, clearChat } = useChatStore();
+
+  // Use selector to subscribe to messages for this chat (reactive)
+  const messagesFromStore = useChatStore((state) => state.chats[chatId]);
+  // Use useMemo to avoid creating new array reference on every render
+  const storedMessages = useMemo(() => messagesFromStore || [], [messagesFromStore]);
 
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
@@ -300,9 +304,8 @@ export default function ChatRoomScreen() {
           console.warn('WebSocket not connected, message saved but not forwarded');
         }
 
-        // Note: addMessage is called in WebSocketManager when message is confirmed
-        // For now, add message locally for immediate feedback
-        addMessage(chatId, messageText);
+        // Refresh messages from API to get correct server timestamp
+        await loadMessages(false);
       } else {
         console.error("Failed to send message:", result.message);
         // Optionally show error to user
