@@ -1,5 +1,5 @@
-import api from './service';
 import { useUserStore } from '../store/userStore';
+import api from './service';
 
 // 获取当前 userId
 const getCurrentUserId = () => useUserStore.getState().user?.id || "";
@@ -93,13 +93,13 @@ export const readFriends = async (isstatus = 1) => {
     const payload = { user_id: userId, request_id: userId, approve_id: userId, isstatus };
     formData.append("data", JSON.stringify(payload));
 
-    console.log("readFriends payload:", payload);
+    // console.log("readFriends payload:", payload);
 
     const response = await api.post("/chats/friends/read", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("readFriends response:", response.data);
+    // console.log("readFriends response:", response.data);
 
     if (response.data?.error) {
       return { success: false, message: response.data.message || "Read failed" };

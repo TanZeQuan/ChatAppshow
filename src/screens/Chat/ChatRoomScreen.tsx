@@ -2,11 +2,13 @@ import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -17,17 +19,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
-import { colors, borders, typography } from "../../styles";
-import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
-import { useChatStore } from '../../store/chatStore';
-import * as ImagePicker from 'expo-image-picker';
 import WebSocketManager from '../../services/WebSocketManager';
+import { useChatStore } from '../../store/chatStore';
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -87,6 +86,25 @@ export default function ChatRoomScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
+  // Listen for WebSocket message notifications
+  useEffect(() => {
+    const handleWebSocketMessage = (data: any) => {
+      // receive and refresh
+      if (data.type && data.message && !data.content) {
+        console.log('New message notification - refreshing messages');
+        loadMessages(false);
+      }
+    };
+
+    // Register callback
+    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+
+    // Cleanup
+    return () => {
+      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+    };
+  }, [chatId]);
+
   const loadMessages = async (loadMore = false) => {
     if (!currentUserId) return;
 
@@ -103,8 +121,8 @@ export default function ChatRoomScreen() {
         offset: currentOffset,
       });
 
-      console.log("=== Load Messages Debug ===");
-      console.log("API Result:", result);
+      // console.log("=== Load Messages Debug ===");
+      // console.log("API Result:", result);
 
       if (result.success && result.data) {
         // Get messages from result.data.chat (backend returns {chat: [...], group: [...]})
@@ -112,7 +130,7 @@ export default function ChatRoomScreen() {
         const groupMembers = result.data.group || [];
 
         console.log("API Messages count:", apiMessages.length);
-        console.log("Group members:", groupMembers);
+        // console.log("Group members:", groupMembers);
 
         // Extract member user IDs and store them
         const memberIds = groupMembers.map((member: any) => member.user_id);
@@ -141,7 +159,7 @@ export default function ChatRoomScreen() {
             };
           });
 
-          console.log("Transformed messages:", transformedMessages);
+          // console.log("Transformed messages:", transformedMessages);
 
           // Store messages in chatStore
           const { setMessages } = useChatStore.getState();
@@ -459,7 +477,7 @@ export default function ChatRoomScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <FlatList
-            data={[...messages].reverse()}
+            data={[...messages]}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}

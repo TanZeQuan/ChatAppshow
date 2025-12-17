@@ -145,22 +145,14 @@ class WebSocketManager {
       }
 
       // 6. Incoming chat message
-      // According to docs: {type: 1, message: "Hello"}
-      // But we need more fields for a complete message
-      // Let's handle both scenarios:
+      // Backend sends: {type: 1, message: "Hello"}
+      // This is a simple notification format - we should refresh messages from API
+      if (data.type && data.message && !data.content) {
+        console.log('📨 New message notification received');
 
-      // Scenario A: Message has chat_id (complete message)
-      if (data.chat_id && data.message && data.sender) {
-        this.handleIncomingMessage(data);
-        return;
-      }
-
-      // Scenario B: Message without chat_id (minimal format from docs)
-      // This might be a broadcast or notification
-      if (data.type && data.message && !data.content && !data.chat_id) {
-        console.log('📨 Received message without chat_id:', data);
-        console.warn('⚠️ Message missing chat_id and sender - cannot add to store');
-        // TODO: You might need to clarify with backend what this message format means
+        // Notify callbacks that a new message was received
+        // The UI should refresh messages from API when this happens
+        this.messageCallbacks.forEach(callback => callback(data));
         return;
       }
 
@@ -172,9 +164,11 @@ class WebSocketManager {
     }
   }
 
-  // Handle incoming chat message
+  // Handle incoming chat message (DEPRECATED - backend sends minimal format)
+  // This function is kept for backward compatibility but should not be called
+  // with the current backend implementation
   private handleIncomingMessage(data: any) {
-    console.log('📨 Incoming message:', data);
+    console.log('Incoming message (legacy handler):', data);
 
     try {
       // Parse message if it's a JSON string

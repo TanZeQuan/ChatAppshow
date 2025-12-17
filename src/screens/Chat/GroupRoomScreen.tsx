@@ -486,7 +486,7 @@ export default function GroupRoomScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <FlatList
-                        data={[...messages].reverse()}
+                        data={messages}
                         renderItem={renderItem}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={roomStyles.chatList}

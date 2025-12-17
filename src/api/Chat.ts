@@ -123,13 +123,13 @@ export const readUserChats = async (user_id: string) => {
 
         formData.append("data", JSON.stringify(dataPayload));
 
-        console.log("readUserChats payload:", dataPayload);
+        // console.log("readUserChats payload:", dataPayload);
 
         const response = await api.post("/chats/read", formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
-        console.log("readUserChats response:", response.data);
+        // console.log("readUserChats response:", response.data);
 
         if (response.data?.error === true) {
             return {
@@ -177,13 +177,13 @@ export const readChatMessages = async ({
 
         formData.append("data", JSON.stringify(dataPayload));
 
-        console.log("readChatMessages payload:", dataPayload);
+        // console.log("readChatMessages payload:", dataPayload);
 
         const response = await api.post("/chats/message/read", formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
-        console.log("readChatMessages response:", response.data);
+        // console.log("readChatMessages response:", response.data);
 
         if (response.data?.error === true) {
             return {
