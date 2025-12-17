@@ -208,3 +208,59 @@ export const readChatMessages = async ({
         };
     }
 };
+
+// Send new message
+export const sendChatMessage = async ({
+    sender,
+    receiver,
+    chat_id,
+    message
+}: {
+    sender: string;
+    receiver: string[];
+    chat_id: string;
+    message: string;
+}) => {
+    try {
+        const formData = new FormData();
+
+        const dataPayload = {
+            sender,
+            receiver,
+            chat_id,
+            message
+        };
+
+        formData.append("data", JSON.stringify(dataPayload));
+
+        console.log("sendChatMessage payload:", dataPayload);
+
+        const response = await api.post("/chats/message/new", formData, {
+            headers: { "Content-Type": "multipart/form-data" },
+        });
+
+        console.log("sendChatMessage response:", response.data);
+
+        if (response.data?.error === true) {
+            return {
+                success: false,
+                message: response.data.message || "Send message failed",
+            };
+        }
+
+        return {
+            success: true,
+            data: response.data.response,
+            message: response.data.message,
+        };
+    } catch (error: any) {
+        console.error(
+            "sendChatMessage error:",
+            error.response?.data || error.message
+        );
+        return {
+            success: false,
+            message: error.response?.data?.message || error.message,
+        };
+    }
+};

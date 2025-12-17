@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
-import { readChatMessages } from '../../api/Chat';
+import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { colors, borders, typography } from "../../styles";
 import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
@@ -77,6 +77,7 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
 
   // Voice message state
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -111,8 +112,14 @@ export default function ChatRoomScreen() {
       if (result.success && result.data) {
         // Get messages from result.data.chat (backend returns {chat: [...], group: [...]})
         const apiMessages = result.data.chat || [];
+        const groupMembers = result.data.group || [];
 
         console.log("API Messages count:", apiMessages.length);
+        console.log("Group members:", groupMembers);
+
+        // Extract member user IDs and store them
+        const memberIds = groupMembers.map((member: any) => member.user_id);
+        setChatMembers(memberIds);
 
         if (apiMessages.length > 0) {
           // Transform API messages to store format
@@ -241,14 +248,52 @@ export default function ChatRoomScreen() {
 
     const messageText = inputText.trim();
 
-    // Send message via WebSocket
-    sendWebSocketMessage(chatId, messageText);
-
-    // Clear input field
+    // Clear input field immediately for better UX
     setInputText('');
 
-    // Note: addMessage is now called in the WebSocket hook,
-    // so we don't need to call it here again
+    try {
+      // Step 1: Save message to database via API
+      const receiver = chatMembers.filter(id => id !== currentUserId);
+
+      console.log("=== Sending Message ===");
+      console.log("Sender:", currentUserId);
+      console.log("Receiver:", receiver);
+      console.log("Chat ID:", chatId);
+      console.log("Message:", messageText);
+
+      const result = await sendChatMessage({
+        sender: currentUserId,
+        receiver: receiver,
+        chat_id: chatId,
+        message: messageText
+      });
+
+      console.log("Send message result:", result);
+
+      if (result.success && result.data) {
+        // Step 2: Forward message via WebSocket
+        sendWebSocketMessage(chatId, messageText, {
+          type: result.data.type,
+          message_id: result.data.message_id,
+          sender: currentUserId,
+          receiver: receiver
+        });
+
+        // Note: addMessage is now called in the WebSocket hook,
+        // so we don't need to call it here again
+      } else {
+        console.error("Failed to send message:", result.message);
+        // Optionally show error to user
+        Alert.alert('发送失败', result.message || '消息发送失败，请重试');
+        // Restore the message in input field
+        setInputText(messageText);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      Alert.alert('发送失败', '网络错误，请重试');
+      // Restore the message in input field
+      setInputText(messageText);
+    }
   };
 
   const handleClearChat = () => {

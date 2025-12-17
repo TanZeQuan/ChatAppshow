@@ -62,22 +62,44 @@ export const useWebSocket = () => {
   }, [addMessage, incrementUnread, user]);
 
   // 发送消息函数
-  const sendMessage = (chatId: string, text: string) => {
+  const sendMessage = (chatId: string, text: string, forwardData?: {
+    type: number;
+    message_id: string;
+    sender: string;
+    receiver: string[];
+  }) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       console.warn('WebSocket is not connected');
       return;
     }
 
-    const msg = {
-      chatId,
-      text,
-      senderId: user?.id,
-      name: user?.name,
-      avatar: user?.avatar,
-      createdAt: new Date().toISOString(),
-    };
+    // If forwardData is provided, send forward command
+    if (forwardData) {
+      const forwardMsg = {
+        msg: "forward",
+        type: forwardData.type,
+        message: text,
+        message_id: forwardData.message_id,
+        sender: forwardData.sender,
+        receiver: forwardData.receiver,
+        chat_id: chatId
+      };
 
-    wsRef.current.send(JSON.stringify(msg));
+      console.log("Sending forward command:", forwardMsg);
+      wsRef.current.send(JSON.stringify(forwardMsg));
+    } else {
+      // Legacy: Direct message send (kept for backward compatibility)
+      const msg = {
+        chatId,
+        text,
+        senderId: user?.id,
+        name: user?.name,
+        avatar: user?.avatar,
+        createdAt: new Date().toISOString(),
+      };
+
+      wsRef.current.send(JSON.stringify(msg));
+    }
 
     // 本地立即添加消息
     addMessage(chatId, text);
