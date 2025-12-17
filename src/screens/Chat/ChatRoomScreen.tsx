@@ -109,14 +109,40 @@ export default function ChatRoomScreen() {
       console.log("API Result:", result);
 
       if (result.success && result.data) {
-        // Transform API response to message format
-        const apiMessages = Array.isArray(result.data) ? result.data : [];
+        // Get messages from result.data.chat (backend returns {chat: [...], group: [...]})
+        const apiMessages = result.data.chat || [];
 
         console.log("API Messages count:", apiMessages.length);
 
-        // TODO: Store messages in chatStore
-        // You'll need to add a method to bulk load messages
-        // For now, messages will be shown from local store
+        if (apiMessages.length > 0) {
+          // Transform API messages to store format
+          const transformedMessages = apiMessages.map((msg: any) => {
+            // Parse the message field (it's a JSON string like {"type":1,"message":"Test6"})
+            let messageText = '';
+            try {
+              const parsedMessage = JSON.parse(msg.message);
+              messageText = parsedMessage.message || '';
+            } catch (e) {
+              console.error('Failed to parse message:', msg.message);
+              messageText = msg.message;
+            }
+
+            return {
+              id: msg.message_id,
+              text: messageText,
+              createdAt: msg.created_at,
+              senderId: msg.sender,
+              name: msg.sender === currentUserId ? currentUserName : undefined,
+              avatar: msg.sender === currentUserId ? currentUserAvatar : undefined,
+            };
+          });
+
+          console.log("Transformed messages:", transformedMessages);
+
+          // Store messages in chatStore
+          const { setMessages } = useChatStore.getState();
+          setMessages(chatId, transformedMessages);
+        }
 
         if (loadMore) {
           setOffset(currentOffset + apiMessages.length);

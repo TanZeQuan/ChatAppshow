@@ -18,7 +18,7 @@ import { useChatStore } from '../../store/chatStore';
 import { colors, borders, typography } from "../../styles";
 import { useContactStore } from '../../store/contactStore';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { readUserChats, readChatMessages } from '../../api/Chat';
+import { readUserChats, readChatMessages, createPrivateChat } from '../../api/Chat';
 import { readFriends } from '../../api/Friend';
 import { useUserStore } from '../../store/userStore';
 
@@ -118,7 +118,41 @@ export default function ChatListScreen() {
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleChatPress = (chat: any) => {
+  const handleChatPress = async (chat: any) => {
+    // 如果是联系人（没有真正的聊天ID，只有用户ID），先创建私聊
+    if (!chat.isGroup && !chat.id.startsWith('IMC')) {
+      try {
+        console.log('Creating private chat with contact:', chat.id);
+
+        const result = await createPrivateChat({
+          name: chat.name,
+          user_id: currentUserId,
+          chat_with: chat.id,  // 联系人ID
+          group: []
+        });
+
+        console.log('Create private chat result:', result);
+
+        if (result.success && result.data?.response) {
+          // 使用返回的真正的 chat_id（response 直接就是 chat_id 字符串）
+          navigation.navigate('ChatRoom', {
+            chatId: result.data.response,
+            chatName: chat.name,
+            isGroup: false,
+          });
+          return;
+        } else {
+          // 如果创建失败，显示错误
+          console.error('Failed to create private chat:', result.message);
+          return;
+        }
+      } catch (error) {
+        console.error('Error creating private chat:', error);
+        return;
+      }
+    }
+
+    // 正常的群聊或已有聊天ID的私聊
     if (chat.isGroup) {
       navigation.navigate('GroupRoom', {
         chatId: chat.id,
