@@ -27,7 +27,7 @@ import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useChatStore } from '../../store/chatStore';
 import * as ImagePicker from 'expo-image-picker';
-import { useWebSocket } from '../../services/websocket'; // Import WebSocket hook
+import WebSocketManager from '../../services/WebSocketManager';
 
 const { width, height } = Dimensions.get("window");
 
@@ -67,9 +67,6 @@ export default function ChatRoomScreen() {
 
   const { getChatById, chats, addMessage, clearChat } = useChatStore();
   const storedMessages = chats[chatId] || [];
-
-  // Initialize WebSocket hook
-  const { sendMessage: sendWebSocketMessage } = useWebSocket();
 
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
@@ -272,15 +269,22 @@ export default function ChatRoomScreen() {
 
       if (result.success && result.data) {
         // Step 2: Forward message via WebSocket
-        sendWebSocketMessage(chatId, messageText, {
+        const forwarded = WebSocketManager.sendForwardMessage({
           type: result.data.type,
+          message: messageText,
           message_id: result.data.message_id,
           sender: currentUserId,
-          receiver: receiver
+          receiver: receiver,
+          chat_id: chatId
         });
 
-        // Note: addMessage is now called in the WebSocket hook,
-        // so we don't need to call it here again
+        if (!forwarded) {
+          console.warn('WebSocket not connected, message saved but not forwarded');
+        }
+
+        // Note: addMessage is called in WebSocketManager when message is confirmed
+        // For now, add message locally for immediate feedback
+        addMessage(chatId, messageText);
       } else {
         console.error("Failed to send message:", result.message);
         // Optionally show error to user
