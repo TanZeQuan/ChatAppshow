@@ -23,10 +23,11 @@ import { colors, borders, typography } from "../../styles";
 import { useChatStore } from '../../store/chatStore';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useUserStore } from '@/src/store/userStore';
-import { readChatMessages } from '../../api/Chat';
+import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { Audio } from 'expo-av';
 import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
 import * as ImagePicker from 'expo-image-picker';
+import WebSocketManager from '../../services/WebSocketManager';
 
 const { width, height } = Dimensions.get("window");
 
@@ -76,7 +77,7 @@ export default function GroupRoomScreen() {
             ? [{
                 id: currentUserId,
                 name: currentUser.name || '我',
-                avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUserId}`,
+                avatar: currentUser.avatar || '',
             }]
             : []
         ),
@@ -96,6 +97,7 @@ export default function GroupRoomScreen() {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [offset, setOffset] = useState(0);
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
+    const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
 
     // Voice message state
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -196,6 +198,13 @@ export default function GroupRoomScreen() {
                     ? (result.data.group || [])
                     : (result.data.chat || []);
 
+                // Extract and save member IDs from group data
+                if (result.data.group && Array.isArray(result.data.group)) {
+                    const memberIds = result.data.group.map((member: any) => member.user_id);
+                    setChatMembers(memberIds);
+                    console.log('Group members:', memberIds);
+                }
+
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
                     setHasMoreMessages(false);
@@ -261,11 +270,62 @@ export default function GroupRoomScreen() {
         };
     }, [insets, navigation]);
 
-    const handleSend = () => {
+    const handleSend = async () => {
         if (!inputText.trim()) return;
 
-        addMessage(chatId, inputText);
+        const messageText = inputText.trim();
+
+        // Clear input field immediately for better UX
         setInputText('');
+
+        try {
+            // Step 1: Save message to database via API
+            const receiver = chatMembers.filter(id => id !== currentUserId);
+
+            console.log("=== Sending Group Message ===");
+            console.log("Sender:", currentUserId);
+            console.log("Receiver:", receiver);
+            console.log("Chat ID:", chatId);
+            console.log("Message:", messageText);
+
+            const result = await sendChatMessage({
+                sender: currentUserId,
+                receiver: receiver,
+                chat_id: chatId,
+                message: messageText
+            });
+
+            console.log("Send message result:", result);
+
+            if (result.success && result.data) {
+                // Step 2: Forward message via WebSocket
+                const forwarded = WebSocketManager.sendForwardMessage({
+                    type: result.data.type,
+                    message: messageText,
+                    message_id: result.data.message_id,
+                    sender: currentUserId,
+                    receiver: receiver,
+                    chat_id: chatId
+                });
+
+                if (!forwarded) {
+                    console.warn('WebSocket not connected, message saved but not forwarded');
+                }
+
+                // Add message locally for immediate feedback
+                addMessage(chatId, messageText);
+            } else {
+                console.error("Failed to send message:", result.message);
+                Alert.alert('发送失败', result.message || '消息发送失败，请重试');
+                // Restore the message in input field
+                setInputText(messageText);
+            }
+        } catch (error) {
+            console.error("Error sending message:", error);
+            Alert.alert('发送失败', '网络错误，请重试');
+            // Restore the message in input field
+            setInputText(messageText);
+        }
     };
 
     const handleClearChat = () => {
@@ -353,7 +413,7 @@ export default function GroupRoomScreen() {
             {item.sender === 'other' && (
                 <View style={roomStyles.avatar}>
                     <Image
-                        source={{ uri: item.avatar || `https://i.pravatar.cc/150?img=${item.senderId}` }}
+                        source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
                         style={roomStyles.avatarImage}
                     />
                 </View>
@@ -376,7 +436,7 @@ export default function GroupRoomScreen() {
             {item.sender === 'me' && (
                 <View style={roomStyles.avatar}>
                     <Image
-                        source={{ uri: currentUser?.avatar || `https://i.pravatar.cc/150?img=${currentUserId}` }}
+                        source={currentUser?.avatar ? { uri: currentUser.avatar } : require('../../assets/images/anonymous.png')}
                         style={roomStyles.avatarImage}
                     />
                 </View>
@@ -426,7 +486,7 @@ export default function GroupRoomScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <FlatList
-                        data={[...messages].reverse()}
+                        data={messages}
                         renderItem={renderItem}
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={roomStyles.chatList}

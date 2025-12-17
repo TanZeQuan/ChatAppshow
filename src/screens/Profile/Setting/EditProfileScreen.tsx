@@ -10,8 +10,8 @@ import { readUsers } from '../../../api/User';
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
   const { user } = useUserStore();
-  
-  const [avatar, setAvatar] = useState<string>(user?.avatar || "https://i.pravatar.cc/150?img=default");
+
+  const [avatar, setAvatar] = useState<string>(user?.avatar || "");
   const [username, setUsername] = useState<string>(user?.name || "Unknown");
   const [phone, setPhone] = useState<string>(user?.phone || "");
   const [accountId, setAccountId] = useState<string>(user?.id || "");
@@ -28,7 +28,7 @@ export default function EditProfileScreen() {
         if (res.success && res.data?.response) {
           const userData = res.data.response;
 
-          setAvatar(userData.image || user.avatar || "https://i.pravatar.cc/150?img=default");
+          setAvatar(userData.image || user.avatar || "");
           setUsername(userData.name || user.name || "Unknown");
           setPhone(userData.phone || user.phone || "");
           setAccountId(userData.user_id || user.id || "");
@@ -57,7 +57,7 @@ export default function EditProfileScreen() {
   // Update local state when user changes (e.g., after editing name)
   useEffect(() => {
     if (user) {
-      setAvatar(user.avatar || "https://i.pravatar.cc/150?img=default");
+      setAvatar(user.avatar || "");
       setUsername(user.name || "Unknown");
       setPhone(user.phone || "");
       setAccountId(user.id || "");
@@ -84,7 +84,7 @@ export default function EditProfileScreen() {
         <View style={styles.row}>
           <Text style={styles.rowLabel}>头像</Text>
           <View style={styles.rightContent}>
-            <Image source={{ uri: avatar }} style={styles.avatar} />
+            <Image source={avatar ? { uri: avatar } : require('../../../assets/images/anonymous.png')} style={styles.avatar} />
           </View>
         </View>
 

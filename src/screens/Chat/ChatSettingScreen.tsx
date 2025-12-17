@@ -296,7 +296,7 @@ export default function ChatSettingScreen() {
     );
   };
 
-  const displayAvatar = contactInfo?.avatar || avatar || `https://i.pravatar.cc/150?u=${chatId}`;
+  const displayAvatar = contactInfo?.avatar || avatar || '';
   const displayName = contactInfo?.name?.replace(/^用户/, '') || chatName;
   const onlineStatus = contactInfo?.online ? '在线' : '离线';
 
@@ -340,7 +340,7 @@ export default function ChatSettingScreen() {
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
             <Image
-              source={{ uri: displayAvatar }}
+              source={displayAvatar ? { uri: displayAvatar } : require('../../assets/images/anonymous.png')}
               style={styles.avatarImage}
             />
           </View>

@@ -1,25 +1,25 @@
-import React, { useState, useRef, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  StatusBar,
-  Image,
-  Alert,
-  ActivityIndicator,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { createFriendRequest, searchUser } from "../../api/Friend";
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
-import { colors, borders, typography } from "../../styles";
-import { LinearGradient } from "expo-linear-gradient";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
 import { useUserStore } from "../../store/userStore";
-import { searchUser, createFriendRequest } from "../../api/Friend";
+import { borders, colors, typography } from "../../styles";
 
 // Define proper types matching API response
 interface SearchResult {
@@ -89,12 +89,12 @@ export default function AddFriendScreen() {
     try {
       const result = await searchUser(searchText.trim());
 
-      console.log("=== Search Result Debug ===");
-      console.log("Full result:", JSON.stringify(result, null, 2));
-      console.log("result.success:", result.success);
-      console.log("result.user:", result.user);
-      console.log("Is array:", Array.isArray(result.user));
-      console.log("Array length:", result.user?.length);
+      // console.log("=== Search Result Debug ===");
+      // console.log("Full result:", JSON.stringify(result, null, 2));
+      // console.log("result.success:", result.success);
+      // console.log("result.user:", result.user);
+      // console.log("Is array:", Array.isArray(result.user));
+      // console.log("Array length:", result.user?.length);
 
       if (!isMounted.current) return;
 

@@ -11,7 +11,7 @@ type IncomingMessage = {
   createdAt?: string;
 };
 
-const WS_URL = 'https://ws.ngrok-free.dev/websocket';
+const WS_URL = 'https://ws.ngrok-free.dev';
 
 export const useWebSocket = () => {
   const wsRef = useRef<WebSocket | null>(null);

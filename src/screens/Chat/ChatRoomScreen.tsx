@@ -2,11 +2,13 @@ import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useLayoutEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -17,17 +19,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
-import { readChatMessages } from '../../api/Chat';
-import { colors, borders, typography } from "../../styles";
-import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
+import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
+import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
-import * as ImagePicker from 'expo-image-picker';
-import { useWebSocket } from '../../services/websocket'; // Import WebSocket hook
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -62,14 +61,11 @@ export default function ChatRoomScreen() {
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
   const currentUserId = currentUser?.id || 'me';
-  const currentUserAvatar = currentUser?.avatar || 'https://i.pravatar.cc/150?img=default';
+  const currentUserAvatar = currentUser?.avatar || '';
   const currentUserName = currentUser?.name || '我';
 
   const { getChatById, chats, addMessage, clearChat } = useChatStore();
   const storedMessages = chats[chatId] || [];
-
-  // Initialize WebSocket hook
-  const { sendMessage: sendWebSocketMessage } = useWebSocket();
 
   const [inputText, setInputText] = useState('');
   const [showToolbar, setShowToolbar] = useState(false);
@@ -77,6 +73,7 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [offset, setOffset] = useState(0);
+  const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
 
   // Voice message state
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -87,6 +84,25 @@ export default function ChatRoomScreen() {
   useEffect(() => {
     loadMessages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // Listen for WebSocket message notifications
+  useEffect(() => {
+    const handleWebSocketMessage = (data: any) => {
+      // receive and refresh
+      if (data.type && data.message && !data.content) {
+        console.log('New message notification - refreshing messages');
+        loadMessages(false);
+      }
+    };
+
+    // Register callback
+    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+
+    // Cleanup
+    return () => {
+      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+    };
   }, [chatId]);
 
   const loadMessages = async (loadMore = false) => {
@@ -105,18 +121,50 @@ export default function ChatRoomScreen() {
         offset: currentOffset,
       });
 
-      console.log("=== Load Messages Debug ===");
-      console.log("API Result:", result);
+      // console.log("=== Load Messages Debug ===");
+      // console.log("API Result:", result);
 
       if (result.success && result.data) {
-        // Transform API response to message format
-        const apiMessages = Array.isArray(result.data) ? result.data : [];
+        // Get messages from result.data.chat (backend returns {chat: [...], group: [...]})
+        const apiMessages = result.data.chat || [];
+        const groupMembers = result.data.group || [];
 
         console.log("API Messages count:", apiMessages.length);
+        // console.log("Group members:", groupMembers);
 
-        // TODO: Store messages in chatStore
-        // You'll need to add a method to bulk load messages
-        // For now, messages will be shown from local store
+        // Extract member user IDs and store them
+        const memberIds = groupMembers.map((member: any) => member.user_id);
+        setChatMembers(memberIds);
+
+        if (apiMessages.length > 0) {
+          // Transform API messages to store format
+          const transformedMessages = apiMessages.map((msg: any) => {
+            // Parse the message field (it's a JSON string like {"type":1,"message":"Test6"})
+            let messageText = '';
+            try {
+              const parsedMessage = JSON.parse(msg.message);
+              messageText = parsedMessage.message || '';
+            } catch (e) {
+              console.error('Failed to parse message:', msg.message);
+              messageText = msg.message;
+            }
+
+            return {
+              id: msg.message_id,
+              text: messageText,
+              createdAt: msg.created_at,
+              senderId: msg.sender,
+              name: msg.sender === currentUserId ? currentUserName : undefined,
+              avatar: msg.sender === currentUserId ? currentUserAvatar : undefined,
+            };
+          });
+
+          // console.log("Transformed messages:", transformedMessages);
+
+          // Store messages in chatStore
+          const { setMessages } = useChatStore.getState();
+          setMessages(chatId, transformedMessages);
+        }
 
         if (loadMore) {
           setOffset(currentOffset + apiMessages.length);
@@ -215,14 +263,58 @@ export default function ChatRoomScreen() {
 
     const messageText = inputText.trim();
 
-    // Send message via WebSocket
-    sendWebSocketMessage(chatId, messageText);
-
-    // Clear input field
+    // Clear input field immediately for better UX
     setInputText('');
 
-    // Note: addMessage is now called in the WebSocket hook,
-    // so we don't need to call it here again
+    try {
+      // Step 1: Save message to database via API
+      const receiver = chatMembers.filter(id => id !== currentUserId);
+
+      console.log("=== Sending Message ===");
+      console.log("Sender:", currentUserId);
+      console.log("Receiver:", receiver);
+      console.log("Chat ID:", chatId);
+      console.log("Message:", messageText);
+
+      const result = await sendChatMessage({
+        sender: currentUserId,
+        receiver: receiver,
+        chat_id: chatId,
+        message: messageText
+      });
+
+      console.log("Send message result:", result);
+
+      if (result.success && result.data) {
+        // Step 2: Forward message via WebSocket
+        const forwarded = WebSocketManager.sendForwardMessage({
+          type: result.data.type,
+          message: messageText,
+          message_id: result.data.message_id,
+          sender: currentUserId,
+          receiver: receiver,
+          chat_id: chatId
+        });
+
+        if (!forwarded) {
+          console.warn('WebSocket not connected, message saved but not forwarded');
+        }
+
+        // Note: addMessage is called in WebSocketManager when message is confirmed
+        // For now, add message locally for immediate feedback
+      } else {
+        console.error("Failed to send message:", result.message);
+        // Optionally show error to user
+        Alert.alert('发送失败', result.message || '消息发送失败，请重试');
+        // Restore the message in input field
+        setInputText(messageText);
+      }
+    } catch (error) {
+      console.error("Error sending message:", error);
+      Alert.alert('发送失败', '网络错误，请重试');
+      // Restore the message in input field
+      setInputText(messageText);
+    }
   };
 
   const handleClearChat = () => {
@@ -253,7 +345,7 @@ export default function ChatRoomScreen() {
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
-        avatar: 'https://i.pravatar.cc/150?img=' + chatId
+        avatar: chat?.avatar || ''
       });
     }
   };
@@ -306,7 +398,7 @@ export default function ChatRoomScreen() {
       {item.sender === 'other' && (
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: item.avatar || `https://i.pravatar.cc/150?u=${chatId}` }}
+            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
             style={roomStyles.avatarImage}
           />
         </View>
@@ -327,7 +419,7 @@ export default function ChatRoomScreen() {
       {item.sender === 'me' && (
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: currentUserAvatar }}
+            source={currentUserAvatar ? { uri: currentUserAvatar } : require('../../assets/images/anonymous.png')}
             style={roomStyles.avatarImage}
           />
         </View>
@@ -384,7 +476,7 @@ export default function ChatRoomScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <FlatList
-            data={[...messages].reverse()}
+            data={[...messages]}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
