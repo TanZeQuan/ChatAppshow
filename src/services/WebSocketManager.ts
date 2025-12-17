@@ -33,11 +33,20 @@ class WebSocketManager {
       console.log('=== WebSocket Connecting ===');
       console.log('User ID:', userId);
       console.log('WS URL:', WS_URL);
+      console.log('⏳ Creating WebSocket connection...');
 
-      this.ws = new WebSocket(WS_URL);
+      try {
+        this.ws = new WebSocket(WS_URL);
+        console.log('✅ WebSocket object created, waiting for connection...');
+      } catch (error) {
+        console.error('❌ Failed to create WebSocket:', error);
+        reject(error);
+        return;
+      }
 
       this.ws.onopen = () => {
-        console.log('WebSocket connection opened');
+        console.log('✅ WebSocket connection opened successfully!');
+        console.log('📤 Sending login message...');
 
         // Send login message
         this.sendLoginMessage();
@@ -78,14 +87,56 @@ class WebSocketManager {
         this.handleMessage(event);
       };
 
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-        reject(error);
+      this.ws.onerror = (error: any) => {
+        // Extract useful info from error event
+        console.error('❌ WebSocket error occurred');
+        console.error('ReadyState:', error.target?.readyState);
+        console.error('URL:', error.target?.url);
+
+        // Don't reject here - wait for onclose to get the real error details
       };
 
       this.ws.onclose = (event) => {
-        console.log('WebSocket closed:', event.code, event.reason);
+        console.log('=== WebSocket Closed ===');
+        console.log('Close Code:', event.code);
+        console.log('Close Reason:', event.reason || '(no reason provided)');
+        console.log('Was Clean:', event.wasClean);
+
+        // Explain common close codes
+        const closeCodeExplanations: Record<number, string> = {
+          1000: 'Normal closure',
+          1001: 'Going away (e.g., server going down or browser navigating away)',
+          1002: 'Protocol error',
+          1003: 'Unsupported data',
+          1006: 'Abnormal closure (no close frame received) - Usually network/connection issue',
+          1007: 'Invalid frame payload data',
+          1008: 'Policy violation',
+          1009: 'Message too big',
+          1010: 'Missing extension',
+          1011: 'Internal server error',
+          1015: 'TLS handshake failed',
+        };
+
+        const explanation = closeCodeExplanations[event.code];
+        if (explanation) {
+          console.log('Explanation:', explanation);
+        }
+
+        // Common issues and solutions
+        if (event.code === 1006) {
+          console.log('🔍 Troubleshooting tips:');
+          console.log('  - Check if backend WebSocket server is running');
+          console.log('  - Verify ngrok tunnel is active: wss://ws.ngrok-free.dev');
+          console.log('  - Check network connectivity');
+          console.log('  - Ensure firewall allows WebSocket connections');
+        }
+
         this.isConnected = false;
+
+        // Reject the connection promise if this happens during initial connection
+        if (event.code !== 1000) {
+          reject(new Error(`WebSocket closed with code ${event.code}: ${explanation || event.reason || 'Unknown error'}`));
+        }
 
         // Auto-reconnect if not a normal closure
         if (event.code !== 1000 && this.userId) {

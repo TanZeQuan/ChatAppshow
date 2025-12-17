@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect, useEffect, useCallback } from 'react';
+import React, { useState, useLayoutEffect, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -64,7 +64,7 @@ export default function GroupRoomScreen() {
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    const { chats, addMessage, clearChat, getChatById, setMessages } = useChatStore();
+    const { addMessage, clearChat, getChatById, setMessages } = useChatStore();
 
     // Get real-time data from store
     const groupChat = getChatById(chatId);
@@ -88,7 +88,10 @@ export default function GroupRoomScreen() {
 
     const memberIds = groupChat?.memberIds || [];
 
-    const storedMessages = chats[chatId] || [];
+    // Use selector to subscribe to messages for this chat (reactive)
+    const messagesFromStore = useChatStore((state) => state.chats[chatId]);
+    // Use useMemo to avoid creating new array reference on every render
+    const storedMessages = useMemo(() => messagesFromStore || [], [messagesFromStore]);
 
     const [inputText, setInputText] = useState('');
     const [showToolbar, setShowToolbar] = useState(false);
@@ -189,7 +192,6 @@ export default function GroupRoomScreen() {
                 offset: currentOffset,
             });
 
-
             if (result.success && result.data) {
                 // API returns { chat: [], group: [] }
                 // Determine which array to use based on chat type
@@ -227,7 +229,7 @@ export default function GroupRoomScreen() {
                         setOffset(transformedMessages.length);
                     } else {
                         // Append messages when loading more
-                        const existingMessages = chats[chatId] || [];
+                        const existingMessages = storedMessages;
                         const allMessages = [...existingMessages, ...transformedMessages];
                         // Remove duplicates based on message id
                         const uniqueMessages = Array.from(
@@ -252,7 +254,7 @@ export default function GroupRoomScreen() {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [currentUserId, chatId, offset, params.isGroup, setMessages, chats]);
+    }, [currentUserId, chatId, offset, params.isGroup, setMessages, storedMessages]);
 
     // Load messages on mount
     useEffect(() => {
@@ -312,8 +314,8 @@ export default function GroupRoomScreen() {
                     console.warn('WebSocket not connected, message saved but not forwarded');
                 }
 
-                // Add message locally for immediate feedback
-                addMessage(chatId, messageText);
+                // Refresh messages from API to get correct server timestamp
+                await loadMessages(false);
             } else {
                 console.error("Failed to send message:", result.message);
                 Alert.alert('发送失败', result.message || '消息发送失败，请重试');
