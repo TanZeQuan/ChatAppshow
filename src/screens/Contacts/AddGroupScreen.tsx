@@ -202,7 +202,7 @@ export default function AddGroupScreen() {
       >
         <View style={styles.contactLeft}>
           <Image
-            source={{ uri: item.avatar || `https://i.pravatar.cc/150?u=${item.id}` }}
+            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
             style={styles.contactAvatar}
           />
           <View style={styles.contactInfo}>

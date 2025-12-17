@@ -114,7 +114,7 @@ export const createGroupChat = async ({
     }
 };
 
-
+// chatList
 export const readUserChats = async (user_id: string) => {
     try {
         const formData = new FormData();
@@ -156,6 +156,7 @@ export const readUserChats = async (user_id: string) => {
 };
 
 
+// chatMsg
 export const readChatMessages = async ({
     chat_id,
     user_id,

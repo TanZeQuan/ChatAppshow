@@ -62,7 +62,7 @@ export default function ChatRoomScreen() {
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
   const currentUserId = currentUser?.id || 'me';
-  const currentUserAvatar = currentUser?.avatar || 'https://i.pravatar.cc/150?img=default';
+  const currentUserAvatar = currentUser?.avatar || '';
   const currentUserName = currentUser?.name || '我';
 
   const { getChatById, chats, addMessage, clearChat } = useChatStore();
@@ -253,7 +253,7 @@ export default function ChatRoomScreen() {
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
-        avatar: 'https://i.pravatar.cc/150?img=' + chatId
+        avatar: chat?.avatar || ''
       });
     }
   };
@@ -306,7 +306,7 @@ export default function ChatRoomScreen() {
       {item.sender === 'other' && (
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: item.avatar || `https://i.pravatar.cc/150?u=${chatId}` }}
+            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
             style={roomStyles.avatarImage}
           />
         </View>
@@ -327,7 +327,7 @@ export default function ChatRoomScreen() {
       {item.sender === 'me' && (
         <View style={roomStyles.avatar}>
           <Image
-            source={{ uri: currentUserAvatar }}
+            source={currentUserAvatar ? { uri: currentUserAvatar } : require('../../assets/images/anonymous.png')}
             style={roomStyles.avatarImage}
           />
         </View>

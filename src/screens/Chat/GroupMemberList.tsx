@@ -63,7 +63,7 @@ export default function GroupMemberList() {
                     {
                         id: currentUserId,
                         name: currentUser.name || '我',
-                        avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUserId}`,
+                        avatar: currentUser.avatar || '',
                     }
                 ];
             }
@@ -175,7 +175,7 @@ export default function GroupMemberList() {
                 }}
             >
                 <Image
-                    source={{ uri: member.avatar || `https://i.pravatar.cc/150?u=${member.id}` }}
+                    source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
                     style={styles.memberAvatar}
                 />
                 <View style={styles.memberInfo}>

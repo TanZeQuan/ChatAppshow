@@ -219,7 +219,7 @@ export default function ChatListScreen() {
         {displayMembers.map((member, index) => (
           <Image
             key={index}
-            source={{ uri: member.avatar || `https://i.pravatar.cc/150?img=${index}` }}
+            source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
             style={[
               styles.groupAvatarImage,
               displayMembers.length === 2 && styles.groupAvatar2,

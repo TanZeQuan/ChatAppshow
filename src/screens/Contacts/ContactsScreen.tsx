@@ -337,7 +337,7 @@ export default function ContactsScreen() {
             >
               <View style={styles.avatarContainer}>
                 <Image
-                  source={{ uri: item.avatar || "https://i.pravatar.cc/150?img=" + item.id }}
+                  source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
                   style={styles.avatarImage}
                 />
                 {item.online && <View style={styles.onlineDot} />}

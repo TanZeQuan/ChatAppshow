@@ -76,7 +76,7 @@ export default function GroupRoomScreen() {
             ? [{
                 id: currentUserId,
                 name: currentUser.name || '我',
-                avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUserId}`,
+                avatar: currentUser.avatar || '',
             }]
             : []
         ),
@@ -353,7 +353,7 @@ export default function GroupRoomScreen() {
             {item.sender === 'other' && (
                 <View style={roomStyles.avatar}>
                     <Image
-                        source={{ uri: item.avatar || `https://i.pravatar.cc/150?img=${item.senderId}` }}
+                        source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
                         style={roomStyles.avatarImage}
                     />
                 </View>
@@ -376,7 +376,7 @@ export default function GroupRoomScreen() {
             {item.sender === 'me' && (
                 <View style={roomStyles.avatar}>
                     <Image
-                        source={{ uri: currentUser?.avatar || `https://i.pravatar.cc/150?img=${currentUserId}` }}
+                        source={currentUser?.avatar ? { uri: currentUser.avatar } : require('../../assets/images/anonymous.png')}
                         style={roomStyles.avatarImage}
                     />
                 </View>

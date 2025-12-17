@@ -63,7 +63,7 @@ export default function GroupSettingScreen() {
                 {
                     id: currentUserId,
                     name: currentUser.name || '我',
-                    avatar: currentUser.avatar || `https://i.pravatar.cc/150?u=${currentUserId}`,
+                    avatar: currentUser.avatar || '',
                 }
             ];
         }
@@ -495,7 +495,7 @@ export default function GroupSettingScreen() {
             >
                 <View style={styles.memberAvatarContainer}>
                     <Image
-                        source={{ uri: member.avatar || `https://i.pravatar.cc/150?img=${index}` }}
+                        source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
                         style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
                     />
                     {isFriend && !isCurrentUser && (
@@ -585,7 +585,7 @@ export default function GroupSettingScreen() {
                                 {allMembers.slice(0, 4).map((member, index) => (
                                     <Image
                                         key={index}
-                                        source={{ uri: member.avatar || `https://i.pravatar.cc/150?img=${index}` }}
+                                        source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
                                         style={styles.groupAvatarImage}
                                     />
                                 ))}
