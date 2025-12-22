@@ -17,6 +17,7 @@ class WebSocketManager {
   private reconnectDelay = 3000;
 
   private messageCallbacks: MessageCallback[] = [];
+  private heartbeatTimer: any = null;
 
   // 👉 login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
@@ -62,14 +63,17 @@ class WebSocketManager {
         console.log('✅ WS opened');
         this.sendLoginMessage();
 
-        // ⏳ login timeout
+        // ⏳ login timeout - 后端登录成功不发送响应，2秒内没收到失败消息就认为成功
         this.loginTimeoutTimer = setTimeout(() => {
           if (!this.isConnected) {
-            console.error('❌ Login timeout');
-            this.loginRejecter?.(new Error('Login timeout'));
+            console.log('✅ Login success (no error received)');
+            this.isConnected = true;
+            this.reconnectAttempts = 0;
+            this.startHeartbeat();
+            this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
-        }, 5000);
+        }, 2000);
       };
 
       /* ---------- MESSAGE ---------- */
@@ -87,6 +91,7 @@ class WebSocketManager {
         console.log('🔌 WS closed:', event.code, event.reason);
 
         this.isConnected = false;
+        this.stopHeartbeat();
         this.cleanupLoginPromise();
 
         if (event.code !== 1000 && this.userId) {
@@ -119,19 +124,25 @@ class WebSocketManager {
       const data = JSON.parse(event.data);
       console.log('📨 WS message:', data);
 
-      /* ---------- LOGIN SUCCESS ---------- */
-      if (!this.isConnected && data.message === 'Connected' && data.type === 1) {
+      /* ---------- IGNORE HEARTBEAT ERROR ---------- */
+      // 心跳消息后端不认识，返回错误，直接忽略
+      if (data.status === 0 && data.message === 'Connection Establishing Failed.') {
+        console.log('⚠️ Heartbeat error (ignored)');
+        return;
+      }
+
+      /* ---------- LOGIN SUCCESS (按文档) ---------- */
+      if (!this.isConnected && data.type === 1 && data.message === 'Connected') {
+        console.log('✅ Login success (from server)');
         this.isConnected = true;
         this.reconnectAttempts = 0;
-
-        console.log('✅ Login success');
-
+        this.startHeartbeat();
         this.loginResolver?.(true);
         this.cleanupLoginPromise();
         return;
       }
 
-      /* ---------- LOGIN FAILED ---------- */
+      /* ---------- LOGIN FAILED (按文档) ---------- */
       if (!this.isConnected && data.type === 0) {
         console.error('❌ Login failed:', data.message);
         this.loginRejecter?.(new Error(data.message || 'Login failed'));
@@ -139,19 +150,37 @@ class WebSocketManager {
         return;
       }
 
-      /* ---------- FORWARD ACK ---------- */
-      if (data.content === 'Success' && data.type === 1) {
-        console.log('✅ Message forwarded');
+      /* ---------- FORWARD ACK (按文档) ---------- */
+      // 文档格式: {type: 1, content: "Success"}
+      if (data.type === 1 && data.content === 'Success') {
+        console.log('✅ Message forwarded (documented format)');
         return;
       }
 
-      /* ---------- INCOMING MESSAGE NOTIFY ---------- */
-      if (data.type === 1 && data.message && !data.content) {
-        this.messageCallbacks.forEach(cb => cb(data));
+      // 兼容实际后端格式: {status: 1, message: "Success"}
+      if (data.status === 1 && data.message === 'Success') {
+        console.log('✅ Message forwarded (backend format)');
+        return;
+      }
+
+      /* ---------- INCOMING MESSAGE (按文档和实际) ---------- */
+      // 文档格式: {type: 1, message: "..."}
+      // 实际格式: {status: 1, type: 1, message: "..."}
+      // 检查：有 type 和 message，但没有 content
+      if (data.type && data.message && !data.content) {
+        console.log('🔔 Incoming message detected, triggering callbacks');
+        console.log('Message data:', data);
+        console.log('Callbacks count:', this.messageCallbacks.length);
+        this.messageCallbacks.forEach((cb, index) => {
+          console.log(`Calling callback ${index + 1}`);
+          cb(data);
+        });
         return;
       }
 
       /* ---------- FALLBACK ---------- */
+      console.log('⚠️ Message not handled by specific conditions, using fallback');
+      console.log('Fallback data:', data);
       this.messageCallbacks.forEach(cb => cb(data));
 
     } catch (err) {
@@ -215,6 +244,7 @@ class WebSocketManager {
     }
 
     this.isConnected = false;
+    this.stopHeartbeat();
     this.userId = null;
     this.reconnectAttempts = 0;
 
@@ -255,6 +285,27 @@ class WebSocketManager {
 
   isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /* ===============================
+     Heartbeat (每20秒发送一次，防止后端30秒超时断开)
+  =============================== */
+  private startHeartbeat() {
+    this.stopHeartbeat(); // 先清除旧的定时器
+
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws && this.isConnected) {
+        console.log('💓 Sending heartbeat');
+        this.ws.send(JSON.stringify({ msg: 'ping' }));
+      }
+    }, 20000); // 每20秒发送一次
+  }
+
+  private stopHeartbeat() {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 }
 

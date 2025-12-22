@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { Dimensions, ViewStyle } from "react-native";
@@ -8,6 +8,9 @@ import { MainTabParamList } from "./types";
 import ChatStack from "./stacks/ChatStack";
 import ContactsStack from "./stacks/ContactStack";
 import ProfileStack from "./stacks/ProfileStack";
+
+import { useUserStore } from "../store/userStore";
+import WebSocketManager from "../services/WebSocketManager";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -116,5 +119,30 @@ function MainTabsContent() {
 }
 
 export default function MainTabs() {
+  const user = useUserStore((state) => state.user);
+
+  useEffect(() => {
+    // 当 MainTabs 加载时，自动连接 WebSocket
+    if (user?.id) {
+      console.log('🔌 MainTabs: Initializing WebSocket connection for user:', user.id);
+
+      WebSocketManager.connect(user.id)
+        .then(() => {
+          console.log('✅ MainTabs: WebSocket connected successfully');
+        })
+        .catch((error) => {
+          console.error('❌ MainTabs: WebSocket connection failed:', error);
+        });
+    }
+
+    // 组件卸载时断开连接（用户登出时）
+    return () => {
+      if (user?.id) {
+        console.log('🔌 MainTabs: Disconnecting WebSocket');
+        WebSocketManager.disconnect();
+      }
+    };
+  }, [user?.id]);
+
   return <MainTabsContent />;
 }
