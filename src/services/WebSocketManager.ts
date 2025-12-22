@@ -165,7 +165,6 @@ class WebSocketManager {
       /* ---------- INCOMING MESSAGE (按文档和实际) ---------- */
       // 文档格式: {type: 1, message: "..."}
       // 实际格式: {status: 1, type: 1, message: "..."}
-      // 检查：有 type 和 message，但没有 content
       if (data.type && data.message && !data.content) {
         console.log('🔔 Incoming message detected, triggering callbacks');
         console.log('Message data:', data);

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -21,6 +21,7 @@ import { borders, colors, typography } from "../../styles";
 import { createPrivateChat, readUserChats } from '../../api/Chat';
 import { readFriends } from '../../api/Friend';
 import { useUserStore } from '../../store/userStore';
+import WebSocketManager from '../../services/WebSocketManager';
 
 const { width, height } = Dimensions.get("window");
 
@@ -44,6 +45,30 @@ export default function ChatListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
+
+  // Listen for WebSocket messages (GLOBAL - works even when not in chat room)
+  useEffect(() => {
+    const handleWebSocketMessage = (data: any) => {
+      console.log('🔔 [ChatList] WebSocket message received');
+      console.log('Message data:', data);
+
+      // When ANY message is received, refresh the chat list
+      // This ensures the chat list shows the latest message preview
+      if (data.type && data.message && !data.content) {
+        console.log('✅ [ChatList] New message detected - refreshing chat list');
+        silentRefresh();
+      }
+    };
+
+    console.log('📝 [ChatList] Registering global WebSocket callback');
+    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+
+    return () => {
+      console.log('🗑️ [ChatList] Removing global WebSocket callback');
+      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Build comprehensive chat list - keeping only the LATEST chat for each unique contact/group
   const allChats = useMemo(() => {

@@ -93,18 +93,29 @@ export default function ChatRoomScreen() {
   // Listen for WebSocket message notifications
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
+      console.log('🔔 WebSocket callback triggered in ChatRoom');
+      console.log('Received data:', data);
+
       // receive and refresh
+      // 后端格式: {status: 1, type: X, message: "..."}
       if (data.type && data.message && !data.content) {
-        console.log('New message notification - refreshing messages');
+        console.log('✅ New message notification - refreshing messages for chatId:', chatId);
         loadMessages(false);
+      } else {
+        console.log('⚠️ Message data does not match criteria');
+        console.log('Has type?', !!data.type);
+        console.log('Has message?', !!data.message);
+        console.log('Has content?', !!data.content);
       }
     };
 
+    console.log('📝 Registering WebSocket callback for chatId:', chatId);
     // Register callback
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
 
     // Cleanup
     return () => {
+      console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
   }, [chatId]);
