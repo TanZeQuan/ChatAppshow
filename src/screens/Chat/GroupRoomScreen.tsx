@@ -329,17 +329,30 @@ export default function GroupRoomScreen() {
 
             if (result.success && result.data) {
                 // Step 2: Forward message via WebSocket
-                const forwarded = WebSocketManager.sendForwardMessage({
-                    type: result.data.type,
-                    message: messageText,
-                    message_id: result.data.message_id,
-                    sender: currentUserId,
-                    receiver: receiver,
-                    chat_id: chatId
-                });
+                // Use isreceive from API response if available, otherwise use receiver
+                const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
+                    ? result.data.isreceive
+                    : receiver;
 
-                if (!forwarded) {
-                    console.warn('WebSocket not connected, message saved but not forwarded');
+                console.log("Actual receivers for WebSocket:", actualReceivers);
+
+                // Only send via WebSocket if there are receivers
+                if (actualReceivers.length > 0) {
+                    const forwarded = WebSocketManager.sendForwardMessage({
+                        type: result.data.type,
+                        message: messageText,
+                        message_id: result.data.message_id,
+                        sender: currentUserId,
+                        receiver: actualReceivers,
+                        chat_id: chatId
+                    });
+
+                    if (!forwarded) {
+                        console.warn('⚠️ WebSocket not connected, message saved but not forwarded');
+                    }
+                } else {
+                    console.warn('⚠️ No receivers found, skipping WebSocket forward');
+                    console.warn('Group chat members data might be missing');
                 }
 
                 // Refresh messages from API to get correct server timestamp
