@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -20,8 +20,8 @@ import { borders, colors, typography } from "../../styles";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { createPrivateChat, readUserChats } from '../../api/Chat';
 import { readFriends } from '../../api/Friend';
-import { useUserStore } from '../../store/userStore';
 import WebSocketManager from '../../services/WebSocketManager';
+import { useUserStore } from '../../store/userStore';
 
 const { width, height } = Dimensions.get("window");
 
@@ -59,12 +59,9 @@ export default function ChatListScreen() {
         silentRefresh();
       }
     };
-
-    console.log('📝 [ChatList] Registering global WebSocket callback');
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
 
     return () => {
-      console.log('🗑️ [ChatList] Removing global WebSocket callback');
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,24 +1,23 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   Alert,
-  ScrollView,
+  Dimensions,
+  RefreshControl,
   StyleSheet as RNStyleSheet,
+  ScrollView,
   Text,
   TouchableOpacity,
   View,
-  Dimensions,
-  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as ImagePicker from 'expo-image-picker';
-import { colors, borders, typography } from "../../styles";
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { useUserStore } from '../../store/userStore';
 import { readUsers, updateUserInfo } from '../../api/User';
 import { Avatar } from '../../components/Avatar';
-import WebSocketManager from '../../services/WebSocketManager';
+import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -221,7 +220,6 @@ export default function ProfileScreen() {
         style: "destructive",
         onPress: () => {
           console.log('🔌 ProfileScreen: Logging out, disconnecting WebSocket');
-          WebSocketManager.logout();
           logout();
         }
       }

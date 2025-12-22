@@ -4,7 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useLayoutEffect, useState, useMemo, useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -191,14 +191,11 @@ export default function ChatRoomScreen() {
 
       // receive and refresh
       // 后端格式: {status: 1, type: X, message: "..."}
-      if (data.type && data.message && !data.content) {
-        console.log('✅ New message notification - refreshing messages for chatId:', chatId);
-        loadMessages(false);
+      if (data.type === 'chat' && data.chat_id === chatId) {
+  console.log('🔄 Reload messages for chat:', chatId);
+  loadMessages(false);
       } else {
         console.log('⚠️ Message data does not match criteria');
-        console.log('Has type?', !!data.type);
-        console.log('Has message?', !!data.message);
-        console.log('Has content?', !!data.content);
       }
     };
 
@@ -313,7 +310,7 @@ export default function ChatRoomScreen() {
         sender: currentUserId,
         receiver: receiver,
         chat_id: chatId,
-        message: messageText
+        message: messageText,
       });
 
       console.log("Send message result:", result);
