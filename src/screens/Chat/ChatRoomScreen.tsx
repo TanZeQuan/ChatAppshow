@@ -4,7 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useLayoutEffect, useState, useMemo } from 'react';
+import React, { useEffect, useLayoutEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -76,51 +76,18 @@ export default function ChatRoomScreen() {
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [offset, setOffset] = useState(0);
-  const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
+  const [chatMembers, setChatMembers] = useState<string[]>([]);
+
+  // Use ref instead of state for offset to avoid unnecessary re-renders
+  const offsetRef = useRef(0);
 
   // Voice message state
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Load messages on mount
-  useEffect(() => {
-    loadMessages();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId]);
-
-  // Listen for WebSocket message notifications
-  useEffect(() => {
-    const handleWebSocketMessage = (data: any) => {
-      console.log('🔔 WebSocket callback triggered in ChatRoom');
-      console.log('Received data:', data);
-
-      // receive and refresh
-      // 后端格式: {status: 1, type: X, message: "..."}
-      if (data.type && data.message && !data.content) {
-        console.log('✅ New message notification - refreshing messages for chatId:', chatId);
-        loadMessages(false);
-      } else {
-        console.log('⚠️ Message data does not match criteria');
-        console.log('Has type?', !!data.type);
-        console.log('Has message?', !!data.message);
-        console.log('Has content?', !!data.content);
-      }
-    };
-
-    console.log('📝 Registering WebSocket callback for chatId:', chatId);
-    // Register callback
-    WebSocketManager.addMessageCallback(handleWebSocketMessage);
-
-    // Cleanup
-    return () => {
-      console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
-      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
-    };
-  }, [chatId]);
-
-  const loadMessages = async (loadMore = false) => {
+  // Wrap loadMessages in useCallback to prevent closure issues
+  const loadMessages = useCallback(async (loadMore = false) => {
     if (!currentUserId) return;
 
     try {
@@ -128,7 +95,7 @@ export default function ChatRoomScreen() {
         setIsLoading(true);
       }
 
-      const currentOffset = loadMore ? offset : 0;
+      const currentOffset = loadMore ? offsetRef.current : 0;
 
       const result = await readChatMessages({
         chat_id: chatId,
@@ -182,9 +149,9 @@ export default function ChatRoomScreen() {
         }
 
         if (loadMore) {
-          setOffset(currentOffset + apiMessages.length);
+          offsetRef.current = currentOffset + apiMessages.length;
         } else {
-          setOffset(apiMessages.length);
+          offsetRef.current = apiMessages.length;
         }
       }
 
@@ -193,7 +160,43 @@ export default function ChatRoomScreen() {
       console.error("Error loading messages:", error);
       setIsLoading(false);
     }
-  };
+  }, [currentUserId, chatId, currentUserName, currentUserAvatar]);
+
+  // Load messages on mount
+  useEffect(() => {
+    offsetRef.current = 0; // Reset offset when entering new chat
+    loadMessages();
+  }, [loadMessages]);
+
+  // Listen for WebSocket message notifications
+  useEffect(() => {
+    const handleWebSocketMessage = (data: any) => {
+      console.log('🔔 WebSocket callback triggered in ChatRoom');
+      console.log('Received data:', data);
+
+      // receive and refresh
+      // 后端格式: {status: 1, type: X, message: "..."}
+      if (data.type && data.message && !data.content) {
+        console.log('✅ New message notification - refreshing messages for chatId:', chatId);
+        loadMessages(false);
+      } else {
+        console.log('⚠️ Message data does not match criteria');
+        console.log('Has type?', !!data.type);
+        console.log('Has message?', !!data.message);
+        console.log('Has content?', !!data.content);
+      }
+    };
+
+    console.log('📝 Registering WebSocket callback for chatId:', chatId);
+    // Register callback
+    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+
+    // Cleanup
+    return () => {
+      console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
+      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+    };
+  }, [chatId, loadMessages]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
