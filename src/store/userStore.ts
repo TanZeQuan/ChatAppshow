@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useChatStore } from './chatStore';
+import { useContactStore } from './contactStore';
 
 type User = {
   id: string;
@@ -37,11 +39,27 @@ export const useUserStore = create<UserStore>()(
       },
 
       logout: () => {
+        console.log('🔴 Logging out - clearing all stores');
+
+        // Clear user store
         set({
           user: null,
           token: null,
           isLoggedIn: false,
         });
+
+        // Clear chat store
+        const { clearAllChats } = useChatStore.getState();
+        clearAllChats();
+        console.log('✅ Chat store cleared');
+
+        // Clear contact store
+        const { clearContacts, clearFriendRequests } = useContactStore.getState();
+        clearContacts();
+        clearFriendRequests();
+        console.log('✅ Contact store cleared');
+
+        console.log('✅ All stores cleared successfully');
       },
     }),
     {
