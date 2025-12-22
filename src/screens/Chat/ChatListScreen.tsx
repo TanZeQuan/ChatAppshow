@@ -1,24 +1,24 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  Image,
-  TextInput,
   Dimensions,
+  FlatList,
+  Image,
   RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import { useChatStore } from '../../store/chatStore';
-import { colors, borders, typography } from "../../styles";
 import { useContactStore } from '../../store/contactStore';
+import { borders, colors, typography } from "../../styles";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { readUserChats, readChatMessages, createPrivateChat } from '../../api/Chat';
+import { createPrivateChat, readUserChats } from '../../api/Chat';
 import { readFriends } from '../../api/Friend';
 import { useUserStore } from '../../store/userStore';
 
@@ -435,6 +435,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: scaleWidth(16),
+    paddingTop: scaleHeight(10), 
+    paddingBottom: scaleHeight(100), // 给底部留出空间，避免被 tab bar 遮挡
   },
   chatItem: {
     flexDirection: 'row',
