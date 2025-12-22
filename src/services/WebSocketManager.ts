@@ -1,4 +1,3 @@
-import { useChatStore } from '../store/chatStore';
 import config from '../config/api';
 
 const WS_URL = config.WS_URL;
@@ -122,12 +121,12 @@ class WebSocketManager {
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
-      console.log('📨 WS message:', data);
+      // console.log('📨 WS message:', data);
 
       /* ---------- IGNORE HEARTBEAT ERROR ---------- */
       // 心跳消息后端不认识，返回错误，直接忽略
       if (data.status === 0 && data.message === 'Connection Establishing Failed.') {
-        console.log('⚠️ Heartbeat error (ignored)');
+        // console.log('⚠️ Heartbeat error (ignored)');
         return;
       }
 
