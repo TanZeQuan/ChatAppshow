@@ -41,7 +41,6 @@ export default function LoginScreen() {
           };
 
           useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
-
           console.log("最终保存到 Store 的用户资料:", fullUser);
         } else {
           console.warn("读取用户信息失败:", userResult.message);
@@ -54,7 +53,6 @@ export default function LoginScreen() {
       Alert.alert('登录异常', err.message || '未知错误');
     }
   };
-
 
   const isButtonDisabled = !phone || !password || !isChecked;
 
