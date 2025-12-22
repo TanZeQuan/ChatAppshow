@@ -66,6 +66,9 @@ export default function ChatRoomScreen() {
 
   const { getChatById, addMessage, clearChat } = useChatStore();
 
+  // Get chat metadata from store
+  const chat = getChatById(chatId);
+
   // Use selector to subscribe to messages for this chat (reactive)
   const messagesFromStore = useChatStore((state) => state.chats[chatId]);
   // Use useMemo to avoid creating new array reference on every render
@@ -77,6 +80,14 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
+
+  // 🔧 Initialize chatMembers from store if available
+  useEffect(() => {
+    if (chat?.memberIds && chat.memberIds.length > 0) {
+      console.log('📋 Using memberIds from chat store:', chat.memberIds);
+      setChatMembers(chat.memberIds);
+    }
+  }, [chat?.memberIds]);
 
   // Use ref instead of state for offset to avoid unnecessary re-renders
   const offsetRef = useRef(0);
@@ -114,9 +125,13 @@ export default function ChatRoomScreen() {
         console.log("API Messages count:", apiMessages.length);
         // console.log("Group members:", groupMembers);
 
-        // Extract member user IDs and store them
-        const memberIds = groupMembers.map((member: any) => member.user_id);
-        setChatMembers(memberIds);
+        // Extract member user IDs and store them (only if not already set from store)
+        if (groupMembers.length > 0) {
+          const memberIds = groupMembers.map((member: any) => member.user_id);
+          // Only update if chatMembers is currently empty
+          setChatMembers(prev => prev.length > 0 ? prev : memberIds);
+          console.log('📋 Using memberIds from API response:', memberIds);
+        }
 
         if (apiMessages.length > 0) {
           // Transform API messages to store format

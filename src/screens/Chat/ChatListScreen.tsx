@@ -30,7 +30,7 @@ const scaleHeight = (size: number) => (height / 812) * size;
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  const { chatList, getLastMessage } = useChatStore();
+  const { chatList, getLastMessage, addChat } = useChatStore();
   const { contacts } = useContactStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
@@ -159,9 +159,30 @@ export default function ChatListScreen() {
         console.log('Create private chat result:', result);
 
         if (result.success && result.data?.response) {
+          const newChatId = result.data.response;  // 真正的 chatID（IM75356175）
+
+          // 💾 保存 chat 信息到 store，包括 memberIds
+          addChat({
+            id: newChatId,
+            name: chat.name,
+            avatar: chat.avatar || null,
+            isGroup: false,
+            members: [
+              { id: chat.id, name: chat.name, avatar: chat.avatar },
+              { id: currentUserId, name: user?.name || '我', avatar: user?.avatar || '' }
+            ],
+            memberIds: [chat.id, currentUserId],  // ✅ 包括双方的 ID
+            lastMessage: '开始聊天',
+            timestamp: new Date().toISOString(),
+            unreadCount: 0,
+            online: chat.online || false,
+          });
+
+          console.log('✅ Chat saved to store with memberIds:', [chat.id, currentUserId]);
+
           // 使用返回的真正的 chat_id（response 直接就是 chat_id 字符串）
           navigation.navigate('ChatRoom', {
-            chatId: result.data.response,
+            chatId: newChatId,
             chatName: chat.name,
             isGroup: false,
           });
