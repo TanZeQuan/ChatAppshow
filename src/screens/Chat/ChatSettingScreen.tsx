@@ -17,7 +17,7 @@ import { colors, borders, typography } from "../../styles";
 import { useChatStore } from '../../store/chatStore';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
-import {
+import { 
   blockUser,
   deleteFriend,
   readFriends

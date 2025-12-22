@@ -192,7 +192,6 @@ export default function GroupRoomScreen() {
                 offset: currentOffset,
             });
 
-
             if (result.success && result.data) {
                 // API returns { chat: [], group: [] }
                 // Determine which array to use based on chat type
