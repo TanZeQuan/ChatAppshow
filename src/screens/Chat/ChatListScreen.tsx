@@ -30,8 +30,8 @@ const scaleHeight = (size: number) => (height / 812) * size;
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  const { chatList, getLastMessage, addChat } = useChatStore();
-  const { contacts } = useContactStore();
+  const { chatList, getLastMessage, addChat, setChats } = useChatStore();
+  const { contacts, setContacts } = useContactStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -229,14 +229,61 @@ export default function ChatListScreen() {
       // 1️⃣ Refresh chat list from API
       if (currentUserId && currentUserId !== 'YOUR_CURRENT_USER_ID') {
         const chatsResult = await readUserChats(currentUserId);
-        if (chatsResult.success) {
-          // Update your chat store here if needed
+        if (chatsResult.success && chatsResult.data) {
+          // Transform API data to chat list format
+          const formattedChats = chatsResult.data.map((chat: any) => ({
+            id: chat.chat_id,
+            name: chat.name || chat.chat_name || '未命名聊天',
+            avatar: chat.image || chat.avatar || null,
+            isGroup: chat.type === 2 || chat.isGroup || false,
+            members: chat.members || [],
+            memberIds: chat.member_ids || chat.memberIds || [],
+            lastMessage: chat.last_message || '',
+            timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
+            unreadCount: chat.unread_count || 0,
+            online: false,
+            rawData: chat,
+          }));
+
+          // Update chat store
+          setChats(formattedChats);
+          console.log('✅ Chat list updated from API:', formattedChats.length, 'chats');
         }
 
         // 2️⃣ Refresh friends/contacts
         const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
-        if (friendsResult.success) {
-          // Update your contact store here if needed
+        if (friendsResult.success && friendsResult.data) {
+          // Combine request and approve arrays (same as ContactsScreen)
+          const allFriends = [
+            ...(friendsResult.data.request || []),
+            ...(friendsResult.data.approve || [])
+          ];
+
+          // Transform API response to contact format
+          const formattedContacts = allFriends.map((friend: any) => {
+            const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
+            const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
+            const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
+
+            return {
+              id: userId,
+              name: userName,
+              avatar: userAvatar,
+              online: friend.online || friend.is_online || false,
+              listId: friend.list_id || friend.listId || 0,
+              isFriend: true,
+              rawData: friend,
+            };
+          });
+
+          // Remove duplicates based on id
+          const uniqueContacts = Array.from(
+            new Map(formattedContacts.map(contact => [contact.id, contact])).values()
+          );
+
+          // Update contact store
+          setContacts(uniqueContacts);
+          console.log('✅ Contact list updated from API:', uniqueContacts.length, 'contacts');
         }
       }
 
