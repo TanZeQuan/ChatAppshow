@@ -1,27 +1,27 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  RefreshControl,
+  SectionList,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  SectionList,
-  Image,
-  Dimensions,
-  ActivityIndicator,
-  RefreshControl,
-  Alert,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { colors, borders, typography } from "../../styles";
+import { createPrivateChat } from "../../api/Chat";
+import { readFriends } from "../../api/Friend";
+import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
-import { useChatStore } from "../../store/chatStore";
-import { readFriends } from "../../api/Friend";
-import { createPrivateChat } from "../../api/Chat";
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -197,7 +197,7 @@ export default function ContactsScreen() {
     }
 
     try {
-      console.log('Creating private chat with contact:', contact.id);
+      // console.log('Creating private chat with contact:', contact.id);
 
       // 先创建私聊，获取真正的 chatId
       const result = await createPrivateChat({
@@ -207,7 +207,7 @@ export default function ContactsScreen() {
         group: []
       });
 
-      console.log('Create private chat result:', result);
+      // console.log('Create private chat result:', result);
 
       if (result.success && result.data?.response) {
         const newChatId = result.data.response;  // 真正的 chatID（IM75356175）
@@ -229,7 +229,7 @@ export default function ContactsScreen() {
           online: contact.online || false,
         });
 
-        console.log('✅ Chat saved to store with memberIds:', [contact.id, currentUserId]);
+        // console.log('✅ Chat saved to store with memberIds:', [contact.id, currentUserId]);
 
         // 使用返回的真正的 chat_id 导航
         parentNavigation.navigate('ChatStack', {

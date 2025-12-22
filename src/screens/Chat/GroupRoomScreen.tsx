@@ -267,16 +267,11 @@ export default function GroupRoomScreen() {
             console.log('🔔 WebSocket callback triggered in GroupRoom');
             console.log('Received data:', data);
 
-            // receive and refresh
-            // 后端格式: {status: 1, type: X, message: "..."}
-            if (data.type && data.message && !data.content) {
-                console.log('✅ New message notification - refreshing group messages for chatId:', chatId);
+            // Auto-refresh on any message received
+            // 后端格式: {type: 1, message: "...", status: 1, ...}
+            if (data.type && data.message) {
+                console.log('🔄 Auto-refresh: New message received');
                 loadMessages(false);
-            } else {
-                console.log('⚠️ Message data does not match criteria');
-                console.log('Has type?', !!data.type);
-                console.log('Has message?', !!data.message);
-                console.log('Has content?', !!data.content);
             }
         };
 

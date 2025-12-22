@@ -52,9 +52,10 @@ export default function ChatListScreen() {
       console.log('🔔 [ChatList] WebSocket message received');
       console.log('Message data:', data);
 
-      // When ANY message is received, refresh the chat list
+      // When ANY chat message is received, refresh the chat list
       // This ensures the chat list shows the latest message preview
-      if (data.type && data.message && !data.content) {
+      // 后端格式: {type: 1, message: "...", status: 1, ...}
+      if (data.type && data.message) {
         console.log('✅ [ChatList] New message detected - refreshing chat list');
         silentRefresh();
       }

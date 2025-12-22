@@ -108,7 +108,7 @@ class WebSocketManager {
       user_id: this.userId,
     };
 
-    console.log("📤 login →", payload);
+    // console.log("📤 login →", payload);
     this.ws.send(JSON.stringify(payload));
   }
 
@@ -156,9 +156,10 @@ class WebSocketManager {
       }
 
       /* ---------- INCOMING MESSAGE (按文档和实际) ---------- */
-      // 文档格式: {type: 1, message: "..."}
-      // 实际格式: {status: 1, type: 1, message: "..."}
-      if (data.type === "chat" && data.chat_id && data.sender && data.content) {
+      // 后端消息格式: {type: 1, message: "...", status: 1, ...}
+      // type 是数字: 1=文本, 2=图片等
+      // 只要有 type 和 message 就是聊天消息
+      if (data.type && data.message) {
         console.log("📩 Incoming chat message");
         this.messageCallbacks.forEach((cb) => cb(data));
         return;
@@ -166,7 +167,7 @@ class WebSocketManager {
 
       /* ---------- FALLBACK ---------- */
       console.log(
-        "⚠️ Message not handled by specific conditions, using fallback"
+        // "⚠️ Message not handled by specific conditions, using fallback"
       );
       console.log("Fallback data:", data);
       this.messageCallbacks.forEach((cb) => cb(data));

@@ -84,7 +84,7 @@ export default function ChatRoomScreen() {
   // 🔧 Initialize chatMembers from store if available
   useEffect(() => {
     if (chat?.memberIds && chat.memberIds.length > 0) {
-      console.log('📋 Using memberIds from chat store:', chat.memberIds);
+      // console.log('📋 Using memberIds from chat store:', chat.memberIds);
       setChatMembers(chat.memberIds);
     }
   }, [chat?.memberIds]);
@@ -130,7 +130,7 @@ export default function ChatRoomScreen() {
           const memberIds = groupMembers.map((member: any) => member.user_id);
           // Only update if chatMembers is currently empty
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
-          console.log('📋 Using memberIds from API response:', memberIds);
+          // console.log('📋 Using memberIds from API response:', memberIds);
         }
 
         if (apiMessages.length > 0) {
@@ -186,26 +186,24 @@ export default function ChatRoomScreen() {
   // Listen for WebSocket message notifications
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
-      console.log('🔔 WebSocket callback triggered in ChatRoom');
+      // console.log('🔔 WebSocket callback triggered in ChatRoom');
       console.log('Received data:', data);
 
-      // receive and refresh
-      // 后端格式: {status: 1, type: X, message: "..."}
-      if (data.type === 'chat' && data.chat_id === chatId) {
-  console.log('🔄 Reload messages for chat:', chatId);
-  loadMessages(false);
-      } else {
-        console.log('⚠️ Message data does not match criteria');
+      // Auto-refresh on any message received
+      // 后端格式: {type: 1, message: "...", status: 1, ...}
+      if (data.type && data.message) {
+        console.log('🔄 Auto-refresh: New message received');
+        loadMessages(false);
       }
     };
 
-    console.log('📝 Registering WebSocket callback for chatId:', chatId);
+    // console.log('📝 Registering WebSocket callback for chatId:', chatId);
     // Register callback
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
 
     // Cleanup
     return () => {
-      console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
+      // console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
   }, [chatId, loadMessages]);
@@ -322,7 +320,7 @@ export default function ChatRoomScreen() {
           ? result.data.isreceive
           : receiver;
 
-        console.log("Actual receivers for WebSocket:", actualReceivers);
+        // console.log("Actual receivers for WebSocket:", actualReceivers);
 
         // Only send via WebSocket if there are receivers
         if (actualReceivers.length > 0) {
@@ -340,7 +338,6 @@ export default function ChatRoomScreen() {
           }
         } else {
           console.warn('⚠️ No receivers found, skipping WebSocket forward');
-          console.warn('This might be a private note or the chat members data is missing');
         }
 
         // Refresh messages from API to get correct server timestamp
