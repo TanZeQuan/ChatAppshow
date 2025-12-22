@@ -1,11 +1,13 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-export const API_BASE_URL = 'https://balkingly-hemitropic-lelah.ngrok-free.dev/api';
+import config from '../config/api';
+
+export const API_BASE_URL = config.API_BASE_URL;
 
 // 创建 Axios 实例
 const api = axios.create({
     baseURL: API_BASE_URL,   // 统一使用 config.ts 的 URL
-    timeout: 10000,
+    timeout: config.API_TIMEOUT,
     headers: { 'Content-Type': 'application/json' },
 });
 

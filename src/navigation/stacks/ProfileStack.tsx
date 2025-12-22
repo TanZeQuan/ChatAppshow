@@ -13,6 +13,7 @@ import EditProfileScreen from "../../screens/Profile/Setting/EditProfileScreen";
 import SettingScreen from "../../screens/Profile/Setting/SettingScreen";
 import EditEmail from "../../screens/Profile/Setting/EditEmail";
 import Notification from "../../screens/Profile/Setting/Notification";
+import ConnectionDiagnosticScreen from "../../screens/Profile/Setting/ConnectionDiagnosticScreen";
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 

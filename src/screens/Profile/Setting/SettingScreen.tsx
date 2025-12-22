@@ -57,6 +57,8 @@ export default function SettingScreen() {
                         navigation.navigate("EditEmail");
                     if (title === "通知")
                         navigation.navigate("Notification");
+                    if (title === "连接诊断")
+                        navigation.navigate("ConnectionDiagnostic" as any);
                 }
             }}
         >
@@ -88,7 +90,8 @@ export default function SettingScreen() {
             <SettingItem title="修改密码" />
             <SettingItem title="修改邮箱" />
             <SettingItem title="通知" />
-            <SettingItem title='显示“发送”按钮' showSwitch />
+            <SettingItem title="连接诊断" />
+            <SettingItem title='显示"发送"按钮' showSwitch />
         </SafeAreaView>
     );
 }

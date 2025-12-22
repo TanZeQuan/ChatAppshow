@@ -1,6 +1,7 @@
 import { useChatStore } from '../store/chatStore';
+import config from '../config/api';
 
-const WS_URL = 'wss://ws.ngrok-free.dev';
+const WS_URL = config.WS_URL;
 
 type MessageCallback = (data: any) => void;
 
