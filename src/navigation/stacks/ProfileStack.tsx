@@ -7,13 +7,12 @@ import JoinMeeting from "../../screens/Profile/Meeting/JoinMeeting";
 import MeetingScreen from "../../screens/Profile/Meeting/MeetingScreen";
 import ProfileScreen from "../../screens/Profile/ProfileScreen";
 import QRcodeScreen from "../../screens/Profile/QRcodeScreen";
+import EditEmail from "../../screens/Profile/Setting/EditEmail";
 import ResetProfileScreen from "../../screens/Profile/Setting/EditName";
 import ForgetPassword from "../../screens/Profile/Setting/EditPasswordScreen";
 import EditProfileScreen from "../../screens/Profile/Setting/EditProfileScreen";
-import SettingScreen from "../../screens/Profile/Setting/SettingScreen";
-import EditEmail from "../../screens/Profile/Setting/EditEmail";
 import Notification from "../../screens/Profile/Setting/Notification";
-import ConnectionDiagnosticScreen from "../../screens/Profile/Setting/ConnectionDiagnosticScreen";
+import SettingScreen from "../../screens/Profile/Setting/SettingScreen";
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
@@ -31,6 +30,7 @@ export default function ProfileStack() {
       <Stack.Screen name="QRcode" component={QRcodeScreen} options={{ title: "QRcode" }} />
       <Stack.Screen name="EditEmail" component={EditEmail} options={{ title: "Edit Email" }} />
       <Stack.Screen name="Notification" component={Notification} options={{ title: "Notification" }} />
+
     </Stack.Navigator>
   );
 }
