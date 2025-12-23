@@ -35,7 +35,23 @@ class WebSocketManager {
      Connect + Login
   =============================== */
   connect(userId: string): Promise<boolean> {
-    if (this.isConnected) {
+    // 🔍 Diagnostic: Log connection attempt
+    console.log('🔌 [WebSocket] connect() called');
+    console.log('  - New userId:', userId);
+    console.log('  - Current userId:', this.userId);
+    console.log('  - isConnected:', this.isConnected);
+
+    // ⚠️ If already connected but userId changed, disconnect first
+    if (this.isConnected && this.userId !== userId) {
+      console.warn('⚠️ [WebSocket] UserId changed! Disconnecting old connection...');
+      console.warn('  - Old userId:', this.userId);
+      console.warn('  - New userId:', userId);
+      this.disconnect();
+    }
+
+    // If already connected with same userId, return
+    if (this.isConnected && this.userId === userId) {
+      console.log('✅ [WebSocket] Already connected with same userId');
       return Promise.resolve(true);
     }
 
@@ -225,6 +241,10 @@ class WebSocketManager {
   =============================== */
 
   disconnect() {
+    console.log('🔌 [WebSocket] disconnect() called');
+    console.log('  - Current userId:', this.userId);
+    console.log('  - isConnected:', this.isConnected);
+
     if (this.ws) {
       this.ws.close(1000, "Client disconnect");
       this.ws = null;
@@ -234,7 +254,7 @@ class WebSocketManager {
     this.userId = null;
     this.reconnectAttempts = 0;
 
-    console.log("🔌 WS disconnected");
+    console.log("✅ [WebSocket] Disconnected successfully");
   }
 
   /* ===============================

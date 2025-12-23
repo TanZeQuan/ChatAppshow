@@ -14,6 +14,12 @@ export const createPrivateChat = async ({
     group: { user_id: string; isadmin: number }[];
 }) => {
     try {
+        // 🔍 Diagnostic: Log what we're sending to backend
+        console.log('🌐 [API/createPrivateChat] Sending to backend:');
+        console.log('  - user_id:', user_id);
+        console.log('  - chat_with:', chat_with);
+        console.log('  - name:', name);
+
         const formData = new FormData();
 
         const dataPayload = {
@@ -117,6 +123,10 @@ export const createGroupChat = async ({
 // chatList
 export const readUserChats = async (user_id: string) => {
     try {
+        // 🔍 Diagnostic: Log what we're sending to backend
+        console.log('🌐 [API/readUserChats] Sending to backend:');
+        console.log('  - user_id:', user_id);
+
         const formData = new FormData();
 
         const dataPayload = { user_id };

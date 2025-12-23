@@ -33,7 +33,17 @@ export default function ChatListScreen() {
   const { contacts, setContacts } = useContactStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const currentUserId = user?.id || 'YOUR_CURRENT_USER_ID';
+
+  // 🔍 Diagnostic: Log current user info
+  console.log('📱 [ChatListScreen] Current user from store:', JSON.stringify(user, null, 2));
+
+  const currentUserId = user?.id;
+
+  if (!currentUserId || currentUserId === 'YOUR_CURRENT_USER_ID') {
+    console.error('❌ [ChatListScreen] Invalid user ID!');
+    console.error('user object:', user);
+    console.error('user.id:', user?.id);
+  }
 
   // Refresh chat list when screen comes into focus
   useFocusEffect(
@@ -140,6 +150,12 @@ export default function ChatListScreen() {
   );
 
   const handleChatPress = async (chat: any) => {
+    // ⚠️ Guard: Check if currentUserId exists
+    if (!currentUserId) {
+      console.error('❌ [handleChatPress] No currentUserId, cannot open chat');
+      return;
+    }
+
     // 如果是联系人（没有真正的聊天ID，只有用户ID），需要创建或查找私聊
     if (!chat.isGroup && !chat.id.startsWith('IMC')) {
       try {
@@ -179,9 +195,16 @@ export default function ChatListScreen() {
         // 🆕 Step 2: No existing chat found, create new one
         console.log('🆕 No existing chat found, creating new chat with contact:', chat.id);
 
+        // 🔍 Diagnostic: Log API parameters
+        console.log('📤 [API] createPrivateChat parameters:');
+        console.log('  - user_id (current user):', currentUserId);
+        console.log('  - chat_with (target user):', chat.id);
+        console.log('  - name:', chat.name);
+        console.log('  - Full user object from store:', JSON.stringify(user, null, 2));
+
         const result = await createPrivateChat({
           name: chat.name,
-          user_id: currentUserId,
+          user_id: currentUserId, // TypeScript now knows this is not undefined
           chat_with: chat.id,
           group: []
         });
@@ -250,78 +273,88 @@ export default function ChatListScreen() {
   };
 
   const refreshData = async () => {
+    // ⚠️ Guard: Check if currentUserId exists
+    if (!currentUserId || currentUserId === 'YOUR_CURRENT_USER_ID') {
+      console.error('❌ [refreshData] Invalid currentUserId, skipping refresh');
+      return;
+    }
+
     try {
+      // 🔍 Diagnostic: Verify user before API calls
+      console.log('🔄 [refreshData] Starting refresh...');
+      console.log('  - currentUserId:', currentUserId);
+      console.log('  - Full user object:', JSON.stringify(user, null, 2));
+
       // 1️⃣ Refresh chat list from API
-      if (currentUserId && currentUserId !== 'YOUR_CURRENT_USER_ID') {
-        const chatsResult = await readUserChats(currentUserId);
-        if (chatsResult.success && chatsResult.data) {
-          console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
+      console.log('📤 [API] Calling readUserChats with user_id:', currentUserId);
+      const chatsResult = await readUserChats(currentUserId);
+      if (chatsResult.success && chatsResult.data) {
+        console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
 
-          // Transform API data to chat list format
-          const formattedChats = chatsResult.data.map((chat: any) => {
-            // 🔍 Try to preserve existing memberIds from chatStore if available
-            const existingChat = chatList.find(c => c.id === chat.chat_id);
-            const existingMemberIds = existingChat?.memberIds || [];
+        // Transform API data to chat list format
+        const formattedChats = chatsResult.data.map((chat: any) => {
+          // 🔍 Try to preserve existing memberIds from chatStore if available
+          const existingChat = chatList.find(c => c.id === chat.chat_id);
+          const existingMemberIds = existingChat?.memberIds || [];
 
-            // Use backend memberIds if available, otherwise keep existing ones
-            const backendMemberIds = chat.member_ids || chat.memberIds || chat.user_ids || [];
-            const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : existingMemberIds;
+          // Use backend memberIds if available, otherwise keep existing ones
+          const backendMemberIds = chat.member_ids || chat.memberIds || chat.user_ids || [];
+          const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : existingMemberIds;
 
-            return {
-              id: chat.chat_id,
-              name: chat.name || chat.chat_name || '未命名聊天',
-              avatar: chat.image || chat.avatar || null,
-              isGroup: chat.type === 2 || chat.isGroup || false,
-              members: chat.members || [],
-              memberIds: finalMemberIds, // ⭐ Preserve or update memberIds
-              lastMessage: chat.last_message || '',
-              timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
-              unreadCount: chat.unread_count || 0,
-              online: false,
-              rawData: chat,
-            };
-          });
+          return {
+            id: chat.chat_id,
+            name: chat.name || chat.chat_name || '未命名聊天',
+            avatar: chat.image || chat.avatar || null,
+            isGroup: chat.type === 2 || chat.isGroup || false,
+            members: chat.members || [],
+            memberIds: finalMemberIds, // ⭐ Preserve or update memberIds
+            lastMessage: chat.last_message || '',
+            timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
+            unreadCount: chat.unread_count || 0,
+            online: false,
+            rawData: chat,
+          };
+        });
 
-          console.log('✅ Formatted chat (first):', JSON.stringify(formattedChats[0]));
+        console.log('✅ Formatted chat (first):', JSON.stringify(formattedChats[0]));
 
-          // Update chat store
-          setChats(formattedChats);
-        }
+        // Update chat store
+        setChats(formattedChats);
+      }
 
-        // 2️⃣ Refresh friends/contacts
-        const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
-        if (friendsResult.success && friendsResult.data) {
-          // Combine request and approve arrays (same as ContactsScreen)
-          const allFriends = [
-            ...(friendsResult.data.request || []),
-            ...(friendsResult.data.approve || [])
-          ];
+      // 2️⃣ Refresh friends/contacts
+      const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
+      if (friendsResult.success && friendsResult.data) {
+        // Combine request and approve arrays (same as ContactsScreen)
+        const allFriends = [
+          ...(friendsResult.data.request || []),
+          ...(friendsResult.data.approve || [])
+        ];
 
-          // Transform API response to contact format
-          const formattedContacts = allFriends.map((friend: any) => {
-            const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
-            const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
-            const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
+        // Transform API response to contact format
+        const formattedContacts = allFriends.map((friend: any) => {
+          const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
+          const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
+          const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
 
-            return {
-              id: userId,
-              name: userName,
-              avatar: userAvatar,
-              online: friend.online || friend.is_online || false,
-              listId: friend.list_id || friend.listId || 0,
-              isFriend: true,
-              rawData: friend,
-            };
-          });
+          return {
+            id: userId,
+            name: userName,
+            avatar: userAvatar,
+            online: friend.online || friend.is_online || false,
+            listId: friend.list_id || friend.listId || 0,
+            isFriend: true,
+            rawData: friend,
+          };
+        });
 
-          // Remove duplicates based on id
-          const uniqueContacts = Array.from(
-            new Map(formattedContacts.map(contact => [contact.id, contact])).values()
-          );
+        // Remove duplicates based on id
+        const uniqueContacts = Array.from(
+          new Map(formattedContacts.map(contact => [contact.id, contact])).values()
+        );
 
-          // Update contact store
-          setContacts(uniqueContacts);
-        }
+        // Update contact store
+        setContacts(uniqueContacts);
       }
 
       // 3️⃣ For each contact not in chatList, fetch last message
