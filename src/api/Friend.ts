@@ -14,13 +14,13 @@ export const searchUser = async (targetUserId: string) => {
       search: targetUserId
     }));
 
-    console.log("searchUser payload:", { user_id: userId, search: targetUserId });
+    // console.log("searchUser payload:", { user_id: userId, search: targetUserId });
 
     const response = await api.post("/users/search", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("searchUser response:", response.data);
+    // console.log("searchUser response:", response.data);
 
     if (response.data?.error) {
       return { success: false, message: response.data.message || "Search failed", user: null };
@@ -42,7 +42,7 @@ export const searchUser = async (targetUserId: string) => {
       message: response.data.message || "Completed"
     };
   } catch (error: any) {
-    console.error("searchUser error:", error.response?.data || error.message);
+    console.error("searchUser full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "Search failed", 
@@ -62,13 +62,13 @@ export const createFriendRequest = async (approveId: string, message?: string, p
 
     formData.append("data", JSON.stringify(payload));
 
-    console.log("createFriendRequest payload:", payload);
+    // console.log("createFriendRequest payload:", payload);
 
     const response = await api.post("/chats/friends/new", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("createFriendRequest response:", response.data);
+    // console.log("createFriendRequest response:", response.data);
 
     if (response.data?.error) {
       return { success: false, message: response.data.message || "Request failed" };
@@ -76,7 +76,7 @@ export const createFriendRequest = async (approveId: string, message?: string, p
 
     return { success: true, data: response.data, message: response.data.message || "Success" };
   } catch (error: any) {
-    console.error("createFriendRequest error:", error.response?.data || error.message);
+    console.error("createFriendRequest full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "Request failed" 
@@ -113,7 +113,7 @@ export const readFriends = async (isstatus = 1) => {
       },
     };
   } catch (error: any) {
-    console.error("readFriends error:", error.response?.data || error.message);
+    console.error("readFriends full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "Read failed" 
@@ -127,13 +127,13 @@ export const updateFriendStatus = async (listId: string, isstatus: number) => {
     const formData = new FormData();
     formData.append("data", JSON.stringify({ list_id: listId, isstatus }));
 
-    console.log("updateFriendStatus payload:", { list_id: listId, isstatus });
+    // console.log("updateFriendStatus payload:", { list_id: listId, isstatus });
 
     const response = await api.post("/chats/friends/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("updateFriendStatus response:", response.data);
+    // console.log("updateFriendStatus response:", response.data);
 
     if (response.data?.error) {
       return { success: false, message: response.data.message || "Update failed" };
@@ -141,7 +141,7 @@ export const updateFriendStatus = async (listId: string, isstatus: number) => {
 
     return { success: true, data: response.data, message: response.data.message || "Success" };
   } catch (error: any) {
-    console.error("updateFriendStatus error:", error.response?.data || error.message);
+    console.error("updateFriendStatus full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "Update failed" 
@@ -174,13 +174,13 @@ export const deleteFriend = async (listId: string) => {
       isstatus: 3  // 3 = Removed
     }));
 
-    console.log("deleteFriend payload:", { list_id: listId, isstatus: 3 });
+    // console.log("deleteFriend payload:", { list_id: listId, isstatus: 3 });
 
     const response = await api.post("/chats/friends/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("deleteFriend response:", response.data);
+    // console.log("deleteFriend response:", response.data);
 
     if (response.data?.error) {
       return { 
@@ -195,7 +195,7 @@ export const deleteFriend = async (listId: string) => {
       message: response.data.message || "删除好友成功" 
     };
   } catch (error: any) {
-    console.error("deleteFriend error:", error.response?.data || error.message);
+    console.error("deleteFriend full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "删除好友失败" 
@@ -216,13 +216,13 @@ export const blockUser = async (listId: string) => {
       isstatus: 4  // 4 = Blocked
     }));
 
-    console.log("blockUser payload:", { list_id: listId, isstatus: 4 });
+    // console.log("blockUser payload:", { list_id: listId, isstatus: 4 });
 
     const response = await api.post("/chats/friends/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("blockUser response:", response.data);
+    // console.log("blockUser response:", response.data);
 
     if (response.data?.error) {
       return { 
@@ -237,7 +237,7 @@ export const blockUser = async (listId: string) => {
       message: response.data.message || "拉黑用户成功" 
     };
   } catch (error: any) {
-    console.error("blockUser error:", error.response?.data || error.message);
+    console.error("blockUser full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "拉黑用户失败" 
@@ -258,13 +258,13 @@ export const unblockUser = async (listId: string) => {
       isstatus: 2  // 2 = Accepted (恢复好友关系)
     }));
 
-    console.log("unblockUser payload:", { list_id: listId, isstatus: 2 });
+    // console.log("unblockUser payload:", { list_id: listId, isstatus: 2 });
 
     const response = await api.post("/chats/friends/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
 
-    console.log("unblockUser response:", response.data);
+    // console.log("unblockUser response:", response.data);
 
     if (response.data?.error) {
       return { 
@@ -279,7 +279,7 @@ export const unblockUser = async (listId: string) => {
       message: response.data.message || "取消拉黑成功" 
     };
   } catch (error: any) {
-    console.error("unblockUser error:", error.response?.data || error.message);
+    console.error("unblockUser full error:", error);
     return { 
       success: false, 
       message: error.response?.data?.message || error.message || "取消拉黑失败" 

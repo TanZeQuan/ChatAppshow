@@ -101,9 +101,9 @@ export default function AddFriendScreen() {
       // API returns response as an array, get the first item
       if (result.success && result.user && Array.isArray(result.user) && result.user.length > 0) {
         const userData = result.user[0]; // Get first result
-        console.log("✅ User found:", userData);
-        console.log("Friend status (isstatus):", userData.isstatus);
-        console.log("Status meaning: 0=not friends, 1=pending, 2=already friends");
+        // console.log("✅ User found:", userData);
+        // console.log("Friend status (isstatus):", userData.isstatus);
+        // console.log("Status meaning: 0=not friends, 1=pending, 2=already friends");
 
         setSearchResult(userData);
       } else {

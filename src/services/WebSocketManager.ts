@@ -94,16 +94,16 @@ class WebSocketManager {
       };
 
       /* ---------- ERROR ---------- */
-      this.ws.onerror = (error: any) => {
-        console.error("❌ WebSocket error occurred");
-        console.error("Error details:", error?.message || 'No error message available');
-        console.error("Connection URL:", WS_URL);
-        console.error("User ID:", this.userId);
-        console.error("Is Connected:", this.isConnected);
+      // this.ws.onerror = (error: any) => {
+        // console.error("❌ WebSocket error occurred");
+        // console.error("Error details:", error?.message || 'No error message available');
+        // console.error("Connection URL:", WS_URL);
+        // console.error("User ID:", this.userId);
+        // console.error("Is Connected:", this.isConnected);
 
         // Don't reject the promise here, let onclose handle it
         // This prevents duplicate error handling
-      };
+      // };
 
       /* ---------- CLOSE ---------- */
       this.ws.onclose = (event) => {

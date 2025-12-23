@@ -192,10 +192,36 @@ export default function ContactsScreen() {
 
     const currentUserId = user?.id;
     if (!currentUserId) {
-      Alert.alert('错误', '无法获取当前用户信息');
+      Alert.alert("错误", "无法获取当前用户信息");
       return;
     }
 
+    // 从Zustand store获取整个chatList
+    const { chatList } = useChatStore.getState();
+
+    // 查找是否已存在与该联系人的1对1聊天
+    const existingChat = chatList.find(
+      (chat) =>
+        !chat.isGroup &&
+        chat.memberIds?.length === 2 &&
+        chat.memberIds.includes(currentUserId) &&
+        chat.memberIds.includes(contact.id)
+    );
+
+    if (existingChat) {
+      // 如果找到了，直接导航到聊天室
+      parentNavigation.navigate("ChatStack", {
+        screen: "ChatRoom",
+        params: {
+          chatId: existingChat.id,
+          chatName: existingChat.name,
+          isGroup: false,
+        },
+      });
+      return; // 结束函数
+    }
+
+    // 如果没找到，执行创建新聊天的逻辑
     try {
       // console.log('Creating private chat with contact:', contact.id);
 
@@ -203,14 +229,14 @@ export default function ContactsScreen() {
       const result = await createPrivateChat({
         name: contact.name,
         user_id: currentUserId,
-        chat_with: contact.id,  // 联系人ID
-        group: []
+        chat_with: contact.id, // 联系人ID
+        group: [],
       });
 
       // console.log('Create private chat result:', result);
 
       if (result.success && result.data?.response) {
-        const newChatId = result.data.response;  // 真正的 chatID（IM75356175）
+        const newChatId = result.data.response; // 真正的 chatID（IM75356175）
 
         // 💾 保存 chat 信息到 store，包括 memberIds
         addChat({
@@ -220,10 +246,14 @@ export default function ContactsScreen() {
           isGroup: false,
           members: [
             { id: contact.id, name: contact.name, avatar: contact.avatar },
-            { id: currentUserId, name: user?.name || '我', avatar: user?.avatar || '' }
+            {
+              id: currentUserId,
+              name: user?.name || "我",
+              avatar: user?.avatar || "",
+            },
           ],
-          memberIds: [contact.id, currentUserId],  // ✅ 包括双方的 ID
-          lastMessage: '开始聊天',
+          memberIds: [contact.id, currentUserId], // ✅ 包括双方的 ID
+          lastMessage: "开始聊天",
           timestamp: new Date().toISOString(),
           unreadCount: 0,
           online: contact.online || false,
@@ -232,21 +262,21 @@ export default function ContactsScreen() {
         // console.log('✅ Chat saved to store with memberIds:', [contact.id, currentUserId]);
 
         // 使用返回的真正的 chat_id 导航
-        parentNavigation.navigate('ChatStack', {
-          screen: 'ChatRoom',
+        parentNavigation.navigate("ChatStack", {
+          screen: "ChatRoom",
           params: {
-            chatId: newChatId,  // ✅ 真正的 chatID（IM75356175）
+            chatId: newChatId, // ✅ 真正的 chatID（IM75356175）
             chatName: contact.name,
             isGroup: false,
           },
         });
       } else {
-        console.error('Failed to create private chat:', result.message);
-        Alert.alert('提示', '无法创建聊天，请重试');
+        // console.error('Failed to create private chat:', result.message);
+        Alert.alert("提示", "无法创建聊天，请重试");
       }
     } catch (error) {
-      console.error('Error creating private chat:', error);
-      Alert.alert('错误', '创建聊天时出错');
+      // console.error('Error creating private chat:', error);
+      Alert.alert("错误", "创建聊天时出错");
     }
   };
 

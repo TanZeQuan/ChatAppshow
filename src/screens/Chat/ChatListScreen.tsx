@@ -35,14 +35,14 @@ export default function ChatListScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 🔍 Diagnostic: Log current user info
-  console.log('📱 [ChatListScreen] Current user from store:', JSON.stringify(user, null, 2));
+  // console.log('📱 [ChatListScreen] Current user from store:', JSON.stringify(user, null, 2));
 
   const currentUserId = user?.id;
 
   if (!currentUserId || currentUserId === 'YOUR_CURRENT_USER_ID') {
-    console.error('❌ [ChatListScreen] Invalid user ID!');
-    console.error('user object:', user);
-    console.error('user.id:', user?.id);
+    // console.error('❌ [ChatListScreen] Invalid user ID!');
+    // console.error('user object:', user);
+    // console.error('user.id:', user?.id);
   }
 
   // Refresh chat list when screen comes into focus
@@ -57,14 +57,14 @@ export default function ChatListScreen() {
   // Listen for WebSocket messages (GLOBAL - works even when not in chat room)
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
-      console.log('🔔 [ChatList] WebSocket message received');
-      console.log('Message data:', data);
+      // console.log('🔔 [ChatList] WebSocket message received');
+      // console.log('Message data:', data);
 
       // When ANY chat message is received, refresh the chat list
       // This ensures the chat list shows the latest message preview
       // 后端格式: {type: 1, message: "...", status: 1, ...}
       if (data.type && data.message) {
-        console.log('✅ [ChatList] New message detected - refreshing chat list');
+        // console.log('✅ [ChatList] New message detected - refreshing chat list');
         silentRefresh();
       }
     };
@@ -159,14 +159,14 @@ export default function ChatListScreen() {
     // 如果是联系人（没有真正的聊天ID，只有用户ID），需要创建或查找私聊
     if (!chat.isGroup && !chat.id.startsWith('IMC')) {
       try {
-        // 🔍 Step 1: Check if chat already exists in frontend chatList
-        console.log('🔍 Checking if chat already exists with user:', chat.id);
-        console.log('📋 Current chatList:', chatList.map(c => ({
-          id: c.id,
-          name: c.name,
-          isGroup: c.isGroup,
-          memberIds: c.memberIds
-        })));
+        // // 🔍 Step 1: Check if chat already exists in frontend chatList
+        // console.log('🔍 Checking if chat already exists with user:', chat.id);
+        // console.log('📋 Current chatList:', chatList.map(c => ({
+        //   id: c.id,
+        //   name: c.name,
+        //   isGroup: c.isGroup,
+        //   memberIds: c.memberIds
+        // })));
 
         // Look for existing private chat with this user
         const existingChat = chatList.find(c => {
@@ -177,12 +177,12 @@ export default function ChatListScreen() {
 
           // Check if this chat includes both currentUserId and the target user (chat.id)
           const hasBothUsers = c.memberIds.includes(currentUserId) && c.memberIds.includes(chat.id);
-          console.log(`Checking chat ${c.id}: memberIds=${c.memberIds}, hasBothUsers=${hasBothUsers}`);
+          // console.log(`Checking chat ${c.id}: memberIds=${c.memberIds}, hasBothUsers=${hasBothUsers}`);
           return hasBothUsers;
         });
 
         if (existingChat) {
-          console.log('✅ Found existing chat:', existingChat.id);
+          // console.log('✅ Found existing chat:', existingChat.id);
           // Navigate to existing chat
           navigation.navigate('ChatRoom', {
             chatId: existingChat.id,
@@ -193,14 +193,14 @@ export default function ChatListScreen() {
         }
 
         // 🆕 Step 2: No existing chat found, create new one
-        console.log('🆕 No existing chat found, creating new chat with contact:', chat.id);
+        // console.log('🆕 No existing chat found, creating new chat with contact:', chat.id);
 
-        // 🔍 Diagnostic: Log API parameters
-        console.log('📤 [API] createPrivateChat parameters:');
-        console.log('  - user_id (current user):', currentUserId);
-        console.log('  - chat_with (target user):', chat.id);
-        console.log('  - name:', chat.name);
-        console.log('  - Full user object from store:', JSON.stringify(user, null, 2));
+        // // 🔍 Diagnostic: Log API parameters
+        // console.log('📤 [API] createPrivateChat parameters:');
+        // console.log('  - user_id (current user):', currentUserId);
+        // console.log('  - chat_with (target user):', chat.id);
+        // console.log('  - name:', chat.name);
+        // console.log('  - Full user object from store:', JSON.stringify(user, null, 2));
 
         const result = await createPrivateChat({
           name: chat.name,
@@ -209,11 +209,11 @@ export default function ChatListScreen() {
           group: []
         });
 
-        console.log('Create private chat result:', result);
+        // console.log('Create private chat result:', result);
 
         if (result.success && result.data?.response) {
           const chatId = result.data.response;
-          console.log('✅ Got new chat_id:', chatId);
+          // console.log('✅ Got new chat_id:', chatId);
 
           // 💾 Save chat info to store with memberIds for future lookup
           addChat({
@@ -281,15 +281,15 @@ export default function ChatListScreen() {
 
     try {
       // 🔍 Diagnostic: Verify user before API calls
-      console.log('🔄 [refreshData] Starting refresh...');
-      console.log('  - currentUserId:', currentUserId);
-      console.log('  - Full user object:', JSON.stringify(user, null, 2));
+      // console.log('🔄 [refreshData] Starting refresh...');
+      // console.log('  - currentUserId:', currentUserId);
+      // console.log('  - Full user object:', JSON.stringify(user, null, 2));
 
       // 1️⃣ Refresh chat list from API
-      console.log('📤 [API] Calling readUserChats with user_id:', currentUserId);
+      // console.log('📤 [API] Calling readUserChats with user_id:', currentUserId);
       const chatsResult = await readUserChats(currentUserId);
       if (chatsResult.success && chatsResult.data) {
-        console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
+        // console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
 
         // Transform API data to chat list format
         const formattedChats = chatsResult.data.map((chat: any) => {
