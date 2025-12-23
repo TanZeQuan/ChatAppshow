@@ -1,33 +1,32 @@
-import React, { useState, useLayoutEffect, useEffect, useCallback, useMemo } from 'react';
+import { useUserStore } from '@/src/store/userStore';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { Audio } from 'expo-av';
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from 'expo-linear-gradient';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
-    View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    FlatList,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    RefreshControl,
+    StyleSheet as RNStyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
-    FlatList,
-    StyleSheet as RNStyleSheet,
-    KeyboardAvoidingView,
-    Platform,
-    Image,
-    Alert,
-    ActivityIndicator,
-    Dimensions,
-    RefreshControl
+    View
 } from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
 import EmojiPicker from 'rn-emoji-keyboard';
-import { colors, borders, typography } from "../../styles";
-import { useChatStore } from '../../store/chatStore';
-import { getOriginalTabBarStyle } from "../../components/tabstyle";
-import { useUserStore } from '@/src/store/userStore';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
-import { Audio } from 'expo-av';
-import { sendVoiceMessageToApi } from '../../api/VoiceMessage';
-import * as ImagePicker from 'expo-image-picker';
+import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
+import { useChatStore } from '../../store/chatStore';
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -229,7 +228,8 @@ export default function GroupRoomScreen() {
                         setOffset(transformedMessages.length);
                     } else {
                         // Append messages when loading more
-                        const existingMessages = storedMessages;
+                        // Get messages from store at call time to avoid stale dependency
+                        const existingMessages = useChatStore.getState().chats[chatId] || [];
                         const allMessages = [...existingMessages, ...transformedMessages];
                         // Remove duplicates based on message id
                         const uniqueMessages = Array.from(
@@ -254,35 +254,51 @@ export default function GroupRoomScreen() {
             setIsLoading(false);
             setIsRefreshing(false);
         }
-    }, [currentUserId, chatId, offset, params.isGroup, setMessages, storedMessages]);
+    }, [currentUserId, chatId, offset, params.isGroup, setMessages]);
 
     // Load messages on mount
     useEffect(() => {
         loadMessages(true);
+
+        // 🔧 Polling fallback: Check for new messages every 8 seconds
+        // This is a backup mechanism in case WebSocket push fails
+        const pollingInterval = setInterval(() => {
+            loadMessages(false);
+        }, 3000);
+
+        return () => {
+            clearInterval(pollingInterval);
+        };
     }, [chatId, currentUserId, loadMessages]);
 
-    // Listen for WebSocket message notifications
+    // Use refs to store stable references for WebSocket callback
+    const chatIdRef = useRef(chatId);
+    const loadMessagesRef = useRef(loadMessages);
+
+    // Update refs when values change
+    useEffect(() => {
+        chatIdRef.current = chatId;
+        loadMessagesRef.current = loadMessages;
+    }, [chatId, loadMessages]);
+
+    // Listen for WebSocket message notifications (registered only once)
     useEffect(() => {
         const handleWebSocketMessage = (data: any) => {
-            console.log('🔔 WebSocket callback triggered in GroupRoom');
-            console.log('Received data:', data);
-
-            // Auto-refresh on any message received
-            // 后端格式: {type: 1, message: "...", status: 1, ...}
             if (data.type && data.message) {
-                console.log('🔄 Auto-refresh: New message received');
-                loadMessages(false);
+                if (!data.chat_id) {
+                    loadMessagesRef.current(false);
+                } else if (data.chat_id === chatIdRef.current) {
+                    loadMessagesRef.current(false);
+                } else {
+                }
             }
         };
 
-        console.log('📝 Registering WebSocket callback for group chatId:', chatId);
         WebSocketManager.addMessageCallback(handleWebSocketMessage);
-
         return () => {
-            console.log('🗑️ Removing WebSocket callback for group chatId:', chatId);
             WebSocketManager.removeMessageCallback(handleWebSocketMessage);
         };
-    }, [chatId, loadMessages]);
+    }, []); // Empty dependency array - register only once
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
@@ -305,13 +321,7 @@ export default function GroupRoomScreen() {
 
         try {
             // Step 1: Save message to database via API
-            const receiver = chatMembers.filter(id => id !== currentUserId);
-
-            console.log("=== Sending Group Message ===");
-            console.log("Sender:", currentUserId);
-            console.log("Receiver:", receiver);
-            console.log("Chat ID:", chatId);
-            console.log("Message:", messageText);
+            const receiver = chatMembers.filter(id => id !== currentUserId)
 
             const result = await sendChatMessage({
                 sender: currentUserId,
@@ -328,8 +338,6 @@ export default function GroupRoomScreen() {
                 const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
                     ? result.data.isreceive
                     : receiver;
-
-                console.log("Actual receivers for WebSocket:", actualReceivers);
 
                 // Only send via WebSocket if there are receivers
                 if (actualReceivers.length > 0) {

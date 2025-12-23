@@ -41,9 +41,8 @@ class WebSocketManager {
 
     this.userId = userId;
 
-    console.log("=== WebSocket CONNECT ===");
-    console.log("User ID:", userId);
-    console.log("WS URL:", WS_URL);
+    console.log("WebSocket CONNECT User ID:", userId);
+    console.log("WebSocket CONNECT WS URL:", WS_URL);
 
     return new Promise((resolve, reject) => {
       this.loginResolver = resolve;
@@ -79,18 +78,30 @@ class WebSocketManager {
       };
 
       /* ---------- ERROR ---------- */
-      this.ws.onerror = () => {
-        console.error("❌ WebSocket error");
+      this.ws.onerror = (error: any) => {
+        console.error("❌ WebSocket error occurred");
+        console.error("Error details:", error?.message || 'No error message available');
+        console.error("Connection URL:", WS_URL);
+        console.error("User ID:", this.userId);
+        console.error("Is Connected:", this.isConnected);
+
+        // Don't reject the promise here, let onclose handle it
+        // This prevents duplicate error handling
       };
 
       /* ---------- CLOSE ---------- */
       this.ws.onclose = (event) => {
-        console.log("🔌 WS closed:", event.code, event.reason);
+        console.warn("🔌 WebSocket closed");
+        console.warn("Close code:", event.code);
+        console.warn("Close reason:", event.reason || 'No reason provided');
+        console.warn("Was clean:", event.wasClean);
 
         this.isConnected = false;
         this.cleanupLoginPromise();
 
+        // If not a normal closure and user is set, attempt reconnect
         if (event.code !== 1000 && this.userId) {
+          console.warn("Abnormal closure, will attempt reconnect...");
           this.attemptReconnect();
         }
       };
@@ -108,7 +119,6 @@ class WebSocketManager {
       user_id: this.userId,
     };
 
-    // console.log("📤 login →", payload);
     this.ws.send(JSON.stringify(payload));
   }
 
@@ -118,8 +128,6 @@ class WebSocketManager {
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
-      // console.log('📨 WS message:', data);
-
       /* ---------- LOGIN SUCCESS (按文档) ---------- */
       if (
         !this.isConnected &&
@@ -145,13 +153,18 @@ class WebSocketManager {
       /* ---------- FORWARD ACK (按文档) ---------- */
       // 文档格式: {type: 1, content: "Success"}
       if (data.type === 1 && data.content === "Success") {
-        console.log("✅ Message forwarded (documented format)");
-        return;
+        // console.log("✅ Message forwarded (documented format)");
+        // return;
       }
 
       // 兼容实际后端格式: {status: 1, message: "Success"}
       if (data.status === 1 && data.message === "Success") {
-        console.log("✅ Message forwarded (backend format)");
+        // console.log("✅ Message forwarded (backend format)");
+        return;
+      }
+
+      // 🔧 Fix: Check for exact "Success" message to avoid treating ACK as chat message
+      if (data.type === 1 && data.message === "Success") {
         return;
       }
 
@@ -160,16 +173,13 @@ class WebSocketManager {
       // type 是数字: 1=文本, 2=图片等
       // 只要有 type 和 message 就是聊天消息
       if (data.type && data.message) {
-        console.log("📩 Incoming chat message");
-        this.messageCallbacks.forEach((cb) => cb(data));
+        this.messageCallbacks.forEach((cb, index) => {
+          cb(data);
+        });
         return;
       }
 
       /* ---------- FALLBACK ---------- */
-      console.log(
-        // "⚠️ Message not handled by specific conditions, using fallback"
-      );
-      console.log("Fallback data:", data);
       this.messageCallbacks.forEach((cb) => cb(data));
     } catch (err) {
       console.error("❌ WS parse error", err);
@@ -206,7 +216,6 @@ class WebSocketManager {
       ...payload,
     };
 
-    console.log("📤 forward →", msg);
     this.ws.send(JSON.stringify(msg));
     return true;
   }
@@ -233,18 +242,21 @@ class WebSocketManager {
   =============================== */
   private attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("❌ Max reconnect reached");
+      console.error("❌ Max reconnect attempts reached. Please check your network connection.");
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * this.reconnectAttempts;
 
-    console.log(`🔄 Reconnect attempt ${this.reconnectAttempts} in ${delay}ms`);
+    console.warn(`🔄 Reconnecting... Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
 
     setTimeout(() => {
       if (this.userId) {
-        this.connect(this.userId).catch(() => {});
+        console.log(`Attempting to reconnect for user: ${this.userId}`);
+        this.connect(this.userId).catch((error) => {
+          console.error("Reconnect failed:", error.message);
+        });
       }
     }, delay);
   }
@@ -257,11 +269,18 @@ class WebSocketManager {
   }
 
   removeMessageCallback(cb: MessageCallback) {
+    const beforeLength = this.messageCallbacks.length;
     this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb);
+    const afterLength = this.messageCallbacks.length;
   }
 
   isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  // Debug method to check callback count
+  getCallbackCount() {
+    return this.messageCallbacks.length;
   }
 }
 

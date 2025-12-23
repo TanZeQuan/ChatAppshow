@@ -176,8 +176,6 @@ export default function ChatListScreen() {
             online: chat.online || false,
           });
 
-          console.log('✅ Chat saved to store with memberIds:', [chat.id, currentUserId]);
-
           // 使用返回的真正的 chat_id（response 直接就是 chat_id 字符串）
           navigation.navigate('ChatRoom', {
             chatId: newChatId,
@@ -248,7 +246,6 @@ export default function ChatListScreen() {
 
           // Update chat store
           setChats(formattedChats);
-          console.log('✅ Chat list updated from API:', formattedChats.length, 'chats');
         }
 
         // 2️⃣ Refresh friends/contacts
@@ -284,7 +281,6 @@ export default function ChatListScreen() {
 
           // Update contact store
           setContacts(uniqueContacts);
-          console.log('✅ Contact list updated from API:', uniqueContacts.length, 'contacts');
         }
       }
 

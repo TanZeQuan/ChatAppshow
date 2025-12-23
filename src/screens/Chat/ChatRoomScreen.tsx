@@ -84,7 +84,6 @@ export default function ChatRoomScreen() {
   // 🔧 Initialize chatMembers from store if available
   useEffect(() => {
     if (chat?.memberIds && chat.memberIds.length > 0) {
-      // console.log('📋 Using memberIds from chat store:', chat.memberIds);
       setChatMembers(chat.memberIds);
     }
   }, [chat?.memberIds]);
@@ -101,6 +100,11 @@ export default function ChatRoomScreen() {
   const loadMessages = useCallback(async (loadMore = false) => {
     if (!currentUserId) return;
 
+    // Get current user info inside the function to avoid dependency issues
+    const user = useUserStore.getState().user;
+    const userName = user?.name || '我';
+    const userAvatar = user?.avatar || '';
+
     try {
       if (!loadMore) {
         setIsLoading(true);
@@ -114,29 +118,19 @@ export default function ChatRoomScreen() {
         offset: currentOffset,
       });
 
-      // console.log("=== Load Messages Debug ===");
-      // console.log("API Result:", result);
-
       if (result.success && result.data) {
-        // Get messages from result.data.chat (backend returns {chat: [...], group: [...]})
         const apiMessages = result.data.chat || [];
         const groupMembers = result.data.group || [];
-
-        console.log("API Messages count:", apiMessages.length);
-        // console.log("Group members:", groupMembers);
 
         // Extract member user IDs and store them (only if not already set from store)
         if (groupMembers.length > 0) {
           const memberIds = groupMembers.map((member: any) => member.user_id);
-          // Only update if chatMembers is currently empty
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
-          // console.log('📋 Using memberIds from API response:', memberIds);
         }
 
         if (apiMessages.length > 0) {
           // Transform API messages to store format
           const transformedMessages = apiMessages.map((msg: any) => {
-            // Parse the message field (it's a JSON string like {"type":1,"message":"Test6"})
             let messageText = '';
             try {
               const parsedMessage = JSON.parse(msg.message);
@@ -151,12 +145,10 @@ export default function ChatRoomScreen() {
               text: messageText,
               createdAt: msg.created_at,
               senderId: msg.sender,
-              name: msg.sender === currentUserId ? currentUserName : undefined,
-              avatar: msg.sender === currentUserId ? currentUserAvatar : undefined,
+              name: msg.sender === currentUserId ? userName : undefined,
+              avatar: msg.sender === currentUserId ? userAvatar : undefined,
             };
           });
-
-          // console.log("Transformed messages:", transformedMessages);
 
           // Store messages in chatStore
           const { setMessages } = useChatStore.getState();
@@ -175,38 +167,60 @@ export default function ChatRoomScreen() {
       console.error("Error loading messages:", error);
       setIsLoading(false);
     }
-  }, [currentUserId, chatId, currentUserName, currentUserAvatar]);
+  }, [currentUserId, chatId]);
 
   // Load messages on mount
   useEffect(() => {
     offsetRef.current = 0; // Reset offset when entering new chat
     loadMessages();
+
+    // Periodic WebSocket connection check (every 10 seconds)
+    const connectionCheckInterval = setInterval(() => {
+      const connected = WebSocketManager.isWebSocketConnected();
+      if (!connected) {
+        console.warn('⚠️ WebSocket disconnected!');
+      }
+    }, 10000);
+
+    // Polling fallback: Check for new messages every 3 seconds
+    // This is a backup mechanism in case WebSocket push fails
+    const pollingInterval = setInterval(() => {
+      loadMessages(false);
+    }, 3000);
+
+    return () => {
+      clearInterval(connectionCheckInterval);
+      clearInterval(pollingInterval);
+    };
   }, [loadMessages]);
 
-  // Listen for WebSocket message notifications
+  // Use refs to store stable references for WebSocket callback
+  const chatIdRef = useRef(chatId);
+  const loadMessagesRef = useRef(loadMessages);
+
+  // Update refs when values change
+  useEffect(() => {
+    chatIdRef.current = chatId;
+    loadMessagesRef.current = loadMessages;
+  }, [chatId, loadMessages]);
+
+  // Listen for WebSocket message notifications (registered only once)
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
-      // console.log('🔔 WebSocket callback triggered in ChatRoom');
-      console.log('Received data:', data);
-
-      // Auto-refresh on any message received
-      // 后端格式: {type: 1, message: "...", status: 1, ...}
       if (data.type && data.message) {
-        console.log('🔄 Auto-refresh: New message received');
-        loadMessages(false);
+        // If chat_id is not provided by backend, refresh anyway (safer approach)
+        if (!data.chat_id || data.chat_id === chatIdRef.current) {
+          loadMessagesRef.current(false);
+        }
       }
     };
 
-    // console.log('📝 Registering WebSocket callback for chatId:', chatId);
-    // Register callback
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
 
-    // Cleanup
     return () => {
-      // console.log('🗑️ Removing WebSocket callback for chatId:', chatId);
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
-  }, [chatId, loadMessages]);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -232,7 +246,6 @@ export default function ChatRoomScreen() {
       );
       setRecording(recording);
       setIsRecording(true);
-      console.log('Recording started');
     } catch (err) {
       console.error('Failed to start recording', err);
     }
@@ -243,20 +256,16 @@ export default function ChatRoomScreen() {
       return;
     }
 
-    console.log('Stopping recording..');
     setIsRecording(false);
     setIsUploading(true);
 
     try {
       await recording.stopAndUnloadAsync();
       const uri = recording.getURI();
-      console.log('Recording stopped and stored at', uri);
 
       if (uri) {
-        // Now, send the voice message
+        // TODO: Implement voice message sending
         // const result = await sendVoiceMessageToApi(uri);
-        console.log('Simulating sending voice message with URI:', uri);
-        // console.log('Voice message sent, result:', result);
       }
     } catch (error) {
       console.error('Failed to send voice message', error);
@@ -290,19 +299,10 @@ export default function ChatRoomScreen() {
     if (!inputText.trim()) return;
 
     const messageText = inputText.trim();
-
-    // Clear input field immediately for better UX
     setInputText('');
 
     try {
-      // Step 1: Save message to database via API
       const receiver = chatMembers.filter(id => id !== currentUserId);
-
-      console.log("=== Sending Message ===");
-      console.log("Sender:", currentUserId);
-      console.log("Receiver:", receiver);
-      console.log("Chat ID:", chatId);
-      console.log("Message:", messageText);
 
       const result = await sendChatMessage({
         sender: currentUserId,
@@ -311,20 +311,13 @@ export default function ChatRoomScreen() {
         message: messageText,
       });
 
-      console.log("Send message result:", result);
-
       if (result.success && result.data) {
-        // Step 2: Forward message via WebSocket
-        // Use isreceive from API response if available, otherwise use receiver
         const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
           ? result.data.isreceive
           : receiver;
 
-        // console.log("Actual receivers for WebSocket:", actualReceivers);
-
-        // Only send via WebSocket if there are receivers
         if (actualReceivers.length > 0) {
-          const forwarded = WebSocketManager.sendForwardMessage({
+          WebSocketManager.sendForwardMessage({
             type: result.data.type,
             message: messageText,
             message_id: result.data.message_id,
@@ -332,27 +325,17 @@ export default function ChatRoomScreen() {
             receiver: actualReceivers,
             chat_id: chatId
           });
-
-          if (!forwarded) {
-            console.warn('⚠️ WebSocket not connected, message saved but not forwarded');
-          }
-        } else {
-          console.warn('⚠️ No receivers found, skipping WebSocket forward');
         }
 
-        // Refresh messages from API to get correct server timestamp
         await loadMessages(false);
       } else {
         console.error("Failed to send message:", result.message);
-        // Optionally show error to user
         Alert.alert('发送失败', result.message || '消息发送失败，请重试');
-        // Restore the message in input field
         setInputText(messageText);
       }
     } catch (error) {
       console.error("Error sending message:", error);
       Alert.alert('发送失败', '网络错误，请重试');
-      // Restore the message in input field
       setInputText(messageText);
     }
   };
