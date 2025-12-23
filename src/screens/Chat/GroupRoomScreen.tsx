@@ -173,15 +173,17 @@ export default function GroupRoomScreen() {
     });
 
     // Load initial messages
-    const loadMessages = useCallback(async (isRefresh = false) => {
+    const loadMessages = useCallback(async (isRefresh = false, showLoading = true) => {
         if (!currentUserId || !chatId) return;
 
         const currentOffset = isRefresh ? 0 : offset;
 
-        if (isRefresh) {
-            setIsRefreshing(true);
-        } else {
-            setIsLoading(true);
+        if (showLoading) {
+            if (isRefresh) {
+                setIsRefreshing(true);
+            } else {
+                setIsLoading(true);
+            }
         }
 
         try {
@@ -203,7 +205,6 @@ export default function GroupRoomScreen() {
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
-                    console.log('Group members:', memberIds);
                 }
 
                 // Check if there are more messages to load
@@ -241,18 +242,20 @@ export default function GroupRoomScreen() {
                 }
             } else {
                 console.warn('⚠️ Failed to load messages:', result.message);
-                if (!isRefresh) {
+                if (!isRefresh && showLoading) {
                     Alert.alert('提示', result.message || '加载消息失败');
                 }
             }
         } catch (error) {
             console.error('Error loading messages:', error);
-            if (!isRefresh) {
+            if (!isRefresh && showLoading) {
                 Alert.alert('错误', '加载消息失败，请重试');
             }
         } finally {
-            setIsLoading(false);
-            setIsRefreshing(false);
+            if (showLoading) {
+                setIsLoading(false);
+                setIsRefreshing(false);
+            }
         }
     }, [currentUserId, chatId, offset, params.isGroup, setMessages]);
 
@@ -260,10 +263,9 @@ export default function GroupRoomScreen() {
     useEffect(() => {
         loadMessages(true);
 
-        // 🔧 Polling fallback: Check for new messages every 8 seconds
-        // This is a backup mechanism in case WebSocket push fails
+        // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
         const pollingInterval = setInterval(() => {
-            loadMessages(false);
+            loadMessages(false, false); // isRefresh=false, showLoading=false
         }, 3000);
 
         return () => {
@@ -286,9 +288,9 @@ export default function GroupRoomScreen() {
         const handleWebSocketMessage = (data: any) => {
             if (data.type && data.message) {
                 if (!data.chat_id) {
-                    loadMessagesRef.current(false);
+                    loadMessagesRef.current(false, false); // Silent refresh
                 } else if (data.chat_id === chatIdRef.current) {
-                    loadMessagesRef.current(false);
+                    loadMessagesRef.current(false, false); // Silent refresh
                 } else {
                 }
             }
@@ -358,8 +360,8 @@ export default function GroupRoomScreen() {
                     console.warn('Group chat members data might be missing');
                 }
 
-                // Refresh messages from API to get correct server timestamp
-                await loadMessages(false);
+                // Refresh messages from API to get correct server timestamp (silent)
+                await loadMessages(false, false);
             } else {
                 console.error("Failed to send message:", result.message);
                 Alert.alert('发送失败', result.message || '消息发送失败，请重试');

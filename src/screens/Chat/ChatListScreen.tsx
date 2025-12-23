@@ -6,7 +6,6 @@ import {
   Dimensions,
   FlatList,
   Image,
-  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -34,7 +33,6 @@ export default function ChatListScreen() {
   const { contacts, setContacts } = useContactStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
   const currentUserId = user?.id || 'YOUR_CURRENT_USER_ID';
 
   // Refresh chat list when screen comes into focus
@@ -142,26 +140,61 @@ export default function ChatListScreen() {
   );
 
   const handleChatPress = async (chat: any) => {
-    // 如果是联系人（没有真正的聊天ID，只有用户ID），先创建私聊
+    // 如果是联系人（没有真正的聊天ID，只有用户ID），需要创建或查找私聊
     if (!chat.isGroup && !chat.id.startsWith('IMC')) {
       try {
-        console.log('Creating private chat with contact:', chat.id);
+        // 🔍 Step 1: Check if chat already exists in frontend chatList
+        console.log('🔍 Checking if chat already exists with user:', chat.id);
+        console.log('📋 Current chatList:', chatList.map(c => ({
+          id: c.id,
+          name: c.name,
+          isGroup: c.isGroup,
+          memberIds: c.memberIds
+        })));
+
+        // Look for existing private chat with this user
+        const existingChat = chatList.find(c => {
+          // Must be a private chat (not group) and have memberIds
+          if (c.isGroup || !c.memberIds || c.memberIds.length === 0) {
+            return false;
+          }
+
+          // Check if this chat includes both currentUserId and the target user (chat.id)
+          const hasBothUsers = c.memberIds.includes(currentUserId) && c.memberIds.includes(chat.id);
+          console.log(`Checking chat ${c.id}: memberIds=${c.memberIds}, hasBothUsers=${hasBothUsers}`);
+          return hasBothUsers;
+        });
+
+        if (existingChat) {
+          console.log('✅ Found existing chat:', existingChat.id);
+          // Navigate to existing chat
+          navigation.navigate('ChatRoom', {
+            chatId: existingChat.id,
+            chatName: existingChat.name,
+            isGroup: false,
+          });
+          return;
+        }
+
+        // 🆕 Step 2: No existing chat found, create new one
+        console.log('🆕 No existing chat found, creating new chat with contact:', chat.id);
 
         const result = await createPrivateChat({
           name: chat.name,
           user_id: currentUserId,
-          chat_with: chat.id,  // 联系人ID
+          chat_with: chat.id,
           group: []
         });
 
         console.log('Create private chat result:', result);
 
         if (result.success && result.data?.response) {
-          const newChatId = result.data.response;  // 真正的 chatID（IM75356175）
+          const chatId = result.data.response;
+          console.log('✅ Got new chat_id:', chatId);
 
-          // 💾 保存 chat 信息到 store，包括 memberIds
+          // 💾 Save chat info to store with memberIds for future lookup
           addChat({
-            id: newChatId,
+            id: chatId,
             name: chat.name,
             avatar: chat.avatar || null,
             isGroup: false,
@@ -169,22 +202,20 @@ export default function ChatListScreen() {
               { id: chat.id, name: chat.name, avatar: chat.avatar },
               { id: currentUserId, name: user?.name || '我', avatar: user?.avatar || '' }
             ],
-            memberIds: [chat.id, currentUserId],  // ✅ 包括双方的 ID
+            memberIds: [chat.id, currentUserId], // ⭐ Critical for future lookups
             lastMessage: '开始聊天',
             timestamp: new Date().toISOString(),
             unreadCount: 0,
             online: chat.online || false,
           });
 
-          // 使用返回的真正的 chat_id（response 直接就是 chat_id 字符串）
           navigation.navigate('ChatRoom', {
-            chatId: newChatId,
+            chatId: chatId,
             chatName: chat.name,
             isGroup: false,
           });
           return;
         } else {
-          // 如果创建失败，显示错误
           console.error('Failed to create private chat:', result.message);
           return;
         }
@@ -195,6 +226,7 @@ export default function ChatListScreen() {
     }
 
     // 正常的群聊或已有聊天ID的私聊
+    console.log('Opening existing chat_id:', chat.id);
     if (chat.isGroup) {
       navigation.navigate('GroupRoom', {
         chatId: chat.id,
@@ -212,12 +244,6 @@ export default function ChatListScreen() {
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await refreshData();
-    setRefreshing(false);
-  };
-
   const silentRefresh = async () => {
     // Refresh without showing the refresh indicator
     await refreshData();
@@ -229,20 +255,34 @@ export default function ChatListScreen() {
       if (currentUserId && currentUserId !== 'YOUR_CURRENT_USER_ID') {
         const chatsResult = await readUserChats(currentUserId);
         if (chatsResult.success && chatsResult.data) {
+          console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
+
           // Transform API data to chat list format
-          const formattedChats = chatsResult.data.map((chat: any) => ({
-            id: chat.chat_id,
-            name: chat.name || chat.chat_name || '未命名聊天',
-            avatar: chat.image || chat.avatar || null,
-            isGroup: chat.type === 2 || chat.isGroup || false,
-            members: chat.members || [],
-            memberIds: chat.member_ids || chat.memberIds || [],
-            lastMessage: chat.last_message || '',
-            timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
-            unreadCount: chat.unread_count || 0,
-            online: false,
-            rawData: chat,
-          }));
+          const formattedChats = chatsResult.data.map((chat: any) => {
+            // 🔍 Try to preserve existing memberIds from chatStore if available
+            const existingChat = chatList.find(c => c.id === chat.chat_id);
+            const existingMemberIds = existingChat?.memberIds || [];
+
+            // Use backend memberIds if available, otherwise keep existing ones
+            const backendMemberIds = chat.member_ids || chat.memberIds || chat.user_ids || [];
+            const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : existingMemberIds;
+
+            return {
+              id: chat.chat_id,
+              name: chat.name || chat.chat_name || '未命名聊天',
+              avatar: chat.image || chat.avatar || null,
+              isGroup: chat.type === 2 || chat.isGroup || false,
+              members: chat.members || [],
+              memberIds: finalMemberIds, // ⭐ Preserve or update memberIds
+              lastMessage: chat.last_message || '',
+              timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
+              unreadCount: chat.unread_count || 0,
+              online: false,
+              rawData: chat,
+            };
+          });
+
+          console.log('✅ Formatted chat (first):', JSON.stringify(formattedChats[0]));
 
           // Update chat store
           setChats(formattedChats);
@@ -453,14 +493,6 @@ export default function ChatListScreen() {
           contentContainerStyle={styles.listContent}
           extraData={filteredChats.map(chat => chat.members?.length)}
           showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={['#FFD966']}
-              tintColor="#FFD966"
-            />
-          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons name="chatbubbles-outline" size={48} color="#CCC" />

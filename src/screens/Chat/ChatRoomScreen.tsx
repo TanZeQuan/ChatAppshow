@@ -97,7 +97,7 @@ export default function ChatRoomScreen() {
   const [isUploading, setIsUploading] = useState(false);
 
   // Wrap loadMessages in useCallback to prevent closure issues
-  const loadMessages = useCallback(async (loadMore = false) => {
+  const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
     if (!currentUserId) return;
 
     // Get current user info inside the function to avoid dependency issues
@@ -106,7 +106,7 @@ export default function ChatRoomScreen() {
     const userAvatar = user?.avatar || '';
 
     try {
-      if (!loadMore) {
+      if (!loadMore && showLoading) {
         setIsLoading(true);
       }
 
@@ -162,10 +162,14 @@ export default function ChatRoomScreen() {
         }
       }
 
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     } catch (error) {
       console.error("Error loading messages:", error);
-      setIsLoading(false);
+      if (showLoading) {
+        setIsLoading(false);
+      }
     }
   }, [currentUserId, chatId]);
 
@@ -182,10 +186,9 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    // Polling fallback: Check for new messages every 3 seconds
-    // This is a backup mechanism in case WebSocket push fails
+    // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
     const pollingInterval = setInterval(() => {
-      loadMessages(false);
+      loadMessages(false, false); // loadMore=false, showLoading=false
     }, 3000);
 
     return () => {
@@ -210,7 +213,7 @@ export default function ChatRoomScreen() {
       if (data.type && data.message) {
         // If chat_id is not provided by backend, refresh anyway (safer approach)
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
-          loadMessagesRef.current(false);
+          loadMessagesRef.current(false, false); // Silent refresh, no loading animation
         }
       }
     };
@@ -224,7 +227,7 @@ export default function ChatRoomScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadMessages(false);
+    await loadMessages(false, false); // No loading spinner, just refresh control
     setRefreshing(false);
   };
 
@@ -327,7 +330,7 @@ export default function ChatRoomScreen() {
           });
         }
 
-        await loadMessages(false);
+        await loadMessages(false, false); // Silent refresh after sending
       } else {
         console.error("Failed to send message:", result.message);
         Alert.alert('发送失败', result.message || '消息发送失败，请重试');
