@@ -8,11 +8,17 @@ import {
     Text,
     TouchableOpacity,
     View,
+    Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, borders, typography } from "../../../styles";
 import { ProfileStackParamList } from "../../../navigation/types";
+import { colors, borders, typography } from "../../../styles";
 import { getOriginalTabBarStyle } from "../../../components/tabstyle";
+
+const { width, height } = Dimensions.get("window");
+
+const scaleWidth = (size: number) => (width / 375) * size;
+const scaleHeight = (size: number) => (height / 812) * size;
 
 export default function SettingScreen() {
     const navigation =
@@ -106,8 +112,8 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 16, // 可以换成 scaleWidth(16)
-        paddingVertical: 12,   // 可以换成 scaleHeight(12)
+        paddingHorizontal: scaleWidth(16),
+        paddingVertical: scaleHeight(12),
         borderBottomWidth: borders.width1,
         borderColor: colors.border.light, // 原 #ecececff
         backgroundColor: colors.functional.yellowBright, // 原 #ffe070ff
@@ -125,8 +131,8 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingHorizontal: 20, // scaleWidth(20)
-        paddingVertical: 15,   // scaleHeight(15)
+        paddingHorizontal: scaleWidth(20),
+        paddingVertical: scaleHeight(15),
         backgroundColor: colors.background.white, // 原 #ffffff9c，可考虑透明度用 rgba(255,255,255,0.6)
         borderBottomWidth: borders.width1,
         borderColor: colors.border.lightGray, // 原 #eee

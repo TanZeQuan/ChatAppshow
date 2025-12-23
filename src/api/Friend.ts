@@ -52,7 +52,7 @@ export const searchUser = async (targetUserId: string) => {
 };
 
 // 创建好友请求
-export const createFriendRequest = async (approveId: string, message?: string, p0?: string) => {
+export const createFriendRequest = async (approveId: string, message?: string) => {
   const requestId = getCurrentUserId();
 
   try {

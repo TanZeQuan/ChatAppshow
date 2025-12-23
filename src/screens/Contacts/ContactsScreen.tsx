@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { createPrivateChat } from "../../api/Chat";
+import { createPrivateChat, readUserChats } from "../../api/Chat";
 import { readFriends } from "../../api/Friend";
 import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
@@ -230,10 +230,7 @@ export default function ContactsScreen() {
         name: contact.name,
         user_id: currentUserId,
         chat_with: contact.id, // 联系人ID
-        group: [],
       });
-
-      // console.log('Create private chat result:', result);
 
       if (result.success && result.data?.response) {
         const newChatId = result.data.response; // 真正的 chatID（IM75356175）
@@ -270,9 +267,53 @@ export default function ContactsScreen() {
             isGroup: false,
           },
         });
+      } else if (result.success && result.message === "Chat existed.") {
+        // WORKAROUND 2.0: Find the new chat by diffing the chat list before and after refreshing.
+        console.log("Chat existed, but no ID returned. Finding it by diffing chat lists...");
+        
+        const oldChatIds = new Set(useChatStore.getState().chatList.map(c => c.id));
+
+        // This is a simplified refresh function that only updates chat list
+        const refreshChatList = async (userId: string) => {
+            const chatsResult = await readUserChats(userId);
+            if (chatsResult.success && chatsResult.data) {
+                const { setChats } = useChatStore.getState();
+                const formattedChats = chatsResult.data.map((chat: any) => ({
+                    id: chat.chat_id,
+                    name: chat.name || chat.chat_name || '未命名聊天',
+                    avatar: chat.image || chat.avatar || null,
+                    isGroup: chat.type === 2 || chat.isGroup || false,
+                    members: chat.members || [],
+                    memberIds: chat.member_ids || chat.memberIds || chat.user_ids || [],
+                    lastMessage: chat.last_message || '',
+                    timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
+                    unreadCount: chat.unread_count || 0,
+                }));
+                setChats(formattedChats);
+            }
+        };
+
+        await refreshChatList(currentUserId);
+        
+        const updatedChatList = useChatStore.getState().chatList;
+        const newlyFoundChat = updatedChatList.find(c => !oldChatIds.has(c.id));
+
+        if (newlyFoundChat) {
+          console.log('✅ Found new chat by diffing lists:', newlyFoundChat.id);
+          parentNavigation.navigate("ChatStack", {
+            screen: "ChatRoom",
+            params: {
+              chatId: newlyFoundChat.id,
+              chatName: contact.name, // Use the name from the contact that was clicked
+              isGroup: false,
+            },
+          });
+        } else {
+          console.error('❌ Failed to find a new chat after refresh. The backend might not be listing it in time.');
+          Alert.alert("无法进入聊天", "请下拉刷新聊天列表后重试。");
+        }
       } else {
-        // console.error('Failed to create private chat:', result.message);
-        Alert.alert("提示", "无法创建聊天，请重试");
+        Alert.alert("提示", `无法创建聊天: ${result.message || '请重试'}`);
       }
     } catch (error) {
       // console.error('Error creating private chat:', error);

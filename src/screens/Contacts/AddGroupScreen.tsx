@@ -23,6 +23,7 @@ import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useChatStore } from "../../store/chatStore";
 import { readFriends } from "../../api/Friend";
+import { addGroup } from "../../api/Group";
 
 const { width, height } = Dimensions.get("window");
 
@@ -33,7 +34,7 @@ const scaleFont = (size: number) => (width / 375) * size;
 export default function AddGroupScreen() {
   const navigation = useNavigation<any>();
   const { contacts, setContacts } = useContactStore();
-  const { token } = useUserStore();
+  const { token, user } = useUserStore();
   const { addChat } = useChatStore();
   const insets = useSafeAreaInsets();
 
@@ -144,44 +145,66 @@ export default function AddGroupScreen() {
       return;
     }
 
+    if (!user?.id) {
+      Alert.alert("错误", "无法获取当前用户信息，请重新登录");
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      const selectedContacts = contacts.filter((c) =>
-        selectedMembers.includes(c.id)
-      );
+      // Creator is an admin
+      const creator = { user_id: user.id, isadmin: 2 };
+      
+      // Other members
+      const members = selectedMembers.map(memberId => ({
+        user_id: memberId,
+        isadmin: 1,
+      }));
 
-      const groupChatId = `group_${Date.now()}`;
+      const groupMembers = [creator, ...members];
 
-      const newGroupChat = {
-        id: groupChatId,
+      const result = await addGroup({
         name: groupName.trim(),
-        avatar: null,
-        isGroup: true,
-        members: selectedContacts,
-        memberIds: selectedMembers,
-        lastMessage: "群聊已创建",
-        timestamp: new Date().toISOString(),
-        unreadCount: 0,
-        online: false,
-      };
+        user_id: user.id,
+        group: groupMembers,
+      });
 
-      addChat(newGroupChat);
-      setShowGroupNameModal(false);
+      setIsLoading(false);
 
-      Alert.alert(
-        "成功",
-        `群聊 "${groupName}" 已创建！`,
-        [
-          {
-            text: "确定",
-            onPress: () => {
-              navigation.goBack();
+      if (result && result.chat_id) {
+        // Optionally, add to local chat store
+        const newGroupChat = {
+          id: result.chat_id,
+          name: groupName.trim(),
+          avatar: result.image || null,
+          isGroup: true,
+          members: result.members || [], // Assuming backend returns members
+          lastMessage: "群聊已创建",
+          timestamp: new Date().toISOString(),
+          unreadCount: 0,
+        };
+        addChat(newGroupChat as any);
+
+        setShowGroupNameModal(false);
+
+        Alert.alert(
+          "成功",
+          `群聊 "${groupName}" 已创建！`,
+          [
+            {
+              text: "确定",
+              onPress: () => navigation.navigate("ChatList"), // Navigate to chat list
             },
-          },
-        ]
-      );
-    } catch (error) {
+          ]
+        );
+      } else {
+        Alert.alert("错误", result.message || "创建群聊失败，请重试");
+      }
+    } catch (error: any) {
+      setIsLoading(false);
       console.error("Error creating group:", error);
-      Alert.alert("错误", "创建群聊失败，请重试");
+      Alert.alert("错误", error.message || "创建群聊失败，请重试");
     }
   };
 

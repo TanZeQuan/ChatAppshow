@@ -46,8 +46,8 @@ export default function ProfileScreen() {
     try {
       const res = await readUsers(user.id);
 
-      console.log('=== FULL API RESPONSE ===');
-      console.log('res.data:', JSON.stringify(res.data, null, 2));
+      // console.log('=== FULL API RESPONSE ===');
+      // console.log('res.data:', JSON.stringify(res.data, null, 2));
 
       if (res.success && res.data?.response) {
         const userData = res.data.response;
@@ -61,7 +61,7 @@ export default function ProfileScreen() {
           about: userData.about || user.about || '',
         };
 
-        console.log('updatedUser:', JSON.stringify(updatedUser, null, 2));
+        // console.log('updatedUser:', JSON.stringify(updatedUser, null, 2));
 
         useUserStore.getState().setUser(updatedUser, useUserStore.getState().token || "");
 

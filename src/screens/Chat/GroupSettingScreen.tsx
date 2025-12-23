@@ -81,7 +81,7 @@ export default function GroupSettingScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
-    const [friendsList, setFriendsList] = useState<string[]>([]);
+    const [friendsList, setFriendsList] = useState<any[]>([]);
     const [loadingFriends, setLoadingFriends] = useState(false);
 
     // Sync state with store
@@ -107,15 +107,14 @@ export default function GroupSettingScreen() {
         if (!currentUserId) return;
         setLoadingFriends(true);
         try {
-            // Pass user_id directly, not as an object
-            const result = await readFriends(parseInt(currentUserId, 10));
+            // Get ACCEPTED friends
+            const result = await readFriends(2); 
             if (result.success && result.data) {
                 const allFriends = [
                     ...(result.data.request || []),
                     ...(result.data.approve || [])
                 ];
-                const friendIds = allFriends.map((friend: any) => friend.user_id || friend.id);
-                setFriendsList(friendIds);
+                setFriendsList(allFriends);
             }
         } catch (error) {
             console.error('Failed to load friends:', error);
@@ -266,13 +265,16 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            const result = await deleteFriend({
-                                user_id: currentUserId,
-                                friend_id: memberId,
-                            } as any);
+                            const friendToDelete = friendsList.find(f => f.user_id === memberId || f.approve_id === memberId || f.request_id === memberId);
+                            if (!friendToDelete || !friendToDelete.list_id) {
+                                Alert.alert('错误', '无法找到该好友的关系ID，请刷新后重试');
+                                return;
+                            }
+                            
+                            const result = await deleteFriend(friendToDelete.list_id);
 
                             if (result.success) {
-                                setFriendsList(prev => prev.filter(id => id !== memberId));
+                                setFriendsList(prev => prev.filter(f => f.list_id !== friendToDelete.list_id));
                                 Alert.alert('成功', '已删除好友');
                             } else {
                                 Alert.alert('错误', result.message || '删除好友失败');
@@ -287,7 +289,7 @@ export default function GroupSettingScreen() {
                 }
             ]
         );
-    }, [currentUserId]);
+    }, [friendsList]);
 
     // Block user
     const handleBlockUser = useCallback(async (memberId: string, memberName: string) => {
@@ -302,14 +304,18 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            const result = await blockUser({
-                                user_id: currentUserId,
-                                blocked_user_id: memberId,
-                            } as any);
+                            const friendToBlock = friendsList.find(f => f.user_id === memberId || f.approve_id === memberId || f.request_id === memberId);
+                            if (!friendToBlock || !friendToBlock.list_id) {
+                                Alert.alert('错误', '无法找到该好友的关系ID，请刷新后重试');
+                                return;
+                            }
+
+                            const result = await blockUser(friendToBlock.list_id);
 
                             if (result.success) {
                                 Alert.alert('成功', '已拉黑该用户');
-                                setFriendsList(prev => prev.filter(id => id !== memberId));
+                                // Refresh the friends list to reflect the change
+                                await loadFriendsList();
                             } else {
                                 Alert.alert('错误', result.message || '拉黑用户失败');
                             }
@@ -323,7 +329,7 @@ export default function GroupSettingScreen() {
                 }
             ]
         );
-    }, [currentUserId]);
+    }, [friendsList, loadFriendsList]);
 
     // View member profile
     const handleViewMemberProfile = useCallback((member: Member) => {
@@ -331,7 +337,7 @@ export default function GroupSettingScreen() {
 
         const permission = checkKickPermission(member.id);
         const canKick = permission.hasPermission;
-        const isFriend = friendsList.includes(member.id);
+        const isFriend = friendsList.some(f => f.user_id === member.id || f.approve_id === member.id || f.request_id === member.id);
 
         const options: any[] = [
             { text: '取消', style: 'cancel' },

@@ -8,6 +8,7 @@ type Message = {
   id: string;
   text: string;
   createdAt: string;
+  type?: number; // 1: text, 2: voice, 3: image/files
 
   // Auto-fill
   senderId: string;
@@ -54,8 +55,7 @@ type ChatStore = {
   setChats: (chats: ChatListItem[]) => void;
   updateChatLastMessage: (
     chatId: string,
-    message: string,
-    timestamp: string
+    message: Message
   ) => void;
   removeChat: (chatId: string) => void;
   getChatById: (chatId: string) => ChatListItem | undefined;
@@ -91,6 +91,7 @@ export const useChatStore = create<ChatStore>()(
           id: messageData.id || Math.random().toString(),
           text: messageData.text || '',
           createdAt: messageData.createdAt || new Date().toISOString(),
+          type: messageData.type, // Add type here
           senderId: messageData.senderId || user.id,
           name: messageData.name || user.name,
           avatar: messageData.avatar || user.avatar,
@@ -106,7 +107,7 @@ export const useChatStore = create<ChatStore>()(
         });
 
         // Update chat list with last message
-        get().updateChatLastMessage(chatId, newMessage.text, newMessage.createdAt);
+        get().updateChatLastMessage(chatId, newMessage); // Pass the whole message object
       },
 
       // ⭐ 新增：直接设置某个聊天的所有消息（用于 API 加载）
@@ -121,7 +122,7 @@ export const useChatStore = create<ChatStore>()(
         // 如果有消息，更新聊天列表的最后一条消息
         if (messages.length > 0) {
           const lastMsg = messages[messages.length - 1];
-          get().updateChatLastMessage(chatId, lastMsg.text, lastMsg.createdAt);
+          get().updateChatLastMessage(chatId, lastMsg); // Pass the whole message object
         }
       },
 
@@ -186,7 +187,7 @@ export const useChatStore = create<ChatStore>()(
       },
 
       // ⭐ Update last message in chat list
-      updateChatLastMessage: (chatId, message, timestamp) => {
+      updateChatLastMessage: (chatId, message) => {
         const currentChatList = get().chatList;
         const chatIndex = currentChatList.findIndex(c => c.id === chatId);
 
@@ -194,11 +195,20 @@ export const useChatStore = create<ChatStore>()(
           const updatedChatList = [...currentChatList];
           const chat = updatedChatList[chatIndex];
 
+          let formattedLastMessage = '';
+          if (message.type === 2) { // Voice message
+            formattedLastMessage = '【语音】';
+          } else if (message.type === 3) { // Image/File message
+            formattedLastMessage = '【图片】';
+          } else { // Default to text message or if type is not recognized
+            formattedLastMessage = message.text;
+          }
+
           // Update chat
           updatedChatList[chatIndex] = {
             ...chat,
-            lastMessage: message,
-            timestamp: timestamp,
+            lastMessage: formattedLastMessage,
+            timestamp: message.createdAt,
           };
 
           // Move to top of list

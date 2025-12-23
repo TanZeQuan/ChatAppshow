@@ -5,13 +5,11 @@ export const createPrivateChat = async ({
     user_id,
     chat_with,
     image = "",
-    group = []
 }: {
     name: string;
     user_id: string;
     chat_with: string;
     image?: string;
-    group: { user_id: string; isadmin: number }[];
 }) => {
     try {
         // 🔍 Diagnostic: Log what we're sending to backend
@@ -27,7 +25,6 @@ export const createPrivateChat = async ({
             user_id,
             chat_with,
             image,
-            group
         };
 
         formData.append("data", JSON.stringify(dataPayload));
@@ -40,17 +37,40 @@ export const createPrivateChat = async ({
 
         console.log("createPrivateChat response:", response.data);
 
-        if (response.data?.error === true) {
+        let responseData = response.data;
+
+        // WORKAROUND for backend sending HTML warnings before JSON
+        if (typeof responseData === 'string') {
+            try {
+                // Find the first '{' which marks the beginning of the JSON
+                const jsonStartIndex = responseData.indexOf('{');
+                if (jsonStartIndex !== -1) {
+                    const jsonString = responseData.substring(jsonStartIndex);
+                    responseData = JSON.parse(jsonString);
+                } else {
+                    // If no JSON is found, treat it as an error
+                    throw new Error("Invalid response format: No JSON object found in response string.");
+                }
+            } catch (e) {
+                console.error("Failed to parse response data string:", e);
+                return {
+                    success: false,
+                    message: "Failed to parse server response.",
+                };
+            }
+        }
+
+        if (responseData?.error === true) {
             return {
                 success: false,
-                message: response.data.message || "Chat creation failed",
+                message: responseData.message || "Chat creation failed",
             };
         }
 
         return {
             success: true,
-            data: response.data,
-            message: response.data.message,
+            data: responseData,
+            message: responseData.message,
         };
     } catch (error: any) {
         console.error(
@@ -220,57 +240,84 @@ export const readChatMessages = async ({
 };
 
 // Send new message
-export const sendChatMessage = async ({
-    sender,
-    receiver,
-    chat_id,
-    message
-}: {
-    sender: string;
-    receiver: string[];
-    chat_id: string;
-    message: string;
-}) => {
-    try {
-        const formData = new FormData();
+export interface MessagePayload {
+  sender: string;
+  isreceive: string[];
+  chat_id: string;
+  message?: string; // for text
+  voice?: { uri: string; name: string; type: string }; // for voice
+  files?: { uri: string; name: string; type: string }[]; // for files
+}
 
-        const dataPayload = {
-            sender,
-            receiver,
-            chat_id,
-            message
-        };
+export const sendChatMessage = async (payload: MessagePayload) => {
+  try {
+    const formData = new FormData();
 
-        formData.append("data", JSON.stringify(dataPayload));
+    // 1. Append the main data payload (excluding files)
+    const dataPayload: any = {
+      sender: payload.sender,
+      isreceive: payload.isreceive,
+      chat_id: payload.chat_id,
+    };
 
-        console.log("sendChatMessage payload:", dataPayload);
-
-        const response = await api.post("/chats/message/new", formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        console.log("sendChatMessage response:", response.data);
-
-        if (response.data?.error === true) {
-            return {
-                success: false,
-                message: response.data.message || "Send message failed",
-            };
-        }
-
-        return {
-            success: true,
-            data: response.data.response,
-            message: response.data.message,
-        };
-    } catch (error: any) {
-        console.error(
-            "sendChatMessage error:",
-            error.response?.data || error.message
-        );
-        return {
-            success: false,
-            message: error.response?.data?.message || error.message,
-        };
+    if (payload.message) {
+      dataPayload.message = payload.message;
     }
+
+    if (payload.files) {
+        dataPayload.files = payload.files.length;
+    }
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    // 2. Append voice file if it exists
+    if (payload.voice) {
+      formData.append("voice", {
+        uri: payload.voice.uri,
+        name: payload.voice.name,
+        type: payload.voice.type,
+      } as any);
+    }
+
+    // 3. Append other files if they exist
+    if (payload.files) {
+      payload.files.forEach((file, index) => {
+        formData.append(`files_${index}`, {
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
+        } as any);
+      });
+    }
+
+    console.log("sendChatMessage payload:", JSON.stringify(dataPayload, null, 2));
+
+    const response = await api.post("/chats/message/new", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+
+    console.log("sendChatMessage response:", response.data);
+
+    if (response.data?.error === true) {
+      return {
+        success: false,
+        message: response.data.message || "Send message failed",
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data.response,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error(
+      "sendChatMessage error:",
+      error.response?.data || error.message
+    );
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
 };

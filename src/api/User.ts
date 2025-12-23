@@ -8,20 +8,30 @@ export const createUser = async (data: {
   name?: string;
   roles?: string;
   status?: number;
+  image?: { uri: string; type?: string; name?: string } | null;
 }) => {
   try {
     const formData = new FormData();
-    formData.append(
-      'data',
-      JSON.stringify({
-        phone: data.phone,
-        passcode: data.passcode,
-        email: data.email,
-        name: data.name,
-        roles: data.roles,
-        status: data.status,
-      })
-    );
+    const dataPayload: any = {
+      phone: data.phone,
+      passcode: data.passcode,
+      email: data.email,
+      name: data.name,
+      roles: data.roles,
+      status: data.status,
+    };
+
+    formData.append('data', JSON.stringify(dataPayload));
+
+    // Append image if it exists and has a valid URI
+    if (data.image && data.image.uri) {
+      const { uri, type = "image/jpeg", name = "avatar.jpg" } = data.image;
+      formData.append("image", {
+        uri,
+        type,
+        name,
+      } as any);
+    }
 
     const response = await api.post('/users/new', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -52,24 +62,7 @@ export const readUsers = async (userId: string) => {
   }
 };
 
-// ✅ Search users
-export const searchUsers = async (query: string, userId?: string) => {
-  try {
-    const formData = new FormData();
-    formData.append(
-      "data",
-      JSON.stringify({
-        search: query,
-        user_id: userId || "",
-      })
-    );
 
-    const response = await api.post("/users/search", formData);
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
-  }
-};
 
 // ✅ Update user info
 export const updateUserInfo = async (

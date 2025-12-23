@@ -267,11 +267,44 @@ export default function ChatRoomScreen() {
       const uri = recording.getURI();
 
       if (uri) {
-        // TODO: Implement voice message sending
-        // const result = await sendVoiceMessageToApi(uri);
+        const receiver = chatMembers.filter(id => id !== currentUserId);
+        const filename = uri.split('/').pop();
+        const result = await sendChatMessage({
+          sender: currentUserId,
+          isreceive: receiver,
+          chat_id: chatId,
+          voice: {
+            uri: uri,
+            name: filename || 'voice.m4a',
+            type: 'audio/m4a', // This might need to be adjusted based on platform
+          },
+        });
+
+        if (result.success && result.data) {
+          const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
+            ? result.data.isreceive
+            : receiver;
+
+          if (actualReceivers.length > 0) {
+            WebSocketManager.sendForwardMessage({
+              type: result.data.type,
+              message: result.data.message, // This should be the URL of the voice message
+              message_id: result.data.message_id,
+              sender: currentUserId,
+              receiver: actualReceivers,
+              chat_id: chatId
+            });
+          }
+
+          await loadMessages(false, false); // Silent refresh after sending
+        } else {
+          console.error("Failed to send voice message:", result.message);
+          Alert.alert('发送失败', result.message || '语音消息发送失败，请重试');
+        }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send voice message', error);
+      Alert.alert('发送失败', error.message || '网络错误，请重试');
     } finally {
       setIsUploading(false);
       setRecording(null);
@@ -309,7 +342,7 @@ export default function ChatRoomScreen() {
 
       const result = await sendChatMessage({
         sender: currentUserId,
-        receiver: receiver,
+        isreceive: receiver,
         chat_id: chatId,
         message: messageText,
       });
@@ -392,9 +425,49 @@ export default function ChatRoomScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        // TODO: 实现图片发送功能
-        Alert.alert('选择成功', `已选择 ${result.assets.length} 张图片\n\n图片发送功能即将推出...`);
-        console.log('Selected images:', result.assets);
+        setIsUploading(true);
+        try {
+            const receiver = chatMembers.filter(id => id !== currentUserId);
+            const files = result.assets.map(asset => ({
+                uri: asset.uri,
+                name: asset.fileName || 'image.jpg',
+                type: asset.type || 'image/jpeg'
+            }));
+
+            const apiResult = await sendChatMessage({
+                sender: currentUserId,
+                isreceive: receiver,
+                chat_id: chatId,
+                files: files
+            });
+
+            if (apiResult.success && apiResult.data) {
+                const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+                    ? apiResult.data.isreceive
+                    : receiver;
+
+                if (actualReceivers.length > 0) {
+                    WebSocketManager.sendForwardMessage({
+                        type: apiResult.data.type,
+                        message: apiResult.data.message, // This should be the URLs of the images
+                        message_id: apiResult.data.message_id,
+                        sender: currentUserId,
+                        receiver: actualReceivers,
+                        chat_id: chatId
+                    });
+                }
+
+                await loadMessages(false, false); // Silent refresh after sending
+            } else {
+                console.error("Failed to send image:", apiResult.message);
+                Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+            }
+        } catch(error: any) {
+            console.error('Failed to send image', error);
+            Alert.alert('发送失败', error.message || '网络错误，请重试');
+        } finally {
+            setIsUploading(false);
+        }
       }
     } catch (error) {
       console.error('选择图片错误:', error);

@@ -8,6 +8,7 @@ import { colors, borders, typography } from "../../styles";
 import { login } from '../../api/Auth';
 import { readUsers } from '../../api/User';
 import { useUserStore } from '../../store/userStore';
+import WebSocketManager from '../../services/WebSocketManager';
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -26,7 +27,7 @@ export default function LoginScreen() {
       console.log('登录结果:', loginResult);
 
       if (!loginResult.error) {
-        const userId = loginResult.response; // this is just the user_id
+        const userId = loginResult.response; 
 
         // fetch full user info
         const userResult = await readUsers(userId);
@@ -39,11 +40,17 @@ export default function LoginScreen() {
             avatar: userResult.data.response.image,
             about: userResult.data.response.about,
           };
+          
+          // Step 1: Connect to WebSocket and wait for login confirmation
+          await WebSocketManager.connect(fullUser.id);
+          console.log("[LoginScreen] WebSocket connected and logged in.");
 
+          // Step 2: Now set the user state. This will trigger navigation to the main app.
           useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
           console.log("最终保存到 Store 的用户资料:", fullUser);
+
         } else {
-          console.warn("读取用户信息失败:", userResult.message);
+          Alert.alert('登录后读取信息失败', userResult.message);
         }
       } else {
         Alert.alert('登录失败', loginResult.message);

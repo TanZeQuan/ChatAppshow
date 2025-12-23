@@ -1,24 +1,25 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import * as ImagePicker from 'expo-image-picker';
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
+  Alert,
+  Dimensions,
   Image,
   KeyboardAvoidingView,
   Platform,
-  Dimensions,
   ScrollView,
-  Alert,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, borders, typography } from "../../styles";
 import { createUser } from "../../api/User";
 import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -38,10 +39,31 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
   const [isLoading, setIsLoading] = useState(false); // Changed to useState
+
+  const pickImage = async () => {
+    // Request permissions before launching the image library
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('抱歉', '我们需要相册权限才能让你选择头像。');
+      return;
+    }
+
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled) {
+      setImage(result.assets[0]);
+    }
+  };
 
   const handleRegister = async () => {
     // Validation
@@ -65,6 +87,7 @@ export default function RegisterScreen() {
       email: email,
       roles: "user",
       status: 1,
+      image: image ? { uri: image.uri, type: image.type || 'image/jpeg', name: image.fileName || 'avatar.jpg' } : null,
     };
 
     console.log("Data to be sent to backend:", postData);
@@ -169,7 +192,7 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.container}>
-              {/* Logo */}
+              {/* Logo
               <View style={styles.logoContainer}>
                 <View style={styles.logoCard}>
                   <Image
@@ -178,9 +201,20 @@ export default function RegisterScreen() {
                     resizeMode="contain"
                   />
                 </View>
-              </View>
+              </View> */}
 
               <Text style={styles.title}>创建账号</Text>
+
+              {/* Avatar Picker */}
+              <View style={styles.avatarContainer}>
+                <Image
+                  source={image ? { uri: image.uri } : require("../../assets/images/anonymous.png")}
+                  style={styles.avatar}
+                />
+                <TouchableOpacity style={styles.avatarEditButton} onPress={pickImage}>
+                  <Ionicons name="camera-outline" size={scaleFont(20)} color="#fff" />
+                </TouchableOpacity>
+              </View>
 
               {/* 姓名 */}
               <View style={styles.inputContainer}>
@@ -354,27 +388,33 @@ const styles = StyleSheet.create({
     height: scaleWidth(isSmallDevice ? 92 : 112),
   },
 
-  // Background shapes
-  // bgShape1: {
-  //   position: "absolute",
-  //   width: scaleWidth(350),
-  //   height: scaleWidth(350),
-  //   borderRadius: borders.radius60,
-  //   backgroundColor: colors.background.transparentWhite50,
-  //   top: scaleHeight(-100),
-  //   right: scaleWidth(-120),
-  //   transform: [{ rotate: "45deg" }],
-  // },
-  // bgShape2: {
-  //   position: "absolute",
-  //   width: scaleWidth(300),
-  //   height: scaleWidth(300),
-  //   borderRadius: borders.radius60,
-  //   backgroundColor: colors.background.transparentWhite70,
-  //   top: scaleHeight(50),
-  //   left: scaleWidth(-150),
-  //   transform: [{ rotate: "30deg" }],
-  // },
+  // Avatar
+  avatarContainer: {
+    marginBottom: scaleHeight(20),
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatar: {
+    width: scaleWidth(100),
+    height: scaleWidth(100),
+    borderRadius: scaleWidth(50),
+    borderWidth: 3,
+    borderColor: colors.background.white,
+  },
+  avatarEditButton: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.functional.blue,
+    width: scaleWidth(32),
+    height: scaleWidth(32),
+    borderRadius: scaleWidth(16),
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.background.white,
+  },
 
   // Title
   title: {

@@ -11,6 +11,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useChatStore } from '../../store/chatStore';
@@ -18,7 +19,6 @@ import { useContactStore } from '../../store/contactStore';
 import { borders, colors, typography } from "../../styles";
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { createPrivateChat, readUserChats } from '../../api/Chat';
-import { readFriends } from '../../api/Friend';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useUserStore } from '../../store/userStore';
 
@@ -27,23 +27,27 @@ const { width, height } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
 const scaleHeight = (size: number) => (height / 812) * size;
 
+const formatLastMessagePreview = (message: string, type: number | undefined): string => {
+  if (!message) {
+    return '开始聊天';
+  }
+  if (type === 2) { // Voice
+    return '【语音】';
+  }
+  if (type === 3) { // Image/Files
+    return '【图片】';
+  }
+  return message; // Default to text
+};
+
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
   const { chatList, getLastMessage, addChat, setChats } = useChatStore();
-  const { contacts, setContacts } = useContactStore();
+  const { contacts } = useContactStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 🔍 Diagnostic: Log current user info
-  // console.log('📱 [ChatListScreen] Current user from store:', JSON.stringify(user, null, 2));
-
   const currentUserId = user?.id;
-
-  if (!currentUserId || currentUserId === 'YOUR_CURRENT_USER_ID') {
-    // console.error('❌ [ChatListScreen] Invalid user ID!');
-    // console.error('user object:', user);
-    // console.error('user.id:', user?.id);
-  }
 
   // Refresh chat list when screen comes into focus
   useFocusEffect(
@@ -128,7 +132,7 @@ export default function ChatListScreen() {
           isGroup: false,
           members: [contact],
           memberIds: [contact.id],
-          lastMessage: lastMessage?.text || '开始聊天',
+          lastMessage: formatLastMessagePreview(lastMessage?.text || '', lastMessage?.type),
           timestamp: lastMessage?.createdAt || '',
           unreadCount: 0,
           online: contact.online || false,
@@ -205,11 +209,8 @@ export default function ChatListScreen() {
         const result = await createPrivateChat({
           name: chat.name,
           user_id: currentUserId, // TypeScript now knows this is not undefined
-          chat_with: chat.id,
-          group: []
+          chat_with: chat.id
         });
-
-        // console.log('Create private chat result:', result);
 
         if (result.success && result.data?.response) {
           const chatId = result.data.response;
@@ -237,6 +238,29 @@ export default function ChatListScreen() {
             chatName: chat.name,
             isGroup: false,
           });
+          return;
+        } else if (result.success && result.message === "Chat existed.") {
+          // WORKAROUND 2.0: Find the new chat by diffing the chat list before and after refreshing.
+          console.log("Chat existed, but no ID returned. Finding it by diffing chat lists...");
+          
+          const oldChatIds = new Set(useChatStore.getState().chatList.map(c => c.id));
+          
+          await silentRefresh();
+          
+          const updatedChatList = useChatStore.getState().chatList;
+          const newlyFoundChat = updatedChatList.find(c => !oldChatIds.has(c.id));
+
+          if (newlyFoundChat) {
+            console.log('✅ Found existing chat by diffing lists:', newlyFoundChat.id);
+            navigation.navigate('ChatRoom', {
+              chatId: newlyFoundChat.id,
+              chatName: chat.name, // Use the name from the item that was clicked
+              isGroup: false,
+            });
+          } else {
+            console.error('❌ Failed to find a new chat after refresh. The backend might not be listing it in time.');
+            Alert.alert("无法进入聊天", "请下拉刷新列表后重试。");
+          }
           return;
         } else {
           console.error('Failed to create private chat:', result.message);
@@ -274,7 +298,7 @@ export default function ChatListScreen() {
 
   const refreshData = async () => {
     // ⚠️ Guard: Check if currentUserId exists
-    if (!currentUserId || currentUserId === 'YOUR_CURRENT_USER_ID') {
+    if (!currentUserId) {
       console.error('❌ [refreshData] Invalid currentUserId, skipping refresh');
       return;
     }
@@ -308,7 +332,7 @@ export default function ChatListScreen() {
             isGroup: chat.type === 2 || chat.isGroup || false,
             members: chat.members || [],
             memberIds: finalMemberIds, // ⭐ Preserve or update memberIds
-            lastMessage: chat.last_message || '',
+            lastMessage: formatLastMessagePreview(chat.last_message, chat.last_message_type),
             timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
             unreadCount: chat.unread_count || 0,
             online: false,
@@ -322,43 +346,8 @@ export default function ChatListScreen() {
         setChats(formattedChats);
       }
 
-      // 2️⃣ Refresh friends/contacts
-      const friendsResult = await readFriends(2); // isstatus = 2 (accepted friends)
-      if (friendsResult.success && friendsResult.data) {
-        // Combine request and approve arrays (same as ContactsScreen)
-        const allFriends = [
-          ...(friendsResult.data.request || []),
-          ...(friendsResult.data.approve || [])
-        ];
-
-        // Transform API response to contact format
-        const formattedContacts = allFriends.map((friend: any) => {
-          const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
-          const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
-          const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
-
-          return {
-            id: userId,
-            name: userName,
-            avatar: userAvatar,
-            online: friend.online || friend.is_online || false,
-            listId: friend.list_id || friend.listId || 0,
-            isFriend: true,
-            rawData: friend,
-          };
-        });
-
-        // Remove duplicates based on id
-        const uniqueContacts = Array.from(
-          new Map(formattedContacts.map(contact => [contact.id, contact])).values()
-        );
-
-        // Update contact store
-        setContacts(uniqueContacts);
-      }
-
-      // 3️⃣ For each contact not in chatList, fetch last message
-      contacts.forEach(contact => getLastMessage(contact.id));
+      // 2️⃣ Refresh friends/contacts - REMOVED
+      // 3️⃣ For each contact not in chatList, fetch last message - REMOVED
 
     } catch (error) {
       console.error("Refresh error:", error);
