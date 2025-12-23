@@ -200,12 +200,11 @@ export default function ContactsScreen() {
     const { chatList } = useChatStore.getState();
 
     // 查找是否已存在与该联系人的1对1聊天
+    // 对于私聊，后端返回的 name 就是对方的名字，所以直接通过名字匹配即可
     const existingChat = chatList.find(
       (chat) =>
-        !chat.isGroup &&
-        chat.memberIds?.length === 2 &&
-        chat.memberIds.includes(currentUserId) &&
-        chat.memberIds.includes(contact.id)
+        !chat.isGroup && // 私聊（istype: 1）
+        chat.name === contact.name // 名字匹配
     );
 
     if (existingChat) {

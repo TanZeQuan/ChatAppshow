@@ -281,7 +281,13 @@ export const sendChatMessage = async (payload: MessagePayload) => {
 
     // 3. Append other files if they exist
     if (payload.files) {
+      console.log('📤 [Send Files] Attaching files:', payload.files.length);
       payload.files.forEach((file, index) => {
+        console.log(`📤 [Send Files] files_${index}:`, {
+          uri: file.uri,
+          name: file.name,
+          type: file.type,
+        });
         formData.append(`files_${index}`, {
           uri: file.uri,
           name: file.name,
@@ -290,13 +296,15 @@ export const sendChatMessage = async (payload: MessagePayload) => {
       });
     }
 
-    console.log("sendChatMessage payload:", JSON.stringify(dataPayload, null, 2));
+    console.log("📤 [sendChatMessage] dataPayload:", JSON.stringify(dataPayload, null, 2));
+    console.log("📤 [sendChatMessage] Sending to:", "/chats/message/new");
 
     const response = await api.post("/chats/message/new", formData, {
       headers: { "Content-Type": "multipart/form-data" },
+      timeout: 60000, // 60 seconds for file uploads
     });
 
-    console.log("sendChatMessage response:", response.data);
+    console.log("✅ [sendChatMessage] Success! Response:", response.data);
 
     if (response.data?.error === true) {
       return {
@@ -312,9 +320,10 @@ export const sendChatMessage = async (payload: MessagePayload) => {
     };
   } catch (error: any) {
     console.error(
-      "sendChatMessage error:",
+      "❌ [sendChatMessage] Error:",
       error.response?.data || error.message
     );
+    console.error("❌ [sendChatMessage] Full error:", error);
     return {
       success: false,
       message: error.response?.data?.message || error.message,

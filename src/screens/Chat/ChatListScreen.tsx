@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -11,16 +11,13 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useChatStore } from '../../store/chatStore';
-import { useContactStore } from '../../store/contactStore';
-import { borders, colors, typography } from "../../styles";
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { createPrivateChat, readUserChats } from '../../api/Chat';
+import { readUserChats } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
+import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -42,8 +39,7 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  const { chatList, getLastMessage, addChat, setChats } = useChatStore();
-  const { contacts } = useContactStore();
+  const { chatList, setChats } = useChatStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -61,14 +57,9 @@ export default function ChatListScreen() {
   // Listen for WebSocket messages (GLOBAL - works even when not in chat room)
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
-      // console.log('🔔 [ChatList] WebSocket message received');
-      // console.log('Message data:', data);
-
       // When ANY chat message is received, refresh the chat list
       // This ensures the chat list shows the latest message preview
-      // 后端格式: {type: 1, message: "...", status: 1, ...}
       if (data.type && data.message) {
-        // console.log('✅ [ChatList] New message detected - refreshing chat list');
         silentRefresh();
       }
     };
@@ -80,200 +71,23 @@ export default function ChatListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Build comprehensive chat list - keeping only the LATEST chat for each unique contact/group
-  const allChats = useMemo(() => {
-    const chatMap = new Map<string, any>();
-
-    // Process chatList first (these have actual message history)
-    chatList.forEach(chat => {
-      const membersWithSelf = [
-        ...(chat.members || []),
-        ...(currentUserId && !chat.members?.some(m => m.id === currentUserId)
-          ? [{ id: currentUserId, name: '我', avatar: '' }]
-          : [])
-      ];
-
-      const uniqueMembers = Array.from(new Map(membersWithSelf.map(m => [m.id, m])).values());
-      
-      // Create a unique key based on participants (sorted to ensure consistency)
-      const participantKey = chat.isGroup 
-        ? chat.id // Use chat ID for groups
-        : uniqueMembers
-            .map(m => m.id)
-            .filter(id => id !== currentUserId)
-            .sort()
-            .join('-'); // Create key from other participants
-
-      const existingChat = chatMap.get(participantKey);
-      const chatTimestamp = new Date(chat.timestamp || 0).getTime();
-      const existingTimestamp = existingChat ? new Date(existingChat.timestamp || 0).getTime() : 0;
-
-      // Only keep the chat with the most recent timestamp
-      if (!existingChat || chatTimestamp > existingTimestamp) {
-        chatMap.set(participantKey, {
-          ...chat,
-          members: uniqueMembers,
-          memberIds: uniqueMembers.map(m => m.id),
-        });
-      }
-    });
-
-    // Add contacts that don't have any chat history yet
-    contacts.forEach(contact => {
-      const participantKey = contact.id;
-      
-      // Only add if there's no existing chat with this contact
-      if (!chatMap.has(participantKey)) {
-        const lastMessage = getLastMessage(contact.id);
-        chatMap.set(participantKey, {
-          id: contact.id,
-          name: contact.name.replace(/^用户/, ''),
-          avatar: contact.avatar,
-          isGroup: false,
-          members: [contact],
-          memberIds: [contact.id],
-          lastMessage: formatLastMessagePreview(lastMessage?.text || '', lastMessage?.type),
-          timestamp: lastMessage?.createdAt || '',
-          unreadCount: 0,
-          online: contact.online || false,
-        });
-      }
-    });
-
-    // Sort by timestamp (most recent first)
-    return Array.from(chatMap.values()).sort((a, b) => {
-      if (!a.timestamp) return 1;
-      if (!b.timestamp) return -1;
-      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    });
-  }, [chatList, contacts, getLastMessage, currentUserId]);
+  // Sort chats by timestamp (most recent first)
+  const sortedChats = [...chatList].sort((a, b) => {
+    if (!a.timestamp) return 1;
+    if (!b.timestamp) return -1;
+    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+  });
 
   // Filter chats based on search query
-  const filteredChats = allChats.filter(chat =>
+  const filteredChats = sortedChats.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleChatPress = async (chat: any) => {
-    // ⚠️ Guard: Check if currentUserId exists
-    if (!currentUserId) {
-      console.error('❌ [handleChatPress] No currentUserId, cannot open chat');
-      return;
-    }
+  const handleChatPress = (chat: any) => {
+    // ChatListScreen 只显示已有的聊天记录（从 /chats/read 获取）
+    // 所有聊天都有真正的 chat_id，直接跳转即可
+    // 创建新聊天的逻辑在 ContactsScreen 中处理
 
-    // 如果是联系人（没有真正的聊天ID，只有用户ID），需要创建或查找私聊
-    if (!chat.isGroup && !chat.id.startsWith('IMC')) {
-      try {
-        // // 🔍 Step 1: Check if chat already exists in frontend chatList
-        // console.log('🔍 Checking if chat already exists with user:', chat.id);
-        // console.log('📋 Current chatList:', chatList.map(c => ({
-        //   id: c.id,
-        //   name: c.name,
-        //   isGroup: c.isGroup,
-        //   memberIds: c.memberIds
-        // })));
-
-        // Look for existing private chat with this user
-        const existingChat = chatList.find(c => {
-          // Must be a private chat (not group) and have memberIds
-          if (c.isGroup || !c.memberIds || c.memberIds.length === 0) {
-            return false;
-          }
-
-          // Check if this chat includes both currentUserId and the target user (chat.id)
-          const hasBothUsers = c.memberIds.includes(currentUserId) && c.memberIds.includes(chat.id);
-          // console.log(`Checking chat ${c.id}: memberIds=${c.memberIds}, hasBothUsers=${hasBothUsers}`);
-          return hasBothUsers;
-        });
-
-        if (existingChat) {
-          // console.log('✅ Found existing chat:', existingChat.id);
-          // Navigate to existing chat
-          navigation.navigate('ChatRoom', {
-            chatId: existingChat.id,
-            chatName: existingChat.name,
-            isGroup: false,
-          });
-          return;
-        }
-
-        // 🆕 Step 2: No existing chat found, create new one
-        // console.log('🆕 No existing chat found, creating new chat with contact:', chat.id);
-
-        // // 🔍 Diagnostic: Log API parameters
-        // console.log('📤 [API] createPrivateChat parameters:');
-        // console.log('  - user_id (current user):', currentUserId);
-        // console.log('  - chat_with (target user):', chat.id);
-        // console.log('  - name:', chat.name);
-        // console.log('  - Full user object from store:', JSON.stringify(user, null, 2));
-
-        const result = await createPrivateChat({
-          name: chat.name,
-          user_id: currentUserId, // TypeScript now knows this is not undefined
-          chat_with: chat.id
-        });
-
-        if (result.success && result.data?.response) {
-          const chatId = result.data.response;
-          // console.log('✅ Got new chat_id:', chatId);
-
-          // 💾 Save chat info to store with memberIds for future lookup
-          addChat({
-            id: chatId,
-            name: chat.name,
-            avatar: chat.avatar || null,
-            isGroup: false,
-            members: [
-              { id: chat.id, name: chat.name, avatar: chat.avatar },
-              { id: currentUserId, name: user?.name || '我', avatar: user?.avatar || '' }
-            ],
-            memberIds: [chat.id, currentUserId], // ⭐ Critical for future lookups
-            lastMessage: '开始聊天',
-            timestamp: new Date().toISOString(),
-            unreadCount: 0,
-            online: chat.online || false,
-          });
-
-          navigation.navigate('ChatRoom', {
-            chatId: chatId,
-            chatName: chat.name,
-            isGroup: false,
-          });
-          return;
-        } else if (result.success && result.message === "Chat existed.") {
-          // WORKAROUND 2.0: Find the new chat by diffing the chat list before and after refreshing.
-          console.log("Chat existed, but no ID returned. Finding it by diffing chat lists...");
-          
-          const oldChatIds = new Set(useChatStore.getState().chatList.map(c => c.id));
-          
-          await silentRefresh();
-          
-          const updatedChatList = useChatStore.getState().chatList;
-          const newlyFoundChat = updatedChatList.find(c => !oldChatIds.has(c.id));
-
-          if (newlyFoundChat) {
-            console.log('✅ Found existing chat by diffing lists:', newlyFoundChat.id);
-            navigation.navigate('ChatRoom', {
-              chatId: newlyFoundChat.id,
-              chatName: chat.name, // Use the name from the item that was clicked
-              isGroup: false,
-            });
-          } else {
-            console.error('❌ Failed to find a new chat after refresh. The backend might not be listing it in time.');
-            Alert.alert("无法进入聊天", "请下拉刷新列表后重试。");
-          }
-          return;
-        } else {
-          console.error('Failed to create private chat:', result.message);
-          return;
-        }
-      } catch (error) {
-        console.error('Error creating private chat:', error);
-        return;
-      }
-    }
-
-    // 正常的群聊或已有聊天ID的私聊
-    console.log('Opening existing chat_id:', chat.id);
     if (chat.isGroup) {
       navigation.navigate('GroupRoom', {
         chatId: chat.id,
@@ -297,6 +111,8 @@ export default function ChatListScreen() {
   };
 
   const refreshData = async () => {
+    const currentUserId = user?.id;
+
     // ⚠️ Guard: Check if currentUserId exists
     if (!currentUserId) {
       console.error('❌ [refreshData] Invalid currentUserId, skipping refresh');
@@ -304,13 +120,7 @@ export default function ChatListScreen() {
     }
 
     try {
-      // 🔍 Diagnostic: Verify user before API calls
-      // console.log('🔄 [refreshData] Starting refresh...');
-      // console.log('  - currentUserId:', currentUserId);
-      // console.log('  - Full user object:', JSON.stringify(user, null, 2));
-
       // 1️⃣ Refresh chat list from API
-      // console.log('📤 [API] Calling readUserChats with user_id:', currentUserId);
       const chatsResult = await readUserChats(currentUserId);
       if (chatsResult.success && chatsResult.data) {
         // console.log('🔍 Full raw chat data from API:', JSON.stringify(chatsResult.data, null, 2));
@@ -325,22 +135,32 @@ export default function ChatListScreen() {
           const backendMemberIds = chat.member_ids || chat.memberIds || chat.user_ids || [];
           const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : existingMemberIds;
 
+          // Extract last message from message array or use existing data
+          const lastMessageText = chat.message && chat.message.length > 0
+            ? chat.message[chat.message.length - 1]?.message || ''
+            : chat.last_message || '';
+
+          const lastMessageType = chat.message && chat.message.length > 0
+            ? chat.message[chat.message.length - 1]?.type
+            : chat.last_message_type;
+
           return {
             id: chat.chat_id,
             name: chat.name || chat.chat_name || '未命名聊天',
             avatar: chat.image || chat.avatar || null,
-            isGroup: chat.type === 2 || chat.isGroup || false,
+            isGroup: chat.istype === 2 || chat.type === 2 || chat.isGroup || false,
             members: chat.members || [],
-            memberIds: finalMemberIds, // ⭐ Preserve or update memberIds
-            lastMessage: formatLastMessagePreview(chat.last_message, chat.last_message_type),
+            memberIds: finalMemberIds,
+            lastMessage: formatLastMessagePreview(lastMessageText, lastMessageType),
             timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
-            unreadCount: chat.unread_count || 0,
+            unreadCount: chat.unread || chat.unread_count || 0,
             online: false,
             rawData: chat,
           };
         });
 
-        console.log('✅ Formatted chat (first):', JSON.stringify(formattedChats[0]));
+        console.log('✅ Formatted chats list:', formattedChats.length, 'chats');
+        // console.log('📋 First chat:', JSON.stringify(formattedChats[0], null, 2));
 
         // Update chat store
         setChats(formattedChats);

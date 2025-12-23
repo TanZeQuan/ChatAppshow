@@ -23,6 +23,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
+import { ensureFullImageUrl } from '../../api/service';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
@@ -40,6 +41,9 @@ interface DisplayMessage {
   senderId: string;
   senderName: string;
   text: string;
+  type?: number; // 1=text, 2=voice, 3=images
+  imageUrls?: string[]; // For type 3 messages
+  voiceUrl?: string; // For type 2 messages
   createdAt: string;
   sender: 'me' | 'other';
   username?: string;
@@ -132,17 +136,108 @@ export default function ChatRoomScreen() {
           // Transform API messages to store format
           const transformedMessages = apiMessages.map((msg: any) => {
             let messageText = '';
+            let messageType = 1; // Default to text
+            let imageUrls: string[] = [];
+            let voiceUrl: string = '';
+
             try {
-              const parsedMessage = JSON.parse(msg.message);
-              messageText = parsedMessage.message || '';
+              // 🔍 Check if msg.message is already an object or a string
+              let parsedMessage: any;
+
+              if (typeof msg.message === 'string') {
+                try {
+                  parsedMessage = JSON.parse(msg.message);
+                } catch {
+                  // If parsing fails, treat as plain text
+                  parsedMessage = { message: msg.message };
+                }
+              } else if (typeof msg.message === 'object' && msg.message !== null) {
+                parsedMessage = msg.message; // Already an object
+              } else {
+                parsedMessage = { message: String(msg.message || '') };
+              }
+
+              console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
+
+              // Extract type: try msg.type first, then parsedMessage.type
+              if (msg.type) {
+                messageType = msg.type;
+              } else if (parsedMessage.type) {
+                messageType = parsedMessage.type; // ✅ 从 parsedMessage 获取类型
+              }
+
+              console.log('📦 [Message Parse] Final messageType:', messageType);
+
+              // For type 3 (images/files), extract image URLs
+              if (messageType === 3) {
+                console.log('🖼️ [Image Message] Detected type 3, parsedMessage:', parsedMessage);
+
+                // Check if parsedMessage is an array (direct image URLs)
+                if (Array.isArray(parsedMessage)) {
+                  console.log('🖼️ [Image Message] parsedMessage is array:', parsedMessage);
+                  imageUrls = parsedMessage.map((url: string) => {
+                    const fullUrl = ensureFullImageUrl(url);
+                    console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
+                    return fullUrl;
+                  });
+                }
+                // Check if parsedMessage.message is an array
+                else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
+                  console.log('🖼️ [Image Message] parsedMessage.message is array:', parsedMessage.message);
+                  imageUrls = parsedMessage.message.map((url: string) => {
+                    const fullUrl = ensureFullImageUrl(url);
+                    console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
+                    return fullUrl;
+                  });
+                }
+                // Check if parsedMessage.message is a comma-separated string
+                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                  console.log('🖼️ [Image Message] parsedMessage.message is string:', parsedMessage.message);
+                  const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
+                  imageUrls = urls.map((url: string) => {
+                    const fullUrl = ensureFullImageUrl(url);
+                    console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
+                    return fullUrl;
+                  });
+                }
+
+                console.log('🖼️ [Image Message] Final imageUrls:', imageUrls);
+                messageText = `[${imageUrls.length}张图片]`; // Display text
+              }
+              // For type 2 (voice), ensure full URL
+              else if (messageType === 2) {
+                if (typeof parsedMessage === 'string') {
+                  voiceUrl = ensureFullImageUrl(parsedMessage);
+                  messageText = '[语音消息]';
+                } else if (parsedMessage.message) {
+                  voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                  messageText = '[语音消息]';
+                }
+              }
+              // For type 1 (text), extract text content
+              else {
+                if (typeof parsedMessage === 'string') {
+                  messageText = parsedMessage;
+                } else if (parsedMessage.message) {
+                  messageText = String(parsedMessage.message);
+                } else {
+                  messageText = String(parsedMessage);
+                }
+              }
             } catch (e) {
-              console.error('Failed to parse message:', msg.message);
-              messageText = msg.message;
+              console.error('Failed to parse message:', msg.message, 'Error:', e);
+              // Fallback: convert to string safely
+              messageText = typeof msg.message === 'string'
+                ? msg.message
+                : JSON.stringify(msg.message);
             }
 
             return {
               id: msg.message_id,
-              text: messageText,
+              text: messageText, // ✅ Always a string
+              type: messageType, // ✅ Save message type
+              imageUrls: imageUrls, // ✅ Save image URLs with full domain
+              voiceUrl: voiceUrl, // ✅ Save voice URL with full domain
               createdAt: msg.created_at,
               senderId: msg.sender,
               name: msg.sender === currentUserId ? userName : undefined,
@@ -427,12 +522,18 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setIsUploading(true);
         try {
+            console.log('📤 [Pick Image] Selected assets:', result.assets.length);
+
             const receiver = chatMembers.filter(id => id !== currentUserId);
             const files = result.assets.map(asset => ({
                 uri: asset.uri,
                 name: asset.fileName || 'image.jpg',
                 type: asset.type || 'image/jpeg'
             }));
+
+            console.log('📤 [Pick Image] Files to send:', files);
+            console.log('📤 [Pick Image] Receiver:', receiver);
+            console.log('📤 [Pick Image] Calling sendChatMessage...');
 
             const apiResult = await sendChatMessage({
                 sender: currentUserId,
@@ -441,12 +542,17 @@ export default function ChatRoomScreen() {
                 files: files
             });
 
+            console.log('📤 [Pick Image] API Result:', apiResult);
+
             if (apiResult.success && apiResult.data) {
+                console.log('✅ [Pick Image] Success! Data:', apiResult.data);
+
                 const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
                     ? apiResult.data.isreceive
                     : receiver;
 
                 if (actualReceivers.length > 0) {
+                    console.log('📨 [Pick Image] Sending WebSocket forward...');
                     WebSocketManager.sendForwardMessage({
                         type: apiResult.data.type,
                         message: apiResult.data.message, // This should be the URLs of the images
@@ -457,9 +563,10 @@ export default function ChatRoomScreen() {
                     });
                 }
 
+                console.log('🔄 [Pick Image] Refreshing messages...');
                 await loadMessages(false, false); // Silent refresh after sending
             } else {
-                console.error("Failed to send image:", apiResult.message);
+                console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
                 Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
             }
         } catch(error: any) {
@@ -489,42 +596,74 @@ export default function ChatRoomScreen() {
     setInputText((prev) => prev + emoji.emoji);
   };
 
-  const renderItem = ({ item }: { item: DisplayMessage }) => (
-    <View style={[
-      roomStyles.messageRow,
-      item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
-    ]}>
-      {item.sender === 'other' && (
-        <View style={roomStyles.avatar}>
-          <Image
-            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
-            style={roomStyles.avatarImage}
-          />
-        </View>
-      )}
-      <View style={[
-        roomStyles.bubble,
-        item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
-      ]}>
-        <Text style={roomStyles.messageText}>{item.text}</Text>
-        <Text style={roomStyles.timestamp}>
-          {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </Text>
-      </View>
+  const renderItem = ({ item }: { item: DisplayMessage }) => {
+    // 🔍 Safety check: ensure text is a string
+    const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
 
-      {item.sender === 'me' && (
-        <View style={roomStyles.avatar}>
-          <Image
-            source={currentUserAvatar ? { uri: currentUserAvatar } : require('../../assets/images/anonymous.png')}
-            style={roomStyles.avatarImage}
-          />
+    return (
+      <View style={[
+        roomStyles.messageRow,
+        item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
+      ]}>
+        {item.sender === 'other' && (
+          <View style={roomStyles.avatar}>
+            <Image
+              source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
+              style={roomStyles.avatarImage}
+            />
+          </View>
+        )}
+        <View style={[
+          roomStyles.bubble,
+          item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
+        ]}>
+          {/* Type 1: Text Message */}
+          {item.type === 1 && messageText && (
+            <Text style={roomStyles.messageText}>{messageText}</Text>
+          )}
+
+          {/* Type 2: Voice Message */}
+          {item.type === 2 && (
+            <View style={roomStyles.voiceMessageContainer}>
+              <Ionicons name="play-circle" size={24} color="#333" />
+              <Text style={roomStyles.voiceMessageText}>语音消息</Text>
+            </View>
+          )}
+
+          {/* Type 3: Image Message */}
+          {item.type === 3 && item.imageUrls && item.imageUrls.length > 0 && (
+            <View style={roomStyles.imageGridContainer}>
+              {item.imageUrls.map((url, index) => (
+                <TouchableOpacity key={index} activeOpacity={0.8}>
+                  <Image
+                    source={{ uri: url }}
+                    style={roomStyles.messageImage}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={roomStyles.timestamp}>
+            {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
         </View>
-      )}
-    </View>
-  );
+
+        {item.sender === 'me' && (
+          <View style={roomStyles.avatar}>
+            <Image
+              source={currentUserAvatar ? { uri: currentUserAvatar } : require('../../assets/images/anonymous.png')}
+              style={roomStyles.avatarImage}
+            />
+          </View>
+        )}
+      </View>
+    );
+  };
 
   const ToolbarButton = ({ icon, label, onPress }: any) => (
     <TouchableOpacity style={roomStyles.toolbarButton} onPress={onPress}>
@@ -819,5 +958,29 @@ const roomStyles = RNStyleSheet.create({
     fontSize: scaleFont(12),
     color: colors.text.blackMedium,
     textAlign: 'center',
+  },
+  // Voice message styles
+  voiceMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: scaleWidth(8),
+    paddingVertical: scaleHeight(4),
+  },
+  voiceMessageText: {
+    fontSize: scaleFont(14),
+    color: colors.text.blackMedium,
+  },
+  // Image message styles
+  imageGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: scaleWidth(4),
+    marginBottom: scaleHeight(4),
+  },
+  messageImage: {
+    width: scaleWidth(120),
+    height: scaleWidth(120),
+    borderRadius: borders.radius8,
+    backgroundColor: colors.background.grayLight,
   },
 });
