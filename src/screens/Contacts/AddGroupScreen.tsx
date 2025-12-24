@@ -170,36 +170,94 @@ export default function AddGroupScreen() {
         group: groupMembers,
       });
 
+      console.log('📩 [Group Create] Full result:', JSON.stringify(result, null, 2));
+      console.log('📩 [Group Create] result.chat_id:', result?.chat_id);
+      console.log('📩 [Group Create] result.error:', result?.error);
+      console.log('📩 [Group Create] result keys:', result ? Object.keys(result) : 'null');
+
       setIsLoading(false);
 
-      if (result && result.chat_id) {
-        // Optionally, add to local chat store
+      // ✅ Check for success - handle different response formats
+      const chatId = result?.chat_id || result?.chatId || result?.id;
+      const hasError = result?.error === true;
+
+      console.log('📩 [Group Create] Extracted chatId:', chatId);
+      console.log('📩 [Group Create] hasError:', hasError);
+
+      if (!hasError && chatId) {
+        console.log('✅ [Group Created] Success! Chat ID:', chatId);
+        console.log('✅ [Group Created] Group members:', groupMembers);
+
+        // ✅ Build complete members array with full user info
+        const membersWithInfo = groupMembers.map(gm => {
+          if (gm.user_id === user.id) {
+            // Creator (current user)
+            return {
+              id: gm.user_id,
+              name: user.name || '我',
+              avatar: user.avatar || '',
+              isadmin: gm.isadmin,
+            };
+          } else {
+            // Other members - find from contacts
+            const contact = contacts.find(c => c.id === gm.user_id);
+            return {
+              id: gm.user_id,
+              name: contact?.name || `用户${gm.user_id}`,
+              avatar: contact?.avatar || '',
+              isadmin: gm.isadmin,
+            };
+          }
+        });
+
+        console.log('✅ [Group Created] Members with info:', membersWithInfo);
+
+        // Add to local chat store with complete member information
         const newGroupChat = {
-          id: result.chat_id,
+          id: chatId, // ✅ Use extracted chatId
           name: groupName.trim(),
           avatar: result.image || null,
           isGroup: true,
-          members: result.members || [], // Assuming backend returns members
+          members: membersWithInfo, // ✅ Full member info
+          memberIds: groupMembers.map(m => m.user_id), // Member IDs
+          ownerId: user.id, // Creator is the owner
+          admins: [user.id], // Creator is admin
           lastMessage: "群聊已创建",
           timestamp: new Date().toISOString(),
           unreadCount: 0,
         };
+
+        console.log('✅ [Group Created] Saving to store:', newGroupChat);
         addChat(newGroupChat as any);
 
+        // ✅ Close modal FIRST, then navigate
         setShowGroupNameModal(false);
 
-        Alert.alert(
-          "成功",
-          `群聊 "${groupName}" 已创建！`,
-          [
-            {
-              text: "确定",
-              onPress: () => navigation.navigate("ChatList"), // Navigate to chat list
-            },
-          ]
-        );
+        // ✅ Use setTimeout to ensure modal is closed before navigation
+        setTimeout(() => {
+          Alert.alert(
+            "成功",
+            `群聊 "${groupName}" 已创建！`,
+            [
+              {
+                text: "确定",
+                onPress: () => {
+                  // Navigate to the newly created group chat room
+                  navigation.navigate("ChatRoomScreen", {
+                    chatId: chatId, // ✅ Use extracted chatId
+                    chatName: groupName.trim(),
+                  });
+                },
+              },
+            ]
+          );
+        }, 300); // Small delay to ensure modal animation completes
       } else {
-        Alert.alert("错误", result.message || "创建群聊失败，请重试");
+        // Show error
+        const errorMsg = result?.message || "创建群聊失败，请重试";
+        console.error("❌ [Group Create] Failed:", errorMsg);
+        console.error("❌ [Group Create] Full result:", result);
+        Alert.alert("错误", errorMsg);
       }
     } catch (error: any) {
       setIsLoading(false);
