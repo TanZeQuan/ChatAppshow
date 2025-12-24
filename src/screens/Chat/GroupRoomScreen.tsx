@@ -40,6 +40,9 @@ interface DisplayMessage {
     senderId: string;
     senderName: string;
     text: string;
+    type?: number; // 1=text, 2=voice, 3=images
+    imageUrls?: string[]; // For type 3 messages
+    voiceUrl?: string; // For type 2 messages
     createdAt: string;
     sender: 'me' | 'other';
     username?: string;
@@ -134,7 +137,7 @@ export default function GroupRoomScreen() {
                 playThroughEarpieceAndroid: false,
             });
 
-            console.log('🎤 [Voice] Starting recording with high-quality audio...');
+            // console.log('🎤 [Voice] Starting recording with high-quality audio...');
 
             // ✅ Use custom recording options for high-quality audio
             // Note: expo-av doesn't support native Opus encoding, so we record in AAC and send as .opus to backend
@@ -168,9 +171,9 @@ export default function GroupRoomScreen() {
             const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
             setRecording(newRecording);
             setIsRecording(true);
-            console.log('✅ [Voice] Recording started (will be sent as .opus)');
+            // console.log('✅ [Voice] Recording started (will be sent as .opus)');
         } catch (err: any) {
-            console.error('❌ [Voice] Failed to start recording:', err);
+            console.log('❌ [Voice] Failed to start recording:', err);
             Alert.alert('录音失败', err.message || '无法启动录音，请重试');
             setRecording(null);
             setIsRecording(false);
@@ -216,7 +219,7 @@ export default function GroupRoomScreen() {
                 // ✅ Always use audio/opus MIME type
                 const mimeType = 'audio/opus';
 
-                console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
+                // console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
 
                 const result = await sendChatMessage({
                     sender: currentUserId,
@@ -229,7 +232,7 @@ export default function GroupRoomScreen() {
                     },
                 });
 
-                console.log('🎤 [Voice] API Result:', result);
+                // console.log('🎤 [Voice] API Result:', result);
 
                 if (result.success && result.data) {
                     console.log('✅ [Voice] Success!');
@@ -531,11 +534,29 @@ export default function GroupRoomScreen() {
                 setIsUploading(true);
                 try {
                     const receiver = chatMembers.filter(id => id !== currentUserId);
-                    const files = result.assets.map(asset => ({
-                        uri: asset.uri,
-                        name: asset.fileName || 'image.jpg',
-                        type: asset.type || 'image/jpeg'
-                    }));
+
+                    // ✅ Get proper MIME type based on file extension (same as ChatRoomScreen)
+                    const files = result.assets.map(asset => {
+                        const fileName = asset.fileName || 'image.jpg';
+                        const extension = fileName.split('.').pop()?.toLowerCase();
+
+                        let mimeType = 'image/jpeg'; // default
+                        if (extension === 'png') mimeType = 'image/png';
+                        else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+                        else if (extension === 'gif') mimeType = 'image/gif';
+                        else if (extension === 'webp') mimeType = 'image/webp';
+
+                        console.log(`📤 [GroupRoom File Type] ${fileName} → ${mimeType}`);
+
+                        return {
+                            uri: asset.uri,
+                            name: fileName,
+                            type: mimeType
+                        };
+                    });
+
+                    console.log('📤 [GroupRoom] Sending images to group...');
+                    console.log('📤 [GroupRoom] Receiver:', receiver);
 
                     const apiResult = await sendChatMessage({
                         sender: currentUserId,

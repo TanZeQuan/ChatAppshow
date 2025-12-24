@@ -43,8 +43,8 @@ api.interceptors.request.use(
         }
 
         // 🔍 Debug logging
-        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-        console.log(`[API Request] Headers:`, config.headers);
+        // console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+        // console.log(`[API Request] Headers:`, config.headers);
 
         return config;
     },
