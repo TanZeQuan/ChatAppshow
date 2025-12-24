@@ -264,14 +264,27 @@ export const sendChatMessage = async (payload: MessagePayload) => {
       dataPayload.message = payload.message;
     }
 
-    if (payload.files) {
-        dataPayload.files = payload.files.length;
+    // ✅ Add file count to data payload if files exist (required by backend)
+    if (payload.files && payload.files.length > 0) {
+      dataPayload.files = payload.files.length;
     }
 
     formData.append("data", JSON.stringify(dataPayload));
 
     // 2. Append voice file if it exists
     if (payload.voice) {
+      console.log('🎤 [Send Voice] Attaching voice file:', {
+        uri: payload.voice.uri,
+        name: payload.voice.name,
+        type: payload.voice.type,
+      });
+
+      // ✅ Validate voice file object
+      if (!payload.voice.uri || !payload.voice.name || !payload.voice.type) {
+        console.error('❌ [Send Voice] Invalid voice object:', payload.voice);
+        throw new Error('Invalid voice file object');
+      }
+
       formData.append("voice", {
         uri: payload.voice.uri,
         name: payload.voice.name,
@@ -280,6 +293,7 @@ export const sendChatMessage = async (payload: MessagePayload) => {
     }
 
     // 3. Append other files if they exist
+    // ✅ Backend expects: files_0, files_1, files_2, ... (not files[])
     if (payload.files) {
       console.log('📤 [Send Files] Attaching files:', payload.files.length);
       payload.files.forEach((file, index) => {
@@ -288,6 +302,13 @@ export const sendChatMessage = async (payload: MessagePayload) => {
           name: file.name,
           type: file.type,
         });
+
+        // ✅ Validate file object before appending
+        if (!file.uri || !file.name || !file.type) {
+          console.error(`❌ [Send Files] Invalid file object at index ${index}:`, file);
+          throw new Error(`Invalid file object at index ${index}`);
+        }
+
         formData.append(`files_${index}`, {
           uri: file.uri,
           name: file.name,
@@ -298,6 +319,14 @@ export const sendChatMessage = async (payload: MessagePayload) => {
 
     console.log("📤 [sendChatMessage] dataPayload:", JSON.stringify(dataPayload, null, 2));
     console.log("📤 [sendChatMessage] Sending to:", "/chats/message/new");
+    console.log("📤 [sendChatMessage] Full URL:", api.defaults.baseURL + "/chats/message/new");
+
+    // Add request interceptor logging for this specific request
+    console.log("📤 [sendChatMessage] Request config:", {
+      baseURL: api.defaults.baseURL,
+      timeout: 60000,
+      headers: { "Content-Type": "multipart/form-data" }
+    });
 
     const response = await api.post("/chats/message/new", formData, {
       headers: { "Content-Type": "multipart/form-data" },

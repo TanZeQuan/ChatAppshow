@@ -20,7 +20,7 @@ export const ensureFullImageUrl = (url: string | undefined | null): string => {
     const path = url.startsWith('/') ? url : `/${url}`;
 
     const fullUrl = `${domainOnly}${path}`;
-    console.log(`🔗 [ensureFullImageUrl] ${url} → ${fullUrl}`);
+    // console.log(`🔗 [ensureFullImageUrl] ${url} → ${fullUrl}`);
     return fullUrl;
 };
 
@@ -35,15 +35,41 @@ const api = axios.create({
 api.interceptors.request.use(
     async (config) => {
         const token = await AsyncStorage.getItem('token');
+        config.headers = config.headers || {};
+
         if (token) {
-            config.headers = config.headers || {};
             // @ts-ignore
             config.headers['Authorization'] = `Bearer ${token}`;
         }
-        // console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+
+        // 🔍 Debug logging
+        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+        console.log(`[API Request] Headers:`, config.headers);
+
         return config;
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        console.error('[API Request] Interceptor error:', error);
+        return Promise.reject(error);
+    }
+);
+
+// Add response interceptor for debugging
+api.interceptors.response.use(
+    (response) => {
+        console.log(`[API Response] ${response.config.url} - Status: ${response.status}`);
+        return response;
+    },
+    (error) => {
+        console.error(`[API Response] Error:`, {
+            url: error.config?.url,
+            method: error.config?.method,
+            message: error.message,
+            code: error.code,
+            response: error.response?.data
+        });
+        return Promise.reject(error);
+    }
 );
 
 export default api;

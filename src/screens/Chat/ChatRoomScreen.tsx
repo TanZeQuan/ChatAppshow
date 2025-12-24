@@ -61,6 +61,8 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
+  console.log('🆔 ChatRoomScreen chatId:', chatId);
+
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -99,6 +101,8 @@ export default function ChatRoomScreen() {
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [playingVoice, setPlayingVoice] = useState<string | null>(null); // Track which voice is playing
+  const [sound, setSound] = useState<Audio.Sound | null>(null); // Current sound instance
 
   // Wrap loadMessages in useCallback to prevent closure issues
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
@@ -157,7 +161,7 @@ export default function ChatRoomScreen() {
                 parsedMessage = { message: String(msg.message || '') };
               }
 
-              console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
+              // console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
 
               // Extract type: try msg.type first, then parsedMessage.type
               if (msg.type) {
@@ -166,7 +170,7 @@ export default function ChatRoomScreen() {
                 messageType = parsedMessage.type; // ✅ 从 parsedMessage 获取类型
               }
 
-              console.log('📦 [Message Parse] Final messageType:', messageType);
+              // console.log('📦 [Message Parse] Final messageType:', messageType);
 
               // For type 3 (images/files), extract image URLs
               if (messageType === 3) {
@@ -175,25 +179,43 @@ export default function ChatRoomScreen() {
                 // Check if parsedMessage is an array (direct image URLs)
                 if (Array.isArray(parsedMessage)) {
                   console.log('🖼️ [Image Message] parsedMessage is array:', parsedMessage);
-                  imageUrls = parsedMessage.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage
+                    .filter((item: any) => {
+                      // Filter out error objects
+                      if (typeof item === 'object' && item.error === true) {
+                        console.warn('🖼️ [Image Message] Skipping error item:', item);
+                        return false;
+                      }
+                      return typeof item === 'string' && item.trim() !== '';
+                    })
+                    .map((url: string) => {
+                      const fullUrl = ensureFullImageUrl(url);
+                      console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
+                      return fullUrl;
+                    });
                 }
                 // Check if parsedMessage.message is an array
                 else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
                   console.log('🖼️ [Image Message] parsedMessage.message is array:', parsedMessage.message);
-                  imageUrls = parsedMessage.message.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage.message
+                    .filter((item: any) => {
+                      // Filter out error objects
+                      if (typeof item === 'object' && item.error === true) {
+                        console.warn('🖼️ [Image Message] Skipping error item:', item);
+                        return false;
+                      }
+                      return typeof item === 'string' && item.trim() !== '';
+                    })
+                    .map((url: string) => {
+                      const fullUrl = ensureFullImageUrl(url);
+                      console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
+                      return fullUrl;
+                    });
                 }
                 // Check if parsedMessage.message is a comma-separated string
                 else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
                   console.log('🖼️ [Image Message] parsedMessage.message is string:', parsedMessage.message);
-                  const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
+                  const urls = parsedMessage.message.split(',').map((url: string) => url.trim()).filter(url => url !== '');
                   imageUrls = urls.map((url: string) => {
                     const fullUrl = ensureFullImageUrl(url);
                     console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
@@ -206,11 +228,37 @@ export default function ChatRoomScreen() {
               }
               // For type 2 (voice), ensure full URL
               else if (messageType === 2) {
+                console.log('🎤 [Voice Message] Detected type 2, parsedMessage:', parsedMessage);
+
+                // Extract voice URL from different possible formats
+                let rawVoiceUrl = '';
+
                 if (typeof parsedMessage === 'string') {
-                  voiceUrl = ensureFullImageUrl(parsedMessage);
-                  messageText = '[语音消息]';
+                  rawVoiceUrl = parsedMessage;
                 } else if (parsedMessage.message) {
-                  voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                  if (typeof parsedMessage.message === 'string') {
+                    rawVoiceUrl = parsedMessage.message;
+                  } else if (typeof parsedMessage.message === 'object') {
+                    // If message is an object, it might be an error or have a nested structure
+                    console.warn('🎤 [Voice Message] parsedMessage.message is object:', parsedMessage.message);
+
+                    // Check if it's an error response
+                    if (parsedMessage.message.error === true) {
+                      console.error('🎤 [Voice Message] Error from backend:', parsedMessage.message.message);
+                      messageText = '[语音消息发送失败]';
+                      voiceUrl = '';
+                    } else {
+                      // Try to extract URL from object
+                      rawVoiceUrl = parsedMessage.message.url || parsedMessage.message.voiceUrl || '';
+                    }
+                  }
+                }
+
+                if (rawVoiceUrl && rawVoiceUrl.trim() !== '') {
+                  voiceUrl = ensureFullImageUrl(rawVoiceUrl);
+                  messageText = '[语音消息]';
+                  console.log('🎤 [Voice Message] Final voiceUrl:', voiceUrl);
+                } else if (!messageText) {
                   messageText = '[语音消息]';
                 }
               }
@@ -282,13 +330,13 @@ export default function ChatRoomScreen() {
     }, 10000);
 
     // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-    const pollingInterval = setInterval(() => {
-      loadMessages(false, false); // loadMore=false, showLoading=false
-    }, 3000);
+    // const pollingInterval = setInterval(() => {
+    //   loadMessages(false, false); // loadMore=false, showLoading=false
+    // }, 3000);
 
     return () => {
       clearInterval(connectionCheckInterval);
-      clearInterval(pollingInterval);
+      // clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 
@@ -339,9 +387,31 @@ export default function ChatRoomScreen() {
         playsInSilentModeIOS: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // ✅ Use recording options that produce commonly supported formats
+      const recordingOptions = {
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.m4a',
+          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 44100,
+          numberOfChannels: 2,
+          bitRate: 128000,
+        },
+        web: {
+          mimeType: 'audio/webm',
+          bitsPerSecond: 128000,
+        },
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
       setRecording(recording);
       setIsRecording(true);
     } catch (err) {
@@ -362,25 +432,56 @@ export default function ChatRoomScreen() {
       const uri = recording.getURI();
 
       if (uri) {
+        console.log('🎤 [Voice] Recording stopped, URI:', uri);
+
         const receiver = chatMembers.filter(id => id !== currentUserId);
-        const filename = uri.split('/').pop();
+        const filename = uri.split('/').pop() || 'voice.m4a';
+        const extension = filename.split('.').pop()?.toLowerCase();
+
+        // ✅ Use standard MIME type for M4A/AAC audio
+        // Most backends accept these MIME types
+        let mimeType = 'audio/mp4'; // Standard MIME type for M4A files
+
+        // Alternative MIME types in case backend is strict
+        if (extension === 'm4a') {
+          mimeType = 'audio/mp4'; // Standard for M4A
+        } else if (extension === 'caf') {
+          mimeType = 'audio/x-caf'; // iOS CAF format
+        } else if (extension === 'mp3') {
+          mimeType = 'audio/mpeg'; // MP3 format
+        } else if (extension === 'wav') {
+          mimeType = 'audio/wav'; // WAV format
+        }
+
+        console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
+        console.log('🎤 [Voice] Full URI:', uri);
+        console.log('🎤 [Voice] Platform:', Platform.OS);
+        console.log('🎤 [Voice] Extension:', extension);
+        console.log('🎤 [Voice] Receiver:', receiver);
+        console.log('🎤 [Voice] Calling sendChatMessage...');
+
         const result = await sendChatMessage({
           sender: currentUserId,
           isreceive: receiver,
           chat_id: chatId,
           voice: {
             uri: uri,
-            name: filename || 'voice.m4a',
-            type: 'audio/m4a', // This might need to be adjusted based on platform
+            name: filename,
+            type: mimeType,
           },
         });
 
+        console.log('🎤 [Voice] API Result:', result);
+
         if (result.success && result.data) {
+          console.log('✅ [Voice] Success! Data:', result.data);
+
           const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
             ? result.data.isreceive
             : receiver;
 
           if (actualReceivers.length > 0) {
+            console.log('📨 [Voice] Sending WebSocket forward...');
             WebSocketManager.sendForwardMessage({
               type: result.data.type,
               message: result.data.message, // This should be the URL of the voice message
@@ -392,19 +493,86 @@ export default function ChatRoomScreen() {
           }
 
           await loadMessages(false, false); // Silent refresh after sending
+          Alert.alert('成功', '语音消息已发送');
         } else {
-          console.error("Failed to send voice message:", result.message);
+          console.error("❌ [Voice] Failed to send voice message:", result.message);
           Alert.alert('发送失败', result.message || '语音消息发送失败，请重试');
         }
       }
     } catch (error: any) {
-      console.error('Failed to send voice message', error);
+      console.error('❌ [Voice] Failed to send voice message', error);
       Alert.alert('发送失败', error.message || '网络错误，请重试');
     } finally {
       setIsUploading(false);
       setRecording(null);
     }
   };
+
+  // 🔊 Play voice message
+  const playVoice = async (voiceUrl: string, messageId: string) => {
+    try {
+      console.log('🔊 [Voice] Playing voice:', voiceUrl);
+
+      // If already playing this voice, stop it
+      if (playingVoice === messageId && sound) {
+        console.log('🔊 [Voice] Stopping current voice');
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+        setPlayingVoice(null);
+        return;
+      }
+
+      // Stop any currently playing sound
+      if (sound) {
+        console.log('🔊 [Voice] Stopping previous voice');
+        await sound.stopAsync();
+        await sound.unloadAsync();
+      }
+
+      // Set audio mode for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+
+      // Load and play new sound
+      console.log('🔊 [Voice] Loading sound from:', voiceUrl);
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true },
+        (status) => {
+          // Handle playback status updates
+          if (status.isLoaded && status.didJustFinish) {
+            console.log('🔊 [Voice] Playback finished');
+            setPlayingVoice(null);
+            newSound.unloadAsync();
+            setSound(null);
+          }
+        }
+      );
+
+      setSound(newSound);
+      setPlayingVoice(messageId);
+      console.log('🔊 [Voice] Playing...');
+    } catch (error: any) {
+      console.error('❌ [Voice] Failed to play voice:', error);
+      Alert.alert('播放失败', error.message || '无法播放语音消息');
+      setPlayingVoice(null);
+      setSound(null);
+    }
+  };
+
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        console.log('🔊 [Voice] Cleaning up sound on unmount');
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
 
   const messages: DisplayMessage[] = storedMessages.map(msg => ({
     ...msg,
@@ -522,18 +690,32 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setIsUploading(true);
         try {
-            console.log('📤 [Pick Image] Selected assets:', result.assets.length);
+            // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
 
             const receiver = chatMembers.filter(id => id !== currentUserId);
-            const files = result.assets.map(asset => ({
-                uri: asset.uri,
-                name: asset.fileName || 'image.jpg',
-                type: asset.type || 'image/jpeg'
-            }));
+            const files = result.assets.map(asset => {
+                // ✅ Get proper MIME type based on file extension
+                const fileName = asset.fileName || 'image.jpg';
+                const extension = fileName.split('.').pop()?.toLowerCase();
 
-            console.log('📤 [Pick Image] Files to send:', files);
-            console.log('📤 [Pick Image] Receiver:', receiver);
-            console.log('📤 [Pick Image] Calling sendChatMessage...');
+                let mimeType = 'image/jpeg'; // default
+                if (extension === 'png') mimeType = 'image/png';
+                else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+                else if (extension === 'gif') mimeType = 'image/gif';
+                else if (extension === 'webp') mimeType = 'image/webp';
+
+                // console.log(`📤 [File Type] ${fileName} → ${mimeType}`);
+
+                return {
+                    uri: asset.uri,
+                    name: fileName,
+                    type: mimeType
+                };
+            });
+
+            // console.log('📤 [Pick Image] Files to send:', files);
+            // console.log('📤 [Pick Image] Receiver:', receiver);
+            // console.log('📤 [Pick Image] Calling sendChatMessage...');
 
             const apiResult = await sendChatMessage({
                 sender: currentUserId,
@@ -541,18 +723,18 @@ export default function ChatRoomScreen() {
                 chat_id: chatId,
                 files: files
             });
-
+// 
             console.log('📤 [Pick Image] API Result:', apiResult);
 
             if (apiResult.success && apiResult.data) {
-                console.log('✅ [Pick Image] Success! Data:', apiResult.data);
+                // console.log('✅ [Pick Image] Success! Data:', apiResult.data);
 
                 const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
                     ? apiResult.data.isreceive
                     : receiver;
 
                 if (actualReceivers.length > 0) {
-                    console.log('📨 [Pick Image] Sending WebSocket forward...');
+                    // console.log('📨 [Pick Image] Sending WebSocket forward...');
                     WebSocketManager.sendForwardMessage({
                         type: apiResult.data.type,
                         message: apiResult.data.message, // This should be the URLs of the images
@@ -623,11 +805,24 @@ export default function ChatRoomScreen() {
           )}
 
           {/* Type 2: Voice Message */}
-          {item.type === 2 && (
-            <View style={roomStyles.voiceMessageContainer}>
-              <Ionicons name="play-circle" size={24} color="#333" />
-              <Text style={roomStyles.voiceMessageText}>语音消息</Text>
-            </View>
+          {item.type === 2 && item.voiceUrl && (
+            <TouchableOpacity
+              style={roomStyles.voiceMessageContainer}
+              onPress={() => playVoice(item.voiceUrl!, item.id)}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={playingVoice === item.id ? "pause-circle" : "play-circle"}
+                size={32}
+                color={playingVoice === item.id ? "#4CAF50" : "#333"}
+              />
+              <View style={roomStyles.voiceMessageTextContainer}>
+                <Text style={roomStyles.voiceMessageText}>
+                  {playingVoice === item.id ? '正在播放...' : '语音消息'}
+                </Text>
+                <Text style={roomStyles.voiceMessageHint}>点击播放</Text>
+              </View>
+            </TouchableOpacity>
           )}
 
           {/* Type 3: Image Message */}
@@ -963,12 +1158,22 @@ const roomStyles = RNStyleSheet.create({
   voiceMessageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleWidth(8),
-    paddingVertical: scaleHeight(4),
+    gap: scaleWidth(12),
+    paddingVertical: scaleHeight(8),
+    paddingHorizontal: scaleWidth(4),
+  },
+  voiceMessageTextContainer: {
+    flexDirection: 'column',
   },
   voiceMessageText: {
     fontSize: scaleFont(14),
     color: colors.text.blackMedium,
+    fontWeight: typography.fontWeight500,
+  },
+  voiceMessageHint: {
+    fontSize: scaleFont(11),
+    color: colors.text.grayDark,
+    marginTop: scaleHeight(2),
   },
   // Image message styles
   imageGridContainer: {
