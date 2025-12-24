@@ -626,6 +626,27 @@ export default function GroupRoomScreen() {
         loadMessagesRef.current = loadMessages;
     }, [chatId, loadMessages]);
 
+    // Polling and WebSocket monitoring (separate from loadMessages dependency)
+    useEffect(() => {
+        // Periodic WebSocket connection check (every 10 seconds)
+        const connectionCheckInterval = setInterval(() => {
+            const connected = WebSocketManager.isWebSocketConnected();
+            if (!connected) {
+                console.warn('⚠️ WebSocket disconnected!');
+            }
+        }, 10000);
+
+        // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
+        const pollingInterval = setInterval(() => {
+            loadMessagesRef.current(true, false); // Use ref - isRefresh=true, showLoading=false
+        }, 3000);
+
+        return () => {
+            clearInterval(connectionCheckInterval);
+            clearInterval(pollingInterval);
+        };
+    }, []); // Empty dependency - only set up once
+
     // Listen for WebSocket message notifications
     useEffect(() => {
         const handleWebSocketMessage = (data: any) => {
