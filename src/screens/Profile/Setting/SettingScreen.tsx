@@ -1,19 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import React, { useState } from "react";
 import {
+    Dimensions,
     StyleSheet,
     Switch,
     Text,
     TouchableOpacity,
     View,
-    Dimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { ProfileStackParamList } from "../../../navigation/types";
-import { colors, borders, typography } from "../../../styles";
 import { getOriginalTabBarStyle } from "../../../components/tabstyle";
+import { ProfileStackParamList } from "../../../navigation/types";
+import { borders, colors, typography } from "../../../styles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -95,9 +95,9 @@ export default function SettingScreen() {
             <SettingItem title="主页" />
             <SettingItem title="修改密码" />
             <SettingItem title="修改邮箱" />
-            <SettingItem title="通知" />
+            {/* <SettingItem title="通知" />
             <SettingItem title="连接诊断" />
-            <SettingItem title='显示"发送"按钮' showSwitch />
+            <SettingItem title='显示"发送"按钮' showSwitch /> */}
         </SafeAreaView>
     );
 }

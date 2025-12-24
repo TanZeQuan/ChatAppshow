@@ -1,14 +1,14 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Image, KeyboardAvoidingView, Platform, Alert } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import React, { useState } from 'react';
+import { Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { colors, borders, typography } from "../../styles";
 import { login } from '../../api/Auth';
 import { readUsers } from '../../api/User';
-import { useUserStore } from '../../store/userStore';
 import WebSocketManager from '../../services/WebSocketManager';
+import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from "../../styles";
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();

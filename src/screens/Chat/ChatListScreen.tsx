@@ -45,6 +45,15 @@ export default function ChatListScreen() {
 
   const currentUserId = user?.id;
 
+  // ✅ Load chat list on mount and when user changes
+  useEffect(() => {
+    if (currentUserId) {
+      console.log('📋 [ChatList] Loading initial chat list for user:', currentUserId);
+      refreshData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
+
   // ✅ REMOVED: Don't auto-refresh on focus to preserve local timestamp updates
   // Only refresh when WebSocket receives new messages
   // This allows the "recently clicked chat" to stay at the top

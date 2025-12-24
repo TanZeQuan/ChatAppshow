@@ -28,7 +28,29 @@ export default function EditProfileScreen() {
         if (res.success && res.data?.response) {
           const userData = res.data.response;
 
-          setAvatar(userData.image || user.avatar || "");
+          // ✅ Validate backend avatar: if it's only the domain (invalid), keep existing avatar
+          let backendAvatar = userData.image || '';
+
+          // Check if backend avatar is invalid (only domain, no path)
+          const isInvalidAvatar = backendAvatar && (
+            backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+            backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+            !backendAvatar.includes('/content/') // Must have actual file path
+          );
+
+          // ✅ If backend avatar is invalid, get current avatar from store (not from parameter)
+          const currentStoreAvatar = useUserStore.getState().user?.avatar || '';
+          const finalAvatar = isInvalidAvatar ? currentStoreAvatar : backendAvatar;
+
+          console.log('🖼️ EditProfile Avatar validation:', {
+            backend: backendAvatar,
+            currentStore: currentStoreAvatar,
+            paramUser: user.avatar,
+            isInvalid: isInvalidAvatar,
+            final: finalAvatar
+          });
+
+          setAvatar(finalAvatar);
           setUsername(userData.name || user.name || "Unknown");
           setPhone(userData.phone || user.phone || "");
           setAccountId(userData.user_id || user.id || "");
@@ -39,7 +61,7 @@ export default function EditProfileScreen() {
             name: userData.name || user.name || 'Unknown',
             phone: userData.phone || user.phone || '',
             email: userData.email || user.email || '',
-            avatar: userData.image || user.avatar || '',
+            avatar: finalAvatar, // ✅ Use validated avatar
             about: userData.about || user.about || '',
           };
 
