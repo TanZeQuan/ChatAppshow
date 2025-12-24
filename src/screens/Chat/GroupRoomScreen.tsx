@@ -110,65 +110,6 @@ export default function GroupRoomScreen() {
     // ✅ Use ref for offset to avoid unnecessary re-renders (like ChatRoomScreen)
     const offsetRef = useRef(0);
 
-    // ✅ Use chatStore member cache (reactive)
-    const memberCache = useChatStore((state) => state.memberCache);
-    const fetchingMemberIdsRef = useRef<Set<string>>(new Set()); // Track IDs being fetched to avoid duplicates
-
-    // ✅ Fetch member info on-demand from /users/read API
-    const fetchMemberInfo = useCallback(async (userId: string) => {
-        // Skip if already cached or currently fetching
-        if (getMemberInfo(userId) || fetchingMemberIdsRef.current.has(userId)) {
-            return;
-        }
-
-        // Skip fetching for current user (we already have this info)
-        if (userId === currentUserId) {
-            setMemberInfo(userId, {
-                name: currentUser?.name || '我',
-                avatar: currentUser?.avatar || '',
-            });
-            return;
-        }
-
-        // Mark as fetching
-        fetchingMemberIdsRef.current.add(userId);
-
-        try {
-            const result = await readUsers(userId);
-
-            if (result.success && result.data?.response) {
-                const userData = result.data.response;
-
-                // ✅ Validate backend avatar
-                let backendAvatar = userData.image || '';
-                const isInvalidAvatar = !backendAvatar ||
-                    backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
-                    backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
-                    (backendAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
-                        !(backendAvatar.includes('/content/') || backendAvatar.includes('/coontent/') ||
-                            backendAvatar.includes('/uploads/') || backendAvatar.includes('/uploadds/')));
-
-                const finalAvatar = isInvalidAvatar ? '' : backendAvatar;
-
-                // ✅ Cache using chatStore
-                setMemberInfo(userId, {
-                    name: userData.name || userData.username || userData.full_name || '未知',
-                    avatar: finalAvatar,
-                });
-
-                // console.log(`✅ [MemberCache] Fetched info for ${userId}:`, {
-                //     name: userData.name,
-                //     avatar: finalAvatar
-                // });
-            }
-        } catch (error) {
-            console.error(`❌ [MemberCache] Failed to fetch info for ${userId}:`, error);
-        } finally {
-            // Remove from fetching set
-            fetchingMemberIdsRef.current.delete(userId);
-        }
-    }, [currentUserId, currentUser, getMemberInfo, setMemberInfo]);
-
     // Voice message state
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -449,31 +390,23 @@ export default function GroupRoomScreen() {
         };
     }, [sound]);
 
-    // ✅ Transform messages with cached member info
+    // ✅ Transform messages - directly use name/avatar from stored messages
     const messages: DisplayMessage[] = useMemo(() => {
         return storedMessages.map(msg => {
-            const member = uniqueMembers.find(m => m.id === msg.senderId);
-
-            // ✅ Fetch member info on-demand if not in cache
-            if (msg.senderId !== currentUserId && !memberCache[msg.senderId]) {
-                fetchMemberInfo(msg.senderId);
-            }
-
-            // ✅ Use cached member info from chatStore
-            const cachedInfo = memberCache[msg.senderId];
+            const finalName = msg.senderId === currentUserId
+                ? `${currentUser?.name || '我'} (我)`
+                : (msg.name || '未知成员');
 
             return {
                 ...msg,
                 sender: msg.senderId === currentUserId ? 'me' : 'other',
-                senderName: msg.senderId === currentUserId
-                    ? `${currentUser?.name || '我'} (我)`
-                    : (cachedInfo?.name || member?.name || msg.name || '未知成员'),
+                senderName: finalName,
                 avatar: msg.senderId === currentUserId
                     ? currentUser?.avatar
-                    : (cachedInfo?.avatar || member?.avatar || msg.avatar),
+                    : msg.avatar,
             };
         });
-    }, [storedMessages, uniqueMembers, currentUserId, currentUser, memberCache, fetchMemberInfo]);
+    }, [storedMessages, currentUserId, currentUser]);
 
     // Load initial messages
     const loadMessages = useCallback(async (isRefresh = false, showLoading = true) => {
@@ -520,40 +453,11 @@ export default function GroupRoomScreen() {
                 // ✅ Messages are always in result.data.chat (for both private and group chats)
                 const apiMessages = result.data.chat || [];
 
-                // ✅ Group members info (only for group chats)
+                // ✅ Extract member IDs from group array
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
-
-                    // ✅ Extract complete member info and save to chatStore
-                    const membersInfo = result.data.group.map((member: any) => {
-                        // Validate avatar URL
-                        let memberAvatar = member.image || member.avatar || '';
-                        const isInvalidAvatar = !memberAvatar ||
-                            memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
-                            memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
-                            (memberAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
-                                !(memberAvatar.includes('/content/') || memberAvatar.includes('/coontent/') ||
-                                    memberAvatar.includes('/uploads/') || memberAvatar.includes('/uploadds/')));
-
-                        return {
-                            id: member.user_id,
-                            name: member.name || member.username || member.full_name || '未知',
-                            avatar: isInvalidAvatar ? '' : memberAvatar,
-                        };
-                    });
-
-                    // Update chatStore with complete member info
-                    const currentChat = getChatById(chatId);
-                    if (currentChat) {
-                        addChat({
-                            ...currentChat,
-                            members: membersInfo,  // ✅ Save complete member info
-                            memberIds: memberIds,
-                        });
-                    }
-
-                    // console.log('👥 [loadMessages] Saved group members to chatStore:', membersInfo);
+                    console.log('👥 [loadMessages] Group member IDs:', memberIds);
                 }
 
                 // Check if there are more messages to load
@@ -563,7 +467,60 @@ export default function GroupRoomScreen() {
                 } else {
                     // console.log(`📬 [loadMessages] Loaded ${apiMessages.length} messages`);
 
-                    // ✅ Transform API messages to app format (same logic as ChatRoomScreen)
+                    // ✅ Step 1: Extract unique sender IDs
+                    const senderIds = [...new Set(apiMessages.map((msg: any) => msg.sender))];
+                    console.log('👥 [loadMessages] Unique senders:', senderIds);
+
+                    // ✅ Step 2: Fetch user info for each sender
+                    const senderInfoMap: Record<string, { name: string, avatar: string }> = {};
+
+                    await Promise.all(
+                        senderIds.map(async (senderId) => {
+                            // Skip if is current user
+                            if (senderId === currentUserId) {
+                                senderInfoMap[senderId] = {
+                                    name: currentUser?.name || '我',
+                                    avatar: currentUser?.avatar || '',
+                                };
+                                return;
+                            }
+
+                            try {
+                                console.log(`📞 [loadMessages] Calling readUsers for ${senderId}`);
+                                const userResult = await readUsers(senderId);
+
+                                if (userResult.success && userResult.data?.response) {
+                                    const userData = userResult.data.response;
+
+                                    // Validate avatar URL
+                                    let userAvatar = userData.image || '';
+                                    const isInvalidAvatar = !userAvatar ||
+                                        userAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+                                        userAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+                                        (userAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+                                            !(userAvatar.includes('/content/') || userAvatar.includes('/coontent/') ||
+                                                userAvatar.includes('/uploads/') || userAvatar.includes('/uploadds/')));
+
+                                    senderInfoMap[senderId] = {
+                                        name: userData.name || userData.username || userData.full_name || '未知',
+                                        avatar: isInvalidAvatar ? '' : userAvatar,
+                                    };
+
+                                    console.log(`✅ [loadMessages] Got user info for ${senderId}:`, senderInfoMap[senderId]);
+                                } else {
+                                    console.warn(`⚠️ [loadMessages] Failed to get user info for ${senderId}`);
+                                    senderInfoMap[senderId] = { name: '未知', avatar: '' };
+                                }
+                            } catch (error) {
+                                console.error(`❌ [loadMessages] Error fetching user ${senderId}:`, error);
+                                senderInfoMap[senderId] = { name: '未知', avatar: '' };
+                            }
+                        })
+                    );
+
+                    console.log('✅ [loadMessages] All sender info fetched:', senderInfoMap);
+
+                    // ✅ Step 3: Transform API messages to app format
                     const transformedMessages = apiMessages.map((msg: any) => {
                         let messageText = '';
                         let messageType = 1; // Default to text
@@ -640,17 +597,26 @@ export default function GroupRoomScreen() {
                                 : JSON.stringify(msg.message);
                         }
 
+                        // ✅ Step 4: Attach sender info from senderInfoMap
+                        const senderId = msg.sender_id || msg.sender || msg.senderId;
+                        const senderInfo = senderInfoMap[senderId];
+
+                        console.log(`📨 [loadMessages] Message ${msg.message_id}:`, {
+                            senderId,
+                            senderInfo,
+                        });
+
                         return {
                             id: msg.message_id || msg.id || String(Date.now() + Math.random()),
-                            senderId: msg.sender_id || msg.sender || msg.senderId,
-                            senderName: msg.sender_name || msg.senderName || '未知',
-                            text: messageText, // ✅ Parsed text
-                            type: messageType, // ✅ Message type (1=text, 2=voice, 3=images)
-                            imageUrls: imageUrls, // ✅ Image URLs for type 3
-                            voiceUrl: voiceUrl, // ✅ Voice URL for type 2
+                            senderId: senderId,
+                            senderName: senderInfo?.name || '未知',
+                            text: messageText,
+                            type: messageType,
+                            imageUrls: imageUrls,
+                            voiceUrl: voiceUrl,
                             createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
-                            name: msg.sender_name || msg.name,
-                            avatar: msg.sender_avatar || msg.avatar,
+                            name: senderInfo?.name || '未知',
+                            avatar: senderInfo?.avatar || '',
                         };
                     });
 
@@ -661,7 +627,6 @@ export default function GroupRoomScreen() {
                         hasImageUrls: !!m.imageUrls && m.imageUrls.length > 0,
                         hasVoiceUrl: !!m.voiceUrl,
                     })));
-
 
                     if (isRefresh) {
                         // Replace all messages on refresh
