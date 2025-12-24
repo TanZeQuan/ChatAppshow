@@ -207,20 +207,20 @@ export const readChatMessages = async ({
 
         formData.append("data", JSON.stringify(dataPayload));
 
-        console.log("📤 [readChatMessages] Request:", dataPayload);
+        // console.log("📤 [readChatMessages] Request:", dataPayload);
 
         const response = await api.post("/chats/message/read", formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
-        console.log("📥 [readChatMessages] Response:", {
-            error: response.data?.error,
-            hasResponse: !!response.data?.response,
-            hasChatArray: !!response.data?.response?.chat,
-            hasGroupArray: !!response.data?.response?.group,
-            chatLength: response.data?.response?.chat?.length || 0,
-            groupLength: response.data?.response?.group?.length || 0,
-        });
+        // console.log("📥 [readChatMessages] Response:", {
+        //     error: response.data?.error,
+        //     hasResponse: !!response.data?.response,
+        //     hasChatArray: !!response.data?.response?.chat,
+        //     hasGroupArray: !!response.data?.response?.group,
+        //     chatLength: response.data?.response?.chat?.length || 0,
+        //     groupLength: response.data?.response?.group?.length || 0,
+        // });
 
         if (response.data?.error === true) {
             return {

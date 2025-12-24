@@ -69,7 +69,7 @@ export default function GroupRoomScreen() {
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    const { addMessage, clearChat, getChatById, setMessages, getMemberInfo, setMemberInfo } = useChatStore();
+    const { addMessage, clearChat, getChatById, setMessages, getMemberInfo, setMemberInfo, addChat } = useChatStore();
 
     // Get real-time data from store
     const groupChat = getChatById(chatId);
@@ -173,6 +173,12 @@ export default function GroupRoomScreen() {
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
     const [isRecording, setIsRecording] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Voice playback state
+    const [playingVoice, setPlayingVoice] = useState<string | null>(null);
+    const [sound, setSound] = useState<Audio.Sound | null>(null);
+    const [voiceDurations, setVoiceDurations] = useState<Record<string, number>>({});
+    const [playbackPosition, setPlaybackPosition] = useState(0);
 
     const startRecording = async () => {
         try {
@@ -337,6 +343,112 @@ export default function GroupRoomScreen() {
         }
     };
 
+    // ✅ Voice playback functions (same as ChatRoomScreen)
+
+    // Playback status update callback
+    const onPlaybackStatusUpdate = useCallback((status: any) => {
+        if (status.isLoaded) {
+            // Update playback position
+            setPlaybackPosition(status.positionMillis || 0);
+
+            // Get duration
+            if (status.durationMillis) {
+                const durationSeconds = Math.round(status.durationMillis / 1000);
+                // Update duration for the current playing voice
+                if (playingVoice) {
+                    setVoiceDurations(prev => ({
+                        ...prev,
+                        [playingVoice]: durationSeconds
+                    }));
+                }
+            }
+
+            // Playback finished
+            if (status.didJustFinish) {
+                setPlayingVoice(null);
+                setPlaybackPosition(0);
+                console.log('🎵 [Voice] Playback finished');
+            }
+        }
+    }, [playingVoice]);
+
+    // Play audio
+    const playAudio = useCallback(async (voiceUrl: string, messageId: string) => {
+        try {
+            console.log('🎵 [Voice] Playing audio:', voiceUrl);
+
+            // Stop current playback if any
+            if (sound) {
+                await sound.stopAsync();
+                await sound.unloadAsync();
+                setSound(null);
+                setPlayingVoice(null);
+            }
+
+            // Reset playback position
+            setPlaybackPosition(0);
+
+            // Set audio mode for playback
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: true,
+                playThroughEarpieceAndroid: false,
+            });
+
+            // Create and play new sound
+            const { sound: newSound } = await Audio.Sound.createAsync(
+                { uri: voiceUrl },
+                { shouldPlay: true },
+                onPlaybackStatusUpdate
+            );
+
+            setSound(newSound);
+            setPlayingVoice(messageId);
+            console.log('▶️ [Voice] Playing:', messageId);
+
+        } catch (error: any) {
+            console.error('❌ [Voice] Failed to play:', error);
+            Alert.alert('播放失败', '无法播放语音消息，请重试');
+            setPlayingVoice(null);
+        }
+    }, [sound, onPlaybackStatusUpdate]);
+
+    // Stop audio
+    const stopAudio = useCallback(async () => {
+        if (sound) {
+            try {
+                await sound.stopAsync();
+                await sound.unloadAsync();
+                setSound(null);
+                setPlayingVoice(null);
+                setPlaybackPosition(0);
+                console.log('⏹️ [Voice] Stopped playback');
+            } catch (error) {
+                console.error('❌ [Voice] Failed to stop:', error);
+            }
+        }
+    }, [sound]);
+
+    // Helper function: Format time from milliseconds to MM:SS
+    const formatTime = useCallback((millis: number) => {
+        const totalSeconds = Math.floor(millis / 1000);
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }, []);
+
+    // Cleanup sound on unmount
+    useEffect(() => {
+        return () => {
+            if (sound) {
+                console.log('🧹 [Voice] Cleaning up sound on unmount');
+                sound.unloadAsync();
+            }
+        };
+    }, [sound]);
+
     // ✅ Transform messages with cached member info
     const messages: DisplayMessage[] = useMemo(() => {
         return storedMessages.map(msg => {
@@ -412,7 +524,36 @@ export default function GroupRoomScreen() {
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
-                    console.log('👥 [loadMessages] Found group members:', memberIds);
+
+                    // ✅ Extract complete member info and save to chatStore
+                    const membersInfo = result.data.group.map((member: any) => {
+                        // Validate avatar URL
+                        let memberAvatar = member.image || member.avatar || '';
+                        const isInvalidAvatar = !memberAvatar ||
+                            memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+                            memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+                            (memberAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+                                !(memberAvatar.includes('/content/') || memberAvatar.includes('/coontent/') ||
+                                    memberAvatar.includes('/uploads/') || memberAvatar.includes('/uploadds/')));
+
+                        return {
+                            id: member.user_id,
+                            name: member.name || member.username || member.full_name || '未知',
+                            avatar: isInvalidAvatar ? '' : memberAvatar,
+                        };
+                    });
+
+                    // Update chatStore with complete member info
+                    const currentChat = getChatById(chatId);
+                    if (currentChat) {
+                        addChat({
+                            ...currentChat,
+                            members: membersInfo,  // ✅ Save complete member info
+                            memberIds: memberIds,
+                        });
+                    }
+
+                    // console.log('👥 [loadMessages] Saved group members to chatStore:', membersInfo);
                 }
 
                 // Check if there are more messages to load
@@ -579,13 +720,13 @@ export default function GroupRoomScreen() {
         }, 10000);
 
         // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-        const pollingInterval = setInterval(() => {
-            loadMessages(false, false); // isRefresh=false, showLoading=false
-        }, 3000);
+        // const pollingInterval = setInterval(() => {
+        //     loadMessages(false, false); // isRefresh=false, showLoading=false
+        // }, 3000);
 
         return () => {
-            clearInterval(connectionCheckInterval); // ✅ Clear connection check interval
-            clearInterval(pollingInterval);
+            // clearInterval(connectionCheckInterval); // ✅ Clear connection check interval
+            // clearInterval(pollingInterval);
         };
     }, [loadMessages]);
 
@@ -712,7 +853,7 @@ export default function GroupRoomScreen() {
         navigation.navigate('GroupSettingScreen', {
             chatId: chatId,
             chatName: chatName,
-            members: memberIds,
+            members: uniqueMembers, // ✅ Pass complete member info (id, name, avatar)
             memberIds: memberIds,
         });
     };
@@ -858,11 +999,43 @@ export default function GroupRoomScreen() {
                     )}
 
                     {/* Type 2: Voice Message */}
-                    {item.type === 2 && (
+                    {item.type === 2 && item.voiceUrl && (
                         <View style={roomStyles.voiceMessageContainer}>
-                            <Ionicons name="play-circle" size={24} color="#333" />
-                            <Text style={roomStyles.voiceMessageText}>语音消息</Text>
+                            <TouchableOpacity
+                                onPress={() => {
+                                    if (playingVoice === item.id) {
+                                        stopAudio();
+                                    } else {
+                                        playAudio(item.voiceUrl!, item.id);
+                                    }
+                                }}
+                                style={roomStyles.voicePlayButton}
+                            >
+                                <Ionicons
+                                    name={playingVoice === item.id ? "pause-circle" : "play-circle"}
+                                    size={scaleWidth(25)}
+                                    color="#1c275bff"
+                                />
+                            </TouchableOpacity>
+                            <View style={roomStyles.voiceInfo}>
+                                <Text style={roomStyles.voiceMessageText}>
+                                    {playingVoice === item.id ? '播放中...' : '语音消息'}
+                                </Text>
+                                {voiceDurations[item.id] && (
+                                    <Text style={roomStyles.voiceDuration}>
+                                        {playingVoice === item.id
+                                            ? `${formatTime(playbackPosition)} / ${formatTime(voiceDurations[item.id] * 1000)}`
+                                            : formatTime(voiceDurations[item.id] * 1000)
+                                        }
+                                    </Text>
+                                )}
+                            </View>
                         </View>
+                    )}
+
+                    {/* Type 2: Failed Voice Message (no voiceUrl) */}
+                    {item.type === 2 && !item.voiceUrl && (
+                        <Text style={roomStyles.messageText}>[语音上传失败]</Text>
                     )}
 
                     {/* Type 3: Image Message */}
@@ -1193,16 +1366,40 @@ const roomStyles = RNStyleSheet.create({
         justifyContent: 'center',
     },
 
-    // ✅ Voice message styles (like ChatRoomScreen)
+    // ✅ Voice message styles (same as ChatRoomScreen)
     voiceMessageContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: scaleWidth(8),
-        paddingVertical: scaleHeight(4),
+        paddingVertical: scaleHeight(8),
+        paddingHorizontal: scaleWidth(4),
+        borderRadius: borders.radius16,
+        maxWidth: scaleWidth(260),
+        minWidth: scaleWidth(150),
+    },
+    voicePlayButton: {
+        width: scaleWidth(35),
+        height: scaleWidth(35),
+        borderRadius: scaleWidth(24),
+        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: scaleWidth(12),
+    },
+    voiceInfo: {
+        flex: 1,
+        justifyContent: 'center',
     },
     voiceMessageText: {
         fontSize: scaleFont(14),
         color: colors.text.blackMedium,
+        lineHeight: scaleHeight(22),
+        marginBottom: scaleHeight(2),
+    },
+    voiceDuration: {
+        fontSize: scaleFont(13),
+        fontWeight: '500',
+        color: '#667eea',
+        letterSpacing: 0.3,
     },
 
     // ✅ Image message styles (like ChatRoomScreen)

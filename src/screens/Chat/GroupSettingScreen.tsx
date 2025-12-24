@@ -17,7 +17,9 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { readChatMessages } from '../../api/Chat';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
+import { readUsers } from '../../api/User';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -109,6 +111,7 @@ export default function GroupSettingScreen() {
 
     useEffect(() => {
         loadFriendsList();
+        loadGroupMembers();  // ✅ Load group members on mount
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -139,6 +142,95 @@ export default function GroupSettingScreen() {
         }
     }, [currentUserId]);
 
+    // ✅ Load group members from API using readUsers for each member
+    const loadGroupMembers = useCallback(async () => {
+        if (!currentUserId || !chatId) return;
+
+        try {
+            console.log('📥 [GroupSetting] Loading group members...');
+
+            // First, get member IDs from readChatMessages API
+            const result = await readChatMessages({
+                chat_id: chatId,
+                user_id: currentUserId,
+                offset: 0,
+            });
+
+            if (result.success && result.data?.group && Array.isArray(result.data.group)) {
+                const memberIds = result.data.group.map((member: any) => member.user_id);
+                console.log('📥 [GroupSetting] Got member IDs:', memberIds);
+
+                // ✅ Fetch each member's info using readUsers API
+                const membersInfo: Member[] = [];
+
+                for (const userId of memberIds) {
+                    try {
+                        console.log(`📥 [GroupSetting] Fetching info for user: ${userId}`);
+
+                        const userResult = await readUsers(userId);
+
+                        if (userResult.success && userResult.data?.response) {
+                            const userData = userResult.data.response;
+
+                            // Validate avatar URL (same logic as EditName.tsx)
+                            let memberAvatar = userData.image || '';
+                            const isInvalidAvatar = !memberAvatar ||
+                                memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+                                memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+                                (memberAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+                                    !(memberAvatar.includes('/content/') || memberAvatar.includes('/coontent/') ||
+                                        memberAvatar.includes('/uploads/') || memberAvatar.includes('/uploadds/')));
+
+                            membersInfo.push({
+                                id: userId,
+                                name: userData.name || userData.username || userData.full_name || '未知',
+                                avatar: isInvalidAvatar ? '' : memberAvatar,
+                            });
+
+                            console.log(`✅ [GroupSetting] Got info for ${userId}:`, {
+                                name: userData.name,
+                                hasAvatar: !isInvalidAvatar
+                            });
+                        } else {
+                            // If failed to get user info, add placeholder
+                            console.warn(`⚠️ [GroupSetting] Failed to get info for ${userId}`);
+                            membersInfo.push({
+                                id: userId,
+                                name: '未知',
+                                avatar: '',
+                            });
+                        }
+                    } catch (error) {
+                        console.error(`❌ [GroupSetting] Error fetching user ${userId}:`, error);
+                        // Add placeholder on error
+                        membersInfo.push({
+                            id: userId,
+                            name: '未知',
+                            avatar: '',
+                        });
+                    }
+                }
+
+                console.log('✅ [GroupSetting] Fetched all member info:', membersInfo.length);
+
+                // ✅ Update chatStore with complete member info
+                const currentChat = getChatById(chatId);
+                if (currentChat) {
+                    addChat({
+                        ...currentChat,
+                        members: membersInfo,  // ✅ Save complete member info
+                        memberIds: memberIds,
+                    });
+                    console.log('✅ [GroupSetting] Saved members to chatStore');
+                }
+            } else {
+                console.warn('⚠️ [GroupSetting] No group members in API response');
+            }
+        } catch (error) {
+            console.error('❌ [GroupSetting] Failed to load group members:', error);
+        }
+    }, [currentUserId, chatId, getChatById, addChat]);
+
     // Update ref when function changes
     useEffect(() => {
         loadFriendsListRef.current = loadFriendsList;
@@ -166,9 +258,12 @@ export default function GroupSettingScreen() {
     // Refresh handler
     const handleRefresh = useCallback(async () => {
         setRefreshing(true);
-        await loadFriendsList();
+        await Promise.all([
+            loadFriendsList(),
+            loadGroupMembers(),  // ✅ Also refresh group members
+        ]);
         setRefreshing(false);
-    }, [loadFriendsList]);
+    }, [loadFriendsList, loadGroupMembers]);
 
     // Update chat helper
     const updateChatData = useCallback((updates: any) => {

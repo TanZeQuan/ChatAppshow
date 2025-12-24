@@ -1,21 +1,21 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    View,
-    Text,
-    StyleSheet,
-    FlatList,
-    TouchableOpacity,
-    Image,
-    Alert,
     ActivityIndicator,
+    Alert,
     Dimensions,
+    FlatList,
+    Image,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, borders, typography } from '../../styles';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from '../../styles';
 
 const { width } = Dimensions.get('window');
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
         height: 48,
         borderRadius: borders.radius8,
         marginRight: 12,
-        backgroundColor: colors.functional.avatarBg,
+        backgroundColor: colors.background.grayLight,
     },
     memberInfo: {
         flex: 1,

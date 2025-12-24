@@ -212,9 +212,9 @@ export default function ChatRoomScreen() {
               }
               // For type 2 (voice), ensure full URL
               else if (messageType === 2) {
-                console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
-                console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
-                console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
+                // console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
+                // console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
+                // console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
 
                 if (typeof parsedMessage === 'string') {
                   voiceUrl = ensureFullImageUrl(parsedMessage);
@@ -222,7 +222,7 @@ export default function ChatRoomScreen() {
                 } else if (parsedMessage.message) {
                   // ✅ Check if it's an error object from backend
                   if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
-                    console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
+                    // console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
                     voiceUrl = ''; // Empty URL to skip this message
                     messageText = '[语音上传失败]';
                   }
@@ -238,7 +238,7 @@ export default function ChatRoomScreen() {
                   }
                 }
 
-                console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
+                // console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
               }
               // For type 1 (text), extract text content
               else {
@@ -308,13 +308,13 @@ export default function ChatRoomScreen() {
     }, 10000);
 
     // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-    // const pollingInterval = setInterval(() => {
-    //   loadMessages(false, false); // loadMore=false, showLoading=false
-    // }, 3000);
+    const pollingInterval = setInterval(() => {
+      loadMessages(false, false); // loadMore=false, showLoading=false
+    }, 3000);
 
     return () => {
       clearInterval(connectionCheckInterval);
-      // clearInterval(pollingInterval);
+      clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 
@@ -875,7 +875,7 @@ export default function ChatRoomScreen() {
                 <Ionicons
                   name={playingVoice === item.id ? "pause-circle" : "play-circle"}
                   size={scaleWidth(25)}
-                  color="#667eea"
+                  color="#1c275bff"
                 />
               </TouchableOpacity>
               <View style={roomStyles.voiceInfo}>
