@@ -80,6 +80,27 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     // Prepare data to send
+    // ✅ Fix image MIME type - get proper MIME type from file extension
+    let imageData = null;
+    if (image && image.uri) {
+      const fileName = image.fileName || 'avatar.jpg';
+      const extension = fileName.split('.').pop()?.toLowerCase();
+
+      let mimeType = 'image/jpeg'; // default
+      if (extension === 'png') mimeType = 'image/png';
+      else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+      else if (extension === 'gif') mimeType = 'image/gif';
+      else if (extension === 'webp') mimeType = 'image/webp';
+
+      console.log(`📸 [Register] Image MIME type: ${fileName} → ${mimeType}`);
+
+      imageData = {
+        uri: image.uri,
+        type: mimeType,  // ✅ Use correct MIME type
+        name: fileName
+      };
+    }
+
     const postData = {
       phone: phone,
       passcode: password,
@@ -87,10 +108,26 @@ export default function RegisterScreen() {
       email: email,
       roles: "user",
       status: 1,
-      image: image ? { uri: image.uri, type: image.type || 'image/jpeg', name: image.fileName || 'avatar.jpg' } : null,
+      image: imageData,
     };
 
     console.log("Data to be sent to backend:", postData);
+    console.log("API URL:", "https://balkingly-hemitropic-lelah.ngrok-free.dev/api/users/new");
+
+    // ✅ Test if API is reachable
+    try {
+      console.log('🔍 [Register] Testing API connectivity...');
+      const testResponse = await fetch('https://balkingly-hemitropic-lelah.ngrok-free.dev/api');
+      console.log('✅ [Register] API is reachable, status:', testResponse.status);
+    } catch (testError) {
+      console.error('❌ [Register] API connectivity test failed:', testError);
+      Alert.alert(
+        '网络错误',
+        'API 服务器无法访问，请检查：\n1. 网络连接是否正常\n2. ngrok URL 是否有效\n3. 后端服务器是否运行'
+      );
+      setIsLoading(false);
+      return;
+    }
 
     try {
       // Call API
@@ -165,9 +202,15 @@ export default function RegisterScreen() {
           res.message || res.error || "请检查您的信息后重试"
         );
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ Registration error:", error);
-      Alert.alert("错误", "注册失败，请稍后重试");
+
+      // Display more detailed error message
+      const errorMessage = error?.response?.data?.message ||
+                          error?.message ||
+                          "网络连接失败，请检查网络后重试";
+
+      Alert.alert("注册失败", errorMessage);
     } finally {
       setIsLoading(false);
     }

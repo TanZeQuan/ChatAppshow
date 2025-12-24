@@ -11,6 +11,9 @@ export const createUser = async (data: {
   image?: { uri: string; type?: string; name?: string } | null;
 }) => {
   try {
+    console.log('[createUser] Starting registration request...');
+    console.log('[createUser] Input data:', { ...data, passcode: '***' }); // Hide password in logs
+
     const formData = new FormData();
     const dataPayload: any = {
       phone: data.phone,
@@ -21,25 +24,56 @@ export const createUser = async (data: {
       status: data.status,
     };
 
+    console.log('[createUser] Data payload:', dataPayload);
     formData.append('data', JSON.stringify(dataPayload));
 
     // Append image if it exists and has a valid URI
     if (data.image && data.image.uri) {
       const { uri, type = "image/jpeg", name = "avatar.jpg" } = data.image;
+      console.log('[createUser] Appending image:', { uri, type, name });
+
+      // ✅ React Native FormData requires this specific format
       formData.append("image", {
         uri,
         type,
         name,
       } as any);
+
+      console.log('[createUser] Image appended to FormData');
+    } else {
+      console.log('[createUser] No image to append');
     }
 
+    console.log('[createUser] Sending POST to /users/new...');
+    console.log('[createUser] FormData prepared, making request...');
+
     const response = await api.post('/users/new', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      // ✅ Add timeout override for registration (may take longer with image upload)
+      timeout: 30000, // 30 seconds
     });
 
+    console.log('[createUser] ✅ Response received:', response.data);
     return response.data;
   } catch (error: any) {
-    return { success: false, message: error.response?.data?.message || error.message };
+    console.error('[createUser] ❌ Error occurred:', {
+      message: error.message,
+      code: error.code,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        baseURL: error.config?.baseURL
+      }
+    });
+
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message || 'Network error occurred'
+    };
   }
 };
 

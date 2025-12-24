@@ -43,8 +43,8 @@ api.interceptors.request.use(
         }
 
         // 🔍 Debug logging
-        // console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
-        // console.log(`[API Request] Headers:`, config.headers);
+        console.log(`[API Request] ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+        console.log(`[API Request] Headers:`, config.headers);
 
         return config;
     },
@@ -57,7 +57,8 @@ api.interceptors.request.use(
 // Add response interceptor for debugging
 api.interceptors.response.use(
     (response) => {
-        // console.log(`[API Response] ${response.config.url} - Status: ${response.status}`);
+        console.log(`[API Response] ${response.config.url} - Status: ${response.status}`);
+        console.log(`[API Response] Data:`, response.data);
         return response;
     },
     (error) => {
@@ -66,7 +67,8 @@ api.interceptors.response.use(
             method: error.config?.method,
             message: error.message,
             code: error.code,
-            response: error.response?.data
+            response: error.response?.data,
+            status: error.response?.status
         });
         return Promise.reject(error);
     }
