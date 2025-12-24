@@ -69,28 +69,11 @@ export default function GroupRoomScreen() {
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    const { addMessage, clearChat, getChatById, setMessages, getMemberInfo, setMemberInfo, addChat } = useChatStore();
+    const { clearChat, getChatById, setMessages } = useChatStore();
 
     // Get real-time data from store
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '群聊';
-
-    // 生成包含自己的成员列表
-    const membersWithSelf = [
-        ...(groupChat?.members || params.members || []),
-        ...(currentUser
-            ? [{
-                id: currentUserId,
-                name: currentUser.name || '我',
-                avatar: currentUser.avatar || '',
-            }]
-            : []
-        ),
-    ];
-
-    // 去重，避免重复
-    const uniqueMembers = Array.from(new Map(membersWithSelf.map(m => [m.id, m])).values());
-
     const memberIds = groupChat?.memberIds || [];
 
     // Use selector to subscribe to messages for this chat (reactive)
@@ -423,55 +406,29 @@ export default function GroupRoomScreen() {
         }
 
         try {
-            console.log('🔄 [loadMessages] Fetching messages...', {
-                chatId,
-                userId: currentUserId,
-                offset: currentOffset,
-                isRefresh,
-            });
-
             const result = await readChatMessages({
                 chat_id: chatId,
                 user_id: currentUserId,
                 offset: currentOffset,
             });
 
-            // console.log('📥 [loadMessages] API Result:', {
-            //     success: result.success,
-            //     hasData: !!result.data,
-            //     message: result.message,
-            // });
-
             if (result.success && result.data) {
-                // console.log('📨 [loadMessages] API Response:', {
-                //     hasChatArray: !!result.data.chat,
-                //     chatLength: result.data.chat?.length || 0,
-                //     hasGroupArray: !!result.data.group,
-                //     groupLength: result.data.group?.length || 0,
-                // });
-
-                // ✅ Messages are always in result.data.chat (for both private and group chats)
                 const apiMessages = result.data.chat || [];
 
-                // ✅ Extract member IDs from group array
+                // Extract member IDs from group array
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
-                    console.log('👥 [loadMessages] Group member IDs:', memberIds);
                 }
 
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
-                    // console.log('📭 [loadMessages] No more messages');
                     setHasMoreMessages(false);
                 } else {
-                    // console.log(`📬 [loadMessages] Loaded ${apiMessages.length} messages`);
-
-                    // ✅ Step 1: Extract unique sender IDs
+                    // Step 1: Extract unique sender IDs
                     const senderIds = [...new Set(apiMessages.map((msg: any) => msg.sender))];
-                    console.log('👥 [loadMessages] Unique senders:', senderIds);
 
-                    // ✅ Step 2: Fetch user info for each sender
+                    // Step 2: Fetch user info for each sender
                     const senderInfoMap: Record<string, { name: string, avatar: string }> = {};
 
                     await Promise.all(
@@ -486,7 +443,6 @@ export default function GroupRoomScreen() {
                             }
 
                             try {
-                                console.log(`📞 [loadMessages] Calling readUsers for ${senderId}`);
                                 const userResult = await readUsers(senderId);
 
                                 if (userResult.success && userResult.data?.response) {
@@ -505,22 +461,17 @@ export default function GroupRoomScreen() {
                                         name: userData.name || userData.username || userData.full_name || '未知',
                                         avatar: isInvalidAvatar ? '' : userAvatar,
                                     };
-
-                                    console.log(`✅ [loadMessages] Got user info for ${senderId}:`, senderInfoMap[senderId]);
                                 } else {
-                                    console.warn(`⚠️ [loadMessages] Failed to get user info for ${senderId}`);
                                     senderInfoMap[senderId] = { name: '未知', avatar: '' };
                                 }
                             } catch (error) {
-                                console.error(`❌ [loadMessages] Error fetching user ${senderId}:`, error);
+                                console.error(`Error fetching user ${senderId}:`, error);
                                 senderInfoMap[senderId] = { name: '未知', avatar: '' };
                             }
                         })
                     );
 
-                    console.log('✅ [loadMessages] All sender info fetched:', senderInfoMap);
-
-                    // ✅ Step 3: Transform API messages to app format
+                    // Step 3: Transform API messages to app format
                     const transformedMessages = apiMessages.map((msg: any) => {
                         let messageText = '';
                         let messageType = 1; // Default to text
@@ -597,14 +548,9 @@ export default function GroupRoomScreen() {
                                 : JSON.stringify(msg.message);
                         }
 
-                        // ✅ Step 4: Attach sender info from senderInfoMap
+                        // Attach sender info from senderInfoMap
                         const senderId = msg.sender_id || msg.sender || msg.senderId;
                         const senderInfo = senderInfoMap[senderId];
-
-                        console.log(`📨 [loadMessages] Message ${msg.message_id}:`, {
-                            senderId,
-                            senderInfo,
-                        });
 
                         return {
                             id: msg.message_id || msg.id || String(Date.now() + Math.random()),
@@ -620,33 +566,21 @@ export default function GroupRoomScreen() {
                         };
                     });
 
-                    console.log(`📝 [loadMessages] Transformed messages sample:`, transformedMessages.slice(0, 2).map(m => ({
-                        id: m.id,
-                        type: m.type,
-                        text: m.text.substring(0, 50),
-                        hasImageUrls: !!m.imageUrls && m.imageUrls.length > 0,
-                        hasVoiceUrl: !!m.voiceUrl,
-                    })));
-
                     if (isRefresh) {
-                        // Replace all messages on refresh
                         setMessages(chatId, transformedMessages);
-                        offsetRef.current = transformedMessages.length; // ✅ Use offsetRef
+                        offsetRef.current = transformedMessages.length;
                     } else {
-                        // Append messages when loading more
-                        // Get messages from store at call time to avoid stale dependency
                         const existingMessages = useChatStore.getState().chats[chatId] || [];
                         const allMessages = [...existingMessages, ...transformedMessages];
-                        // Remove duplicates based on message id
                         const uniqueMessages = Array.from(
                             new Map(allMessages.map(m => [m.id, m])).values()
                         );
                         setMessages(chatId, uniqueMessages);
-                        offsetRef.current = uniqueMessages.length; // ✅ Use offsetRef
+                        offsetRef.current = uniqueMessages.length;
                     }
                 }
             } else {
-                console.warn('⚠️ Failed to load messages:', result.message);
+                console.warn('Failed to load messages:', result.message);
                 if (!isRefresh && showLoading) {
                     Alert.alert('提示', result.message || '加载消息失败');
                 }
@@ -662,36 +596,23 @@ export default function GroupRoomScreen() {
                 setIsRefreshing(false);
             }
         }
-    }, [currentUserId, chatId, params.isGroup, setMessages]); // ✅ Remove offset from dependencies
+    }, [currentUserId, chatId, params.isGroup, setMessages]);
 
-    // ✅ Handle pull-to-refresh (like ChatRoomScreen)
+    // Handle pull-to-refresh
     const handleRefresh = async () => {
         setRefreshing(true);
-        await loadMessages(false, false); // No loading spinner, just refresh control
+        offsetRef.current = 0; // Reset offset
+        await loadMessages(true, false); // isRefresh=true to reload all messages
         setRefreshing(false);
     };
 
     // Load messages on mount
     useEffect(() => {
-        offsetRef.current = 0; // ✅ Reset offset when entering new chat (like ChatRoomScreen)
+        offsetRef.current = 0;
         loadMessages(true);
 
-        // ✅ WebSocket connection check (every 10 seconds) - like ChatRoomScreen
-        const connectionCheckInterval = setInterval(() => {
-            const connected = WebSocketManager.isWebSocketConnected();
-            if (!connected) {
-                console.warn('⚠️ WebSocket disconnected!');
-            }
-        }, 10000);
-
-        // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-        // const pollingInterval = setInterval(() => {
-        //     loadMessages(false, false); // isRefresh=false, showLoading=false
-        // }, 3000);
-
         return () => {
-            // clearInterval(connectionCheckInterval); // ✅ Clear connection check interval
-            // clearInterval(pollingInterval);
+            // Cleanup intervals on unmount
         };
     }, [loadMessages]);
 
@@ -705,15 +626,15 @@ export default function GroupRoomScreen() {
         loadMessagesRef.current = loadMessages;
     }, [chatId, loadMessages]);
 
-    // Listen for WebSocket message notifications (registered only once)
+    // Listen for WebSocket message notifications
     useEffect(() => {
         const handleWebSocketMessage = (data: any) => {
+            console.log('📨 [WebSocket] Received message:', data);
             if (data.type && data.message) {
-                if (!data.chat_id) {
-                    loadMessagesRef.current(false, false); // Silent refresh
-                } else if (data.chat_id === chatIdRef.current) {
-                    loadMessagesRef.current(false, false); // Silent refresh
-                } else {
+                // Refresh messages when new message arrives
+                if (!data.chat_id || data.chat_id === chatIdRef.current) {
+                    console.log('🔄 [WebSocket] Refreshing messages for this chat');
+                    loadMessagesRef.current(true, false); // isRefresh=true, showLoading=false
                 }
             }
         };
@@ -722,7 +643,7 @@ export default function GroupRoomScreen() {
         return () => {
             WebSocketManager.removeMessageCallback(handleWebSocketMessage);
         };
-    }, []); // Empty dependency array - register only once
+    }, []);
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
@@ -818,7 +739,7 @@ export default function GroupRoomScreen() {
         navigation.navigate('GroupSettingScreen', {
             chatId: chatId,
             chatName: chatName,
-            members: uniqueMembers, // ✅ Pass complete member info (id, name, avatar)
+            members: groupChat?.members || [],
             memberIds: memberIds,
         });
     };
@@ -927,12 +848,6 @@ export default function GroupRoomScreen() {
         }
     };
 
-    const handleRefreshOld = () => { // ✅ This is now unused, remove if needed
-        offsetRef.current = 0;
-        setHasMoreMessages(true);
-        loadMessages(true);
-    };
-
     const renderItem = ({ item }: { item: DisplayMessage }) => {
         // 🔍 Safety check: ensure text is a string (like ChatRoomScreen)
         const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
@@ -1038,13 +953,7 @@ export default function GroupRoomScreen() {
     };
 
     const renderFooter = () => {
-        if (!isLoading) return null;
-        // return (
-        //     <View style={roomStyles.loadingFooter}>
-        //         <ActivityIndicator size="small" color="#666" />
-        //         <Text style={roomStyles.loadingText}>加载更多消息...</Text>
-        //     </View>
-        // );
+        return null;
     };
 
     const ToolbarButton = ({ icon, label, onPress }: any) => (
@@ -1089,7 +998,7 @@ export default function GroupRoomScreen() {
                     <View style={roomStyles.headerCenter}>
                         <Text style={roomStyles.headerTitle}>{chatName}</Text>
                         <Text style={roomStyles.headerSubtitle}>
-                            {uniqueMembers.length} 位成员
+                            {groupChat?.members?.length || memberIds.length || 0} 位成员
                         </Text>
                     </View>
                     <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
