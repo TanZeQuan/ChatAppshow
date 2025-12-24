@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readUserChats } from '../../api/Chat';
+import { readUserChats, readChatMessages } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
 import { ChatListItem, useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -39,7 +39,7 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  const { chatList, setChats, addChat } = useChatStore();
+  const { chatList, setChats, addChat, getChatById } = useChatStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -202,6 +202,9 @@ export default function ChatListScreen() {
 
         // Update chat store
         setChats(formattedChats);
+
+        // ✅ Load group members for all group chats (with caching)
+        loadGroupMembersForAllChats(formattedChats);
       }
 
       // 2️⃣ Refresh friends/contacts - REMOVED
@@ -210,6 +213,70 @@ export default function ChatListScreen() {
     } catch (error) {
       console.error("Refresh error:", error);
     }
+  };
+
+  // ✅ Load group members for all group chats (only if not already cached)
+  const loadGroupMembersForAllChats = async (chats: ChatListItem[]) => {
+    if (!currentUserId) return;
+
+    const groupChats = chats.filter(chat => chat.isGroup);
+    console.log(`📥 [ChatList] Found ${groupChats.length} group chats, checking cache...`);
+
+    for (const chat of groupChats) {
+      try {
+        // ✅ Check if members are already cached
+        const cachedChat = getChatById(chat.id);
+        if (cachedChat?.members && cachedChat.members.length > 0) {
+          console.log(`✅ [ChatList] Group "${chat.name}" already has ${cachedChat.members.length} cached members, skipping`);
+          continue; // Skip if already cached
+        }
+
+        console.log(`📥 [ChatList] Loading members for group "${chat.name}"...`);
+
+        // Load members from API
+        const result = await readChatMessages({
+          chat_id: chat.id,
+          user_id: currentUserId,
+          offset: 0,
+        });
+
+        if (result.success && result.data?.group && Array.isArray(result.data.group)) {
+          // Extract member info
+          const membersInfo = result.data.group.map((member: any) => {
+            // Validate avatar URL
+            let memberAvatar = member.image || member.avatar || '';
+            const isInvalidAvatar = !memberAvatar ||
+              memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+              memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+              (memberAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+                !(memberAvatar.includes('/content/') || memberAvatar.includes('/coontent/') ||
+                  memberAvatar.includes('/uploads/') || memberAvatar.includes('/uploadds/')));
+
+            return {
+              id: member.user_id,
+              name: member.name || member.username || member.full_name || '未知',
+              avatar: isInvalidAvatar ? '' : memberAvatar,
+            };
+          });
+
+          const memberIds = result.data.group.map((member: any) => member.user_id);
+
+          // Update chatStore with member info
+          addChat({
+            ...chat,
+            members: membersInfo,
+            memberIds: memberIds,
+          });
+
+          console.log(`✅ [ChatList] Cached ${membersInfo.length} members for group "${chat.name}"`);
+        }
+      } catch (error) {
+        console.error(`❌ [ChatList] Failed to load members for group "${chat.name}":`, error);
+        // Continue to next group even if this one fails
+      }
+    }
+
+    console.log('✅ [ChatList] Finished loading all group members');
   };
 
   const formatTime = (timestamp: string) => {
