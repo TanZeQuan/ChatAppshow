@@ -160,8 +160,10 @@ export default function ProfileScreen() {
       setIsUpdating(true);
 
       try {
-        // Upload image to server (only send image, don't send name)
+        // ✅ Upload image to server - MUST include name and about to prevent backend from clearing them
         const res = await updateUserInfo(user.id, {
+          name: user.name,  // Keep existing name
+          about: user.about || '',  // Keep existing about
           image: { uri, type: "image/jpeg", name: "avatar.jpg" },
         });
 
@@ -200,8 +202,10 @@ export default function ProfileScreen() {
       setIsUpdating(true);
 
       try {
-        // Upload image to server (only send image, don't send name)
+        // ✅ Upload image to server - MUST include name and about to prevent backend from clearing them
         const res = await updateUserInfo(user.id, {
+          name: user.name,  // Keep existing name
+          about: user.about || '',  // Keep existing about
           image: { uri, type: "image/jpeg", name: "avatar.jpg" },
         });
 

@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readUserChats } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
-import { useChatStore } from '../../store/chatStore';
+import { ChatListItem, useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import { borders, colors, typography } from "../../styles";
 
@@ -193,7 +193,7 @@ export default function ChatListScreen() {
           };
         });
 
-        console.log('✅ [ChatList] Formatted chats:', formattedChats.map(c => ({
+        console.log('✅ [ChatList] Formatted chats:', formattedChats.map((c: ChatListItem) => ({
           name: c.name,
           timestamp: c.timestamp,
           isGroup: c.isGroup,
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: scaleWidth(16),
-    paddingTop: scaleHeight(10), 
+    paddingTop: scaleHeight(10),
     paddingBottom: scaleHeight(100), // 给底部留出空间，避免被 tab bar 遮挡
   },
   chatItem: {

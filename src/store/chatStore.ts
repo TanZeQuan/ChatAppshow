@@ -16,7 +16,7 @@ type Message = {
   avatar?: string;
 };
 
-type ChatListItem = {
+export type ChatListItem = {
   id: string;
   name: string;
   avatar: string | null;
@@ -25,7 +25,7 @@ type ChatListItem = {
   memberIds?: string[];
   lastMessage: string;
   timestamp: string;
-  ownerId?: string; 
+  ownerId?: string;
   unreadCount: number;
   online: boolean;
   rawData?: {

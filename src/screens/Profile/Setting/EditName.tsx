@@ -59,9 +59,12 @@ export default function EditNameScreen({ navigation }: Props) {
     try {
       console.log('更新用户名 - user_id:', user.id, 'new name:', name.trim());
 
-      // Update user info
+      // ✅ IMPORTANT: Must include 'about' field to prevent backend from clearing it
+      // Backend may clear fields that are not included in the request
       const res = await updateUserInfo(user.id, {
         name: name.trim(),
+        about: user.about || '',  // Keep existing 'about' field
+        // Don't include 'image' - we're not updating it
       });
 
       console.log('updateUserInfo 返回:', res);
