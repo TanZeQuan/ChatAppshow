@@ -156,10 +156,10 @@ export default function GroupRoomScreen() {
                     avatar: finalAvatar,
                 });
 
-                console.log(`✅ [MemberCache] Fetched info for ${userId}:`, {
-                    name: userData.name,
-                    avatar: finalAvatar
-                });
+                // console.log(`✅ [MemberCache] Fetched info for ${userId}:`, {
+                //     name: userData.name,
+                //     avatar: finalAvatar
+                // });
             }
         } catch (error) {
             console.error(`❌ [MemberCache] Failed to fetch info for ${userId}:`, error);
@@ -391,19 +391,19 @@ export default function GroupRoomScreen() {
                 offset: currentOffset,
             });
 
-            console.log('📥 [loadMessages] API Result:', {
-                success: result.success,
-                hasData: !!result.data,
-                message: result.message,
-            });
+            // console.log('📥 [loadMessages] API Result:', {
+            //     success: result.success,
+            //     hasData: !!result.data,
+            //     message: result.message,
+            // });
 
             if (result.success && result.data) {
-                console.log('📨 [loadMessages] API Response:', {
-                    hasChatArray: !!result.data.chat,
-                    chatLength: result.data.chat?.length || 0,
-                    hasGroupArray: !!result.data.group,
-                    groupLength: result.data.group?.length || 0,
-                });
+                // console.log('📨 [loadMessages] API Response:', {
+                //     hasChatArray: !!result.data.chat,
+                //     chatLength: result.data.chat?.length || 0,
+                //     hasGroupArray: !!result.data.group,
+                //     groupLength: result.data.group?.length || 0,
+                // });
 
                 // ✅ Messages are always in result.data.chat (for both private and group chats)
                 const apiMessages = result.data.chat || [];
@@ -417,10 +417,10 @@ export default function GroupRoomScreen() {
 
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
-                    console.log('📭 [loadMessages] No more messages');
+                    // console.log('📭 [loadMessages] No more messages');
                     setHasMoreMessages(false);
                 } else {
-                    console.log(`📬 [loadMessages] Loaded ${apiMessages.length} messages`);
+                    // console.log(`📬 [loadMessages] Loaded ${apiMessages.length} messages`);
 
                     // ✅ Transform API messages to app format (same logic as ChatRoomScreen)
                     const transformedMessages = apiMessages.map((msg: any) => {
@@ -700,7 +700,7 @@ export default function GroupRoomScreen() {
                 style: 'destructive',
                 onPress: () => {
                     clearChat(chatId);
-                    setOffset(0);
+                    offsetRef.current = 0;
                     setHasMoreMessages(true);
                     Alert.alert('成功', '聊天记录已清除');
                 }
@@ -748,7 +748,7 @@ export default function GroupRoomScreen() {
                         else if (extension === 'gif') mimeType = 'image/gif';
                         else if (extension === 'webp') mimeType = 'image/webp';
 
-                        console.log(`📤 [GroupRoom File Type] ${fileName} → ${mimeType}`);
+                        // console.log(`📤 [GroupRoom File Type] ${fileName} → ${mimeType}`);
 
                         return {
                             uri: asset.uri,
@@ -757,7 +757,7 @@ export default function GroupRoomScreen() {
                         };
                     });
 
-                    console.log('📤 [GroupRoom] Sending images to group...');
+                    // console.log('📤 [GroupRoom] Sending images to group...');
                     console.log('📤 [GroupRoom] Receiver:', receiver);
 
                     const apiResult = await sendChatMessage({
@@ -1107,7 +1107,7 @@ const roomStyles = RNStyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: borders.radius4,
-        backgroundColor: colors.background.grayLight,
+        backgroundColor: colors.background.white,
         marginHorizontal: 8,
         overflow: 'hidden',
     },
@@ -1191,11 +1191,6 @@ const roomStyles = RNStyleSheet.create({
         paddingVertical: 20,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    loadingText: {
-        marginTop: 8,
-        fontSize: typography.fontSize12,
-        color: colors.text.grayDark,
     },
 
     // ✅ Voice message styles (like ChatRoomScreen)

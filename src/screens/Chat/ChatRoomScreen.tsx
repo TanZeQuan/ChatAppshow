@@ -103,6 +103,8 @@ export default function ChatRoomScreen() {
   const [isUploading, setIsUploading] = useState(false);
   const [playingVoice, setPlayingVoice] = useState<string | null>(null); // Track which voice is playing
   const [sound, setSound] = useState<Audio.Sound | null>(null); // Current sound instance
+  const [voiceDurations, setVoiceDurations] = useState<Record<string, number>>({}); // Cache duration for each voice message
+  const [playbackPosition, setPlaybackPosition] = useState(0); // Current playback position in milliseconds
 
   // Wrap loadMessages in useCallback to prevent closure issues
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
@@ -210,13 +212,33 @@ export default function ChatRoomScreen() {
               }
               // For type 2 (voice), ensure full URL
               else if (messageType === 2) {
+                console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
+                console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
+                console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
+
                 if (typeof parsedMessage === 'string') {
                   voiceUrl = ensureFullImageUrl(parsedMessage);
                   messageText = '[语音消息]';
                 } else if (parsedMessage.message) {
-                  voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
-                  messageText = '[语音消息]';
+                  // ✅ Check if it's an error object from backend
+                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
+                    console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
+                    voiceUrl = ''; // Empty URL to skip this message
+                    messageText = '[语音上传失败]';
+                  }
+                  // Check if parsedMessage.message is an object with uri property
+                  else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
+                    voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
+                    messageText = '[语音消息]';
+                  }
+                  // Normal string path
+                  else if (typeof parsedMessage.message === 'string') {
+                    voiceUrl = ensureFullImageUrl(parsedMessage.message);
+                    messageText = '[语音消息]';
+                  }
                 }
+
+                console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
               }
               // For type 1 (text), extract text content
               else {
@@ -286,13 +308,13 @@ export default function ChatRoomScreen() {
     }, 10000);
 
     // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-    const pollingInterval = setInterval(() => {
-      loadMessages(false, false); // loadMore=false, showLoading=false
-    }, 3000);
+    // const pollingInterval = setInterval(() => {
+    //   loadMessages(false, false); // loadMore=false, showLoading=false
+    // }, 3000);
 
     return () => {
       clearInterval(connectionCheckInterval);
-      clearInterval(pollingInterval);
+      // clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 
@@ -497,10 +519,120 @@ export default function ChatRoomScreen() {
     }
   };
 
+  // ✅ Voice playback functions (simplified version)
+
+  // Playback status update callback
+  const onPlaybackStatusUpdate = useCallback((status: any) => {
+    if (status.isLoaded) {
+      // Update playback position
+      setPlaybackPosition(status.positionMillis || 0);
+
+      // Get duration
+      if (status.durationMillis) {
+        const durationSeconds = Math.round(status.durationMillis / 1000);
+        // Update duration for the current playing voice
+        if (playingVoice) {
+          setVoiceDurations(prev => ({
+            ...prev,
+            [playingVoice]: durationSeconds
+          }));
+        }
+      }
+
+      // Playback finished
+      if (status.didJustFinish) {
+        setPlayingVoice(null);
+        setPlaybackPosition(0);
+        console.log('🎵 [Voice] Playback finished');
+      }
+    }
+  }, [playingVoice]);
+
+  // Play audio
+  const playAudio = useCallback(async (voiceUrl: string, messageId: string) => {
+    try {
+      console.log('🎵 [Voice] Playing audio:', voiceUrl);
+
+      // Stop current playback if any
+      if (sound) {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+        setPlayingVoice(null);
+      }
+
+      // Reset playback position
+      setPlaybackPosition(0);
+
+      // Set audio mode for playback
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Create and play new sound
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: true },
+        onPlaybackStatusUpdate
+      );
+
+      setSound(newSound);
+      setPlayingVoice(messageId);
+      console.log('▶️ [Voice] Playing:', messageId);
+
+    } catch (error: any) {
+      console.error('❌ [Voice] Failed to play:', error);
+      Alert.alert('播放失败', '无法播放语音消息，请重试');
+      setPlayingVoice(null);
+    }
+  }, [sound, onPlaybackStatusUpdate]);
+
+  // Stop audio
+  const stopAudio = useCallback(async () => {
+    if (sound) {
+      try {
+        await sound.stopAsync();
+        await sound.unloadAsync();
+        setSound(null);
+        setPlayingVoice(null);
+        setPlaybackPosition(0);
+        console.log('⏹️ [Voice] Stopped playback');
+      } catch (error) {
+        console.error('❌ [Voice] Failed to stop:', error);
+      }
+    }
+  }, [sound]);
+
+  // Helper function: Format time from milliseconds to MM:SS
+  const formatTime = useCallback((millis: number) => {
+    const totalSeconds = Math.floor(millis / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }, []);
+
+  // Cleanup sound on unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        console.log('🧹 [Voice] Cleaning up sound on unmount');
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
   const messages: DisplayMessage[] = storedMessages.map(msg => ({
     ...msg,
     sender: msg.senderId === currentUserId ? 'me' : 'other',
     senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
+    // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
+    voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
+      ? String((msg.voiceUrl as any).message)
+      : msg.voiceUrl,
   }));
 
   useLayoutEffect(() => {
@@ -728,11 +860,43 @@ export default function ChatRoomScreen() {
           )}
 
           {/* Type 2: Voice Message */}
-          {item.type === 2 && (
+          {item.type === 2 && item.voiceUrl && (
             <View style={roomStyles.voiceMessageContainer}>
-              <Ionicons name="play-circle" size={24} color="#333" />
-              <Text style={roomStyles.voiceMessageText}>语音消息</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  if (playingVoice === item.id) {
+                    stopAudio();
+                  } else {
+                    playAudio(item.voiceUrl!, item.id);
+                  }
+                }}
+                style={roomStyles.voicePlayButton}
+              >
+                <Ionicons
+                  name={playingVoice === item.id ? "pause-circle" : "play-circle"}
+                  size={scaleWidth(25)}
+                  color="#667eea"
+                />
+              </TouchableOpacity>
+              <View style={roomStyles.voiceInfo}>
+                <Text style={roomStyles.voiceMessageText}>
+                  {playingVoice === item.id ? '播放中...' : '语音消息'}
+                </Text>
+                {voiceDurations[item.id] && (
+                  <Text style={roomStyles.voiceDuration}>
+                    {playingVoice === item.id
+                      ? `${formatTime(playbackPosition)} / ${formatTime(voiceDurations[item.id] * 1000)}`
+                      : formatTime(voiceDurations[item.id] * 1000)
+                    }
+                  </Text>
+                )}
+              </View>
             </View>
+          )}
+
+          {/* Type 2: Failed Voice Message (no voiceUrl) */}
+          {item.type === 2 && !item.voiceUrl && (
+            <Text style={roomStyles.messageText}>{messageText || '[语音上传失败]'}</Text>
           )}
 
           {/* Type 3: Image Message */}
@@ -960,7 +1124,7 @@ const roomStyles = RNStyleSheet.create({
     width: scaleWidth(40),
     height: scaleWidth(40),
     borderRadius: borders.radius4,
-    backgroundColor: colors.background.grayLight,
+    backgroundColor: colors.background.white,
     marginHorizontal: scaleWidth(8),
     overflow: 'hidden'
   },
@@ -983,7 +1147,7 @@ const roomStyles = RNStyleSheet.create({
     color: colors.text.blackMedium
   },
   messageText: {
-    fontSize: scaleFont(16),
+    fontSize: scaleFont(14),
     color: colors.text.blackMedium,
     lineHeight: scaleHeight(22)
   },
@@ -1064,16 +1228,40 @@ const roomStyles = RNStyleSheet.create({
     color: colors.text.blackMedium,
     textAlign: 'center',
   },
-  // Voice message styles
+  // Voice message styles - Modern design
   voiceMessageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: scaleWidth(8),
-    paddingVertical: scaleHeight(4),
+    paddingVertical: scaleHeight(8),
+    paddingHorizontal: scaleWidth(4),
+    borderRadius: borders.radius16,
+    maxWidth: scaleWidth(260),
+    minWidth: scaleWidth(150),
+  },
+  voicePlayButton: {
+    width: scaleWidth(35),
+    height: scaleWidth(35),
+    borderRadius: scaleWidth(24),
+    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: scaleWidth(12),
+  },
+  voiceInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
   voiceMessageText: {
     fontSize: scaleFont(14),
     color: colors.text.blackMedium,
+    lineHeight: scaleHeight(22),
+    marginBottom: scaleHeight(2),
+  },
+  voiceDuration: {
+    fontSize: scaleFont(13),
+    fontWeight: '500',
+    color: '#667eea',
+    letterSpacing: 0.3,
   },
   // Image message styles
   imageGridContainer: {
