@@ -1,29 +1,29 @@
-import React, { useState, useEffect } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
 import {
-  View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Image,
-  FlatList,
-  Alert,
-  Dimensions,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
+  View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
-import { colors, borders, typography } from "../../styles";
+import { addGroup } from "../../api/Chat";
+import { readFriends } from "../../api/Friend";
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
+import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
-import { useChatStore } from "../../store/chatStore";
-import { readFriends } from "../../api/Friend";
-import { addGroup } from "../../api/Group";
+import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 

@@ -9,11 +9,20 @@ type Message = {
   text: string;
   createdAt: string;
   type?: number; // 1: text, 2: voice, 3: image/files
+  imageUrls?: string[]; // For type 3 messages
+  voiceUrl?: string; // For type 2 messages
 
-  // Auto-fill
+  // Sender info
   senderId: string;
-  name?: string;
-  avatar?: string;
+  name?: string;  // ⚠️ Deprecated: Use memberCache instead
+  avatar?: string; // ⚠️ Deprecated: Use memberCache instead
+};
+
+// ✅ Member info cache type
+type MemberInfo = {
+  name: string;
+  avatar: string;
+  cachedAt: number; // Timestamp when cached
 };
 
 export type ChatListItem = {
@@ -27,45 +36,39 @@ export type ChatListItem = {
   timestamp: string;
   ownerId?: string;
   unreadCount: number;
-  online: boolean;
+  online: boolean; // ⚠️ Not currently used - can be removed if not needed
   rawData?: {
     push_notification?: boolean;
     top_notification?: boolean;
     show_nicknames?: boolean;
     ownerId?: string;
   };
-  admins?: string[]; // 可选，保存管理员 ID
-};
-
-type Settings = {
-  notifications: boolean;
-  soundEnabled: boolean;
-  vibrationEnabled: boolean;
-  showPreview: boolean;
+  admins?: string[];
 };
 
 type ChatStore = {
   chats: Record<string, Message[]>;
   chatList: ChatListItem[];
-  settings: Settings;
+  memberCache: Record<string, MemberInfo>; // ✅ Global member info cache
 
   addMessage: (message: Partial<Message> & { chatId: string }) => void;
   setMessages: (chatId: string, messages: Message[]) => void;
   addChat: (chat: ChatListItem) => void;
   setChats: (chats: ChatListItem[]) => void;
-  updateChatLastMessage: (
-    chatId: string,
-    message: Message
-  ) => void;
+  updateChatLastMessage: (chatId: string, message: Message) => void;
   removeChat: (chatId: string) => void;
   getChatById: (chatId: string) => ChatListItem | undefined;
   clearChat: (chatId: string) => void;
   clearAllChats: () => void;
-  updateSettings: (newSettings: Partial<Settings>) => void;
   getLastMessage: (chatId: string) => Message | null;
-  getTotalMessages: () => number;
   markAsRead: (chatId: string) => void;
   incrementUnread: (chatId: string) => void;
+
+  // ✅ Member cache management
+  getMemberInfo: (userId: string) => MemberInfo | undefined;
+  setMemberInfo: (userId: string, info: Omit<MemberInfo, 'cachedAt'>) => void;
+  clearMemberCache: () => void;
+  clearExpiredMemberCache: (maxAgeMs?: number) => void;
 };
 
 export const useChatStore = create<ChatStore>()(
@@ -73,12 +76,7 @@ export const useChatStore = create<ChatStore>()(
     (set, get) => ({
       chats: {},
       chatList: [],
-      settings: {
-        notifications: true,
-        soundEnabled: true,
-        vibrationEnabled: true,
-        showPreview: true,
-      },
+      memberCache: {}, // ✅ Initialize member cache
 
       // ⭐ Refactored addMessage to accept a message object
       addMessage: (message) => {
@@ -298,24 +296,45 @@ export const useChatStore = create<ChatStore>()(
 
       clearAllChats: () => set({ chats: {}, chatList: [] }),
 
-      updateSettings: (newSettings) =>
+      // ✅ Member cache management functions
+      getMemberInfo: (userId) => {
+        return get().memberCache[userId];
+      },
+
+      setMemberInfo: (userId, info) => {
         set({
-          settings: {
-            ...get().settings,
-            ...newSettings,
+          memberCache: {
+            ...get().memberCache,
+            [userId]: {
+              ...info,
+              cachedAt: Date.now(),
+            },
           },
-        }),
+        });
+      },
+
+      clearMemberCache: () => {
+        set({ memberCache: {} });
+      },
+
+      clearExpiredMemberCache: (maxAgeMs = 24 * 60 * 60 * 1000) => {
+        // Default: 24 hours
+        const now = Date.now();
+        const cache = get().memberCache;
+        const filteredCache: Record<string, MemberInfo> = {};
+
+        Object.entries(cache).forEach(([userId, info]) => {
+          if (now - info.cachedAt < maxAgeMs) {
+            filteredCache[userId] = info;
+          }
+        });
+
+        set({ memberCache: filteredCache });
+      },
 
       getLastMessage: (chatId) => {
         const messages = get().chats[chatId] || [];
         return messages.length ? messages[messages.length - 1] : null;
-      },
-
-      getTotalMessages: () => {
-        return Object.values(get().chats).reduce(
-          (total, arr) => total + arr.length,
-          0
-        );
       },
     }),
 

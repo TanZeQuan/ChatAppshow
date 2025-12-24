@@ -207,13 +207,20 @@ export const readChatMessages = async ({
 
         formData.append("data", JSON.stringify(dataPayload));
 
-        // console.log("readChatMessages payload:", dataPayload);
+        console.log("📤 [readChatMessages] Request:", dataPayload);
 
         const response = await api.post("/chats/message/read", formData, {
             headers: { "Content-Type": "multipart/form-data" },
         });
 
-        // console.log("readChatMessages response:", response.data);
+        console.log("📥 [readChatMessages] Response:", {
+            error: response.data?.error,
+            hasResponse: !!response.data?.response,
+            hasChatArray: !!response.data?.response?.chat,
+            hasGroupArray: !!response.data?.response?.group,
+            chatLength: response.data?.response?.chat?.length || 0,
+            groupLength: response.data?.response?.group?.length || 0,
+        });
 
         if (response.data?.error === true) {
             return {
@@ -357,5 +364,66 @@ export const sendChatMessage = async (payload: MessagePayload) => {
       success: false,
       message: error.response?.data?.message || error.message,
     };
+  }
+};
+
+export interface GroupMember {
+  user_id: string;
+  isadmin: number; // 1 normal, 2 admin
+}
+
+export interface AddGroupParams {
+  name: string;
+  user_id: string;
+  image?: string;
+  group: GroupMember[];
+}
+
+export const addGroup = async (params: AddGroupParams) => {
+  console.log("📞 addGroup called:", params);
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload = {
+      name: params.name,
+      user_id: params.user_id,
+      image: params.image ?? "",
+      group: params.group
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("➡ Sending to backend (FormData JSON):", {
+      name: params.name,
+      user_id: params.user_id,
+      image: params.image,
+      groupCount: params.group.length,
+      group: params.group
+    });
+
+    // ✅ Use same headers as successful Chat API
+    const response = await api.post("/chats/group/new", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000, // 30 seconds
+    });
+
+    console.log("📩 Backend response:", response.data);
+
+    // Handle response (check for error field)
+    if (response.data?.error === true) {
+      console.error("❌ Backend returned error:", response.data.message);
+      return {
+        error: true,
+        message: response.data.message || "Group creation failed"
+      };
+    }
+
+    return response.data;
+
+  } catch (error: any) {
+    console.error("❌ addGroup error:", error?.message);
+    console.error("❌ Full error:", error);
+    throw error;
   }
 };

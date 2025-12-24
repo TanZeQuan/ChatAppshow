@@ -15,7 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ProfileStackParamList } from "../../../navigation/types";
 import { colors, borders, typography } from "../../../styles";
 import { useUserStore } from '../../../store/userStore';
-import { updateUserInfo } from '../../../api/User';
+import { updateUserInfo, readUsers } from '../../../api/User';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "EditName">;
 
@@ -59,21 +59,56 @@ export default function EditNameScreen({ navigation }: Props) {
     try {
       console.log('更新用户名 - user_id:', user.id, 'new name:', name.trim());
 
-      // ✅ IMPORTANT: Must include 'about' field to prevent backend from clearing it
-      // Backend may clear fields that are not included in the request
+      // ✅ Follow backend API standard: only send name and about
+      // ⚠️ Backend will clear avatar when not uploading image - frontend validation will protect it
       const res = await updateUserInfo(user.id, {
         name: name.trim(),
         about: user.about || '',  // Keep existing 'about' field
-        // Don't include 'image' - we're not updating it
       });
 
       console.log('updateUserInfo 返回:', res);
 
-      if (res.success) {
-        // Just update the name in store, ProfileScreen will fetch complete data
+      if (!res.success) {
+        Alert.alert("失败", res.message || "更新失败，请重试");
+        return;
+      }
+
+      // ✅ Fetch updated user data - backend may have cleared avatar, so we validate it
+      const info = await readUsers(user.id);
+
+      if (info.success && info.data?.response) {
+        const userData = info.data.response;
+
+        // ✅ Validate backend avatar: if it's only the domain (invalid), keep existing avatar
+        let backendAvatar = userData.image || '';
+
+        // Check if backend avatar is invalid (only domain, no path, or malformed path)
+        const isInvalidAvatar = !backendAvatar ||
+          backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+          backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+          (backendAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+           !(backendAvatar.includes('/content/') || backendAvatar.includes('/coontent/') ||
+             backendAvatar.includes('/uploads/') || backendAvatar.includes('/uploadds/')));
+
+        // ✅ If backend avatar is invalid, get current avatar from store (not from parameter)
+        const currentStoreAvatar = useUserStore.getState().user?.avatar || '';
+        const finalAvatar = isInvalidAvatar ? currentStoreAvatar : backendAvatar;
+
+        console.log('🖼️ Avatar validation:', {
+          backend: backendAvatar,
+          currentStore: currentStoreAvatar,
+          isInvalid: isInvalidAvatar,
+          final: finalAvatar
+        });
+
+        // Update store with complete user data
         const updatedUser = {
-          ...user,
-          name: name.trim(),
+          id: userData.user_id || user.id,
+          name: userData.name || name.trim(),
+          phone: userData.phone || user.phone || '',
+          email: userData.email || user.email || '',
+          avatar: finalAvatar, // ✅ Use validated avatar (protected from backend clearing)
+          about: userData.about || user.about || '',
         };
 
         console.log('更新 store:', updatedUser);
@@ -90,7 +125,9 @@ export default function EditNameScreen({ navigation }: Props) {
           }
         ]);
       } else {
-        Alert.alert("失败", res.message || "更新失败，请重试");
+        // If readUsers fails, just show success and go back
+        Alert.alert("成功", "名字已更新");
+        navigation.goBack();
       }
     } catch (error) {
       console.error('更新名字错误:', error);

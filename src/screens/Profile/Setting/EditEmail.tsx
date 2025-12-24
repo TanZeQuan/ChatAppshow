@@ -90,12 +90,13 @@ export default function EditEmailScreen({ navigation }: Props) {
         // ✅ Validate backend avatar: if it's only the domain (invalid), keep existing avatar
         let backendAvatar = userData.image || '';
 
-        // Check if backend avatar is invalid (only domain, no path)
-        const isInvalidAvatar = backendAvatar && (
+        // Check if backend avatar is invalid (only domain, no path, or malformed path)
+        const isInvalidAvatar = !backendAvatar ||
           backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
           backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
-          !backendAvatar.includes('/content/') // Must have actual file path
-        );
+          (backendAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+           !(backendAvatar.includes('/content/') || backendAvatar.includes('/coontent/') ||
+             backendAvatar.includes('/uploads/') || backendAvatar.includes('/uploadds/')));
 
         // ✅ If backend avatar is invalid, get current avatar from store (not from parameter)
         const currentStoreAvatar = useUserStore.getState().user?.avatar || '';

@@ -285,14 +285,14 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    // // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-    // const pollingInterval = setInterval(() => {
-    //   loadMessages(false, false); // loadMore=false, showLoading=false
-    // }, 3000);
+    // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
+    const pollingInterval = setInterval(() => {
+      loadMessages(false, false); // loadMore=false, showLoading=false
+    }, 3000);
 
     return () => {
       clearInterval(connectionCheckInterval);
-      // clearInterval(pollingInterval);
+      clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 

@@ -67,35 +67,38 @@ export const readUsers = async (userId: string) => {
 // ✅ Update user info
 export const updateUserInfo = async (
   userId: string,
-  updateData: { 
-    name?: string; 
-    about?: string; 
-    image?: { uri: string; type?: string; name?: string } | null 
+  updateData: {
+    name?: string;
+    about?: string;
+    image?: { uri: string; type?: string; name?: string } | null;
   }
 ) => {
   try {
     const formData = new FormData();
-    
+
     // Always append the data field with user info
-    const dataPayload: any = { 
-      user_id: userId 
+    const dataPayload: any = {
+      user_id: userId
     };
-    
-    // Only include fields that are provided
+
+    // Only include fields that are provided (name and about only)
     if (updateData.name !== undefined) {
       dataPayload.name = updateData.name;
     }
-    
+
     if (updateData.about !== undefined) {
       dataPayload.about = updateData.about;
     }
-    
+
+    // ⚠️ Note: Not including image URL in data - backend clears avatar when not uploading
+    // Frontend validation logic will protect avatar by using stored value when backend returns invalid URL
+
     formData.append("data", JSON.stringify(dataPayload));
 
-    // Only append image if it exists and has a valid URI
+    // Only append image file if it exists and has a valid URI (for uploading new image)
     if (updateData.image && updateData.image.uri) {
       const { uri, type = "image/jpeg", name = "avatar.jpg" } = updateData.image;
-      
+
       // For React Native, the image object structure for FormData
       formData.append("image", {
         uri,
@@ -111,8 +114,8 @@ export const updateUserInfo = async (
     });
 
     const response = await api.post("/users/info/update", formData, {
-      headers: { 
-        "Content-Type": "multipart/form-data" 
+      headers: {
+        "Content-Type": "multipart/form-data"
       },
     });
 
@@ -120,21 +123,21 @@ export const updateUserInfo = async (
 
     // Check if response indicates an error
     if (response.data?.error === true) {
-      return { 
-        success: false, 
-        message: response.data.message || "Update failed" 
+      return {
+        success: false,
+        message: response.data.message || "Update failed"
       };
     }
 
-    return { 
-      success: true, 
-      data: response.data 
+    return {
+      success: true,
+      data: response.data
     };
   } catch (error: any) {
     console.error('updateUserInfo error:', error.response?.data || error.message);
-    return { 
-      success: false, 
-      message: error.response?.data?.message || error.message 
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message
     };
   }
 };

@@ -23,6 +23,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
+import { readUsers } from '../../api/User';
+import { ensureFullImageUrl } from '../../api/service';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
@@ -62,11 +64,12 @@ export default function GroupRoomScreen() {
     const navigation = useNavigation<any>();
     const params = route.params as RouteParams;
     const { chatId } = params;
+    console.log('🆔 GroupRoomScreen chatId:', chatId);
 
     const currentUserId = useUserStore((state) => state.user?.id) || 'me';
     const currentUser = useUserStore((state) => state.user);
 
-    const { addMessage, clearChat, getChatById, setMessages } = useChatStore();
+    const { addMessage, clearChat, getChatById, setMessages, getMemberInfo, setMemberInfo } = useChatStore();
 
     // Get real-time data from store
     const groupChat = getChatById(chatId);
@@ -100,9 +103,71 @@ export default function GroupRoomScreen() {
     const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const [offset, setOffset] = useState(0);
+    const [refreshing, setRefreshing] = useState(false); // ✅ For RefreshControl
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
     const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
+
+    // ✅ Use ref for offset to avoid unnecessary re-renders (like ChatRoomScreen)
+    const offsetRef = useRef(0);
+
+    // ✅ Use chatStore member cache (reactive)
+    const memberCache = useChatStore((state) => state.memberCache);
+    const fetchingMemberIdsRef = useRef<Set<string>>(new Set()); // Track IDs being fetched to avoid duplicates
+
+    // ✅ Fetch member info on-demand from /users/read API
+    const fetchMemberInfo = useCallback(async (userId: string) => {
+        // Skip if already cached or currently fetching
+        if (getMemberInfo(userId) || fetchingMemberIdsRef.current.has(userId)) {
+            return;
+        }
+
+        // Skip fetching for current user (we already have this info)
+        if (userId === currentUserId) {
+            setMemberInfo(userId, {
+                name: currentUser?.name || '我',
+                avatar: currentUser?.avatar || '',
+            });
+            return;
+        }
+
+        // Mark as fetching
+        fetchingMemberIdsRef.current.add(userId);
+
+        try {
+            const result = await readUsers(userId);
+
+            if (result.success && result.data?.response) {
+                const userData = result.data.response;
+
+                // ✅ Validate backend avatar
+                let backendAvatar = userData.image || '';
+                const isInvalidAvatar = !backendAvatar ||
+                    backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+                    backendAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
+                    (backendAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
+                        !(backendAvatar.includes('/content/') || backendAvatar.includes('/coontent/') ||
+                            backendAvatar.includes('/uploads/') || backendAvatar.includes('/uploadds/')));
+
+                const finalAvatar = isInvalidAvatar ? '' : backendAvatar;
+
+                // ✅ Cache using chatStore
+                setMemberInfo(userId, {
+                    name: userData.name || userData.username || userData.full_name || '未知',
+                    avatar: finalAvatar,
+                });
+
+                console.log(`✅ [MemberCache] Fetched info for ${userId}:`, {
+                    name: userData.name,
+                    avatar: finalAvatar
+                });
+            }
+        } catch (error) {
+            console.error(`❌ [MemberCache] Failed to fetch info for ${userId}:`, error);
+        } finally {
+            // Remove from fetching set
+            fetchingMemberIdsRef.current.delete(userId);
+        }
+    }, [currentUserId, currentUser, getMemberInfo, setMemberInfo]);
 
     // Voice message state
     const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -272,25 +337,37 @@ export default function GroupRoomScreen() {
         }
     };
 
-    const messages: DisplayMessage[] = storedMessages.map(msg => {
-        const member = uniqueMembers.find(m => m.id === msg.senderId);
-        return {
-            ...msg,
-            sender: msg.senderId === currentUserId ? 'me' : 'other',
-            senderName: msg.senderId === currentUserId
-                ? `${currentUser?.name || '我'} (我)`
-                : (member?.name || msg.name || '未知成员'),
-            avatar: msg.senderId === currentUserId
-                ? currentUser?.avatar
-                : (member?.avatar || msg.avatar),
-        };
-    });
+    // ✅ Transform messages with cached member info
+    const messages: DisplayMessage[] = useMemo(() => {
+        return storedMessages.map(msg => {
+            const member = uniqueMembers.find(m => m.id === msg.senderId);
+
+            // ✅ Fetch member info on-demand if not in cache
+            if (msg.senderId !== currentUserId && !memberCache[msg.senderId]) {
+                fetchMemberInfo(msg.senderId);
+            }
+
+            // ✅ Use cached member info from chatStore
+            const cachedInfo = memberCache[msg.senderId];
+
+            return {
+                ...msg,
+                sender: msg.senderId === currentUserId ? 'me' : 'other',
+                senderName: msg.senderId === currentUserId
+                    ? `${currentUser?.name || '我'} (我)`
+                    : (cachedInfo?.name || member?.name || msg.name || '未知成员'),
+                avatar: msg.senderId === currentUserId
+                    ? currentUser?.avatar
+                    : (cachedInfo?.avatar || member?.avatar || msg.avatar),
+            };
+        });
+    }, [storedMessages, uniqueMembers, currentUserId, currentUser, memberCache, fetchMemberInfo]);
 
     // Load initial messages
     const loadMessages = useCallback(async (isRefresh = false, showLoading = true) => {
         if (!currentUserId || !chatId) return;
 
-        const currentOffset = isRefresh ? 0 : offset;
+        const currentOffset = isRefresh ? 0 : offsetRef.current; // ✅ Use offsetRef
 
         if (showLoading) {
             if (isRefresh) {
@@ -301,46 +378,154 @@ export default function GroupRoomScreen() {
         }
 
         try {
+            console.log('🔄 [loadMessages] Fetching messages...', {
+                chatId,
+                userId: currentUserId,
+                offset: currentOffset,
+                isRefresh,
+            });
+
             const result = await readChatMessages({
                 chat_id: chatId,
                 user_id: currentUserId,
                 offset: currentOffset,
             });
 
-            if (result.success && result.data) {
-                // API returns { chat: [], group: [] }
-                // Determine which array to use based on chat type
-                const isGroupChat = chatId.startsWith('group_') || params.isGroup;
-                const apiMessages = isGroupChat
-                    ? (result.data.group || [])
-                    : (result.data.chat || []);
+            console.log('📥 [loadMessages] API Result:', {
+                success: result.success,
+                hasData: !!result.data,
+                message: result.message,
+            });
 
-                // Extract and save member IDs from group data
+            if (result.success && result.data) {
+                console.log('📨 [loadMessages] API Response:', {
+                    hasChatArray: !!result.data.chat,
+                    chatLength: result.data.chat?.length || 0,
+                    hasGroupArray: !!result.data.group,
+                    groupLength: result.data.group?.length || 0,
+                });
+
+                // ✅ Messages are always in result.data.chat (for both private and group chats)
+                const apiMessages = result.data.chat || [];
+
+                // ✅ Group members info (only for group chats)
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
+                    console.log('👥 [loadMessages] Found group members:', memberIds);
                 }
 
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
+                    console.log('📭 [loadMessages] No more messages');
                     setHasMoreMessages(false);
                 } else {
-                    // Transform API messages to app format
-                    const transformedMessages = apiMessages.map((msg: any) => ({
-                        id: msg.message_id || msg.id || String(Date.now() + Math.random()),
-                        senderId: msg.sender_id || msg.senderId,
-                        senderName: msg.sender_name || msg.senderName || '未知',
-                        text: msg.message || msg.text || '',
-                        createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
-                        name: msg.sender_name || msg.name,
-                        avatar: msg.sender_avatar || msg.avatar,
-                    }));
+                    console.log(`📬 [loadMessages] Loaded ${apiMessages.length} messages`);
+
+                    // ✅ Transform API messages to app format (same logic as ChatRoomScreen)
+                    const transformedMessages = apiMessages.map((msg: any) => {
+                        let messageText = '';
+                        let messageType = 1; // Default to text
+                        let imageUrls: string[] = [];
+                        let voiceUrl: string = '';
+
+                        try {
+                            // 🔍 Check if msg.message is already an object or a string
+                            let parsedMessage: any;
+
+                            if (typeof msg.message === 'string') {
+                                try {
+                                    parsedMessage = JSON.parse(msg.message);
+                                } catch {
+                                    // If parsing fails, treat as plain text
+                                    parsedMessage = { message: msg.message };
+                                }
+                            } else if (typeof msg.message === 'object' && msg.message !== null) {
+                                parsedMessage = msg.message; // Already an object
+                            } else {
+                                parsedMessage = { message: String(msg.message || '') };
+                            }
+
+                            // Extract type: try msg.type first, then parsedMessage.type
+                            if (msg.type) {
+                                messageType = msg.type;
+                            } else if (parsedMessage.type) {
+                                messageType = parsedMessage.type;
+                            }
+
+                            // For type 3 (images/files), extract image URLs
+                            if (messageType === 3) {
+                                // Check if parsedMessage is an array (direct image URLs)
+                                if (Array.isArray(parsedMessage)) {
+                                    imageUrls = parsedMessage.map((url: string) => ensureFullImageUrl(url));
+                                }
+                                // Check if parsedMessage.message is an array
+                                else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
+                                    imageUrls = parsedMessage.message.map((url: string) => ensureFullImageUrl(url));
+                                }
+                                // Check if parsedMessage.message is a comma-separated string
+                                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                                    const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
+                                    imageUrls = urls.map((url: string) => ensureFullImageUrl(url));
+                                }
+
+                                messageText = `[${imageUrls.length}张图片]`; // Display text
+                            }
+                            // For type 2 (voice), ensure full URL
+                            else if (messageType === 2) {
+                                if (typeof parsedMessage === 'string') {
+                                    voiceUrl = ensureFullImageUrl(parsedMessage);
+                                    messageText = '[语音消息]';
+                                } else if (parsedMessage.message) {
+                                    voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                                    messageText = '[语音消息]';
+                                }
+                            }
+                            // For type 1 (text), extract text content
+                            else {
+                                if (typeof parsedMessage === 'string') {
+                                    messageText = parsedMessage;
+                                } else if (parsedMessage.message) {
+                                    messageText = String(parsedMessage.message);
+                                } else {
+                                    messageText = String(parsedMessage);
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Failed to parse message:', msg.message, 'Error:', e);
+                            // Fallback: convert to string safely
+                            messageText = typeof msg.message === 'string'
+                                ? msg.message
+                                : JSON.stringify(msg.message);
+                        }
+
+                        return {
+                            id: msg.message_id || msg.id || String(Date.now() + Math.random()),
+                            senderId: msg.sender_id || msg.sender || msg.senderId,
+                            senderName: msg.sender_name || msg.senderName || '未知',
+                            text: messageText, // ✅ Parsed text
+                            type: messageType, // ✅ Message type (1=text, 2=voice, 3=images)
+                            imageUrls: imageUrls, // ✅ Image URLs for type 3
+                            voiceUrl: voiceUrl, // ✅ Voice URL for type 2
+                            createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
+                            name: msg.sender_name || msg.name,
+                            avatar: msg.sender_avatar || msg.avatar,
+                        };
+                    });
+
+                    console.log(`📝 [loadMessages] Transformed messages sample:`, transformedMessages.slice(0, 2).map(m => ({
+                        id: m.id,
+                        type: m.type,
+                        text: m.text.substring(0, 50),
+                        hasImageUrls: !!m.imageUrls && m.imageUrls.length > 0,
+                        hasVoiceUrl: !!m.voiceUrl,
+                    })));
 
 
                     if (isRefresh) {
                         // Replace all messages on refresh
                         setMessages(chatId, transformedMessages);
-                        setOffset(transformedMessages.length);
+                        offsetRef.current = transformedMessages.length; // ✅ Use offsetRef
                     } else {
                         // Append messages when loading more
                         // Get messages from store at call time to avoid stale dependency
@@ -351,7 +536,7 @@ export default function GroupRoomScreen() {
                             new Map(allMessages.map(m => [m.id, m])).values()
                         );
                         setMessages(chatId, uniqueMessages);
-                        setOffset(uniqueMessages.length);
+                        offsetRef.current = uniqueMessages.length; // ✅ Use offsetRef
                     }
                 }
             } else {
@@ -371,11 +556,27 @@ export default function GroupRoomScreen() {
                 setIsRefreshing(false);
             }
         }
-    }, [currentUserId, chatId, offset, params.isGroup, setMessages]);
+    }, [currentUserId, chatId, params.isGroup, setMessages]); // ✅ Remove offset from dependencies
+
+    // ✅ Handle pull-to-refresh (like ChatRoomScreen)
+    const handleRefresh = async () => {
+        setRefreshing(true);
+        await loadMessages(false, false); // No loading spinner, just refresh control
+        setRefreshing(false);
+    };
 
     // Load messages on mount
     useEffect(() => {
+        offsetRef.current = 0; // ✅ Reset offset when entering new chat (like ChatRoomScreen)
         loadMessages(true);
+
+        // ✅ WebSocket connection check (every 10 seconds) - like ChatRoomScreen
+        const connectionCheckInterval = setInterval(() => {
+            const connected = WebSocketManager.isWebSocketConnected();
+            if (!connected) {
+                console.warn('⚠️ WebSocket disconnected!');
+            }
+        }, 10000);
 
         // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
         const pollingInterval = setInterval(() => {
@@ -383,9 +584,10 @@ export default function GroupRoomScreen() {
         }, 3000);
 
         return () => {
+            clearInterval(connectionCheckInterval); // ✅ Clear connection check interval
             clearInterval(pollingInterval);
         };
-    }, [chatId, currentUserId, loadMessages]);
+    }, [loadMessages]);
 
     // Use refs to store stable references for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -619,50 +821,83 @@ export default function GroupRoomScreen() {
         }
     };
 
-    const handleRefresh = () => {
-        setOffset(0);
+    const handleRefreshOld = () => { // ✅ This is now unused, remove if needed
+        offsetRef.current = 0;
         setHasMoreMessages(true);
         loadMessages(true);
     };
 
-    const renderItem = ({ item }: { item: DisplayMessage }) => (
-        <View style={[
-            roomStyles.messageRow,
-            item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
-        ]}>
-            {item.sender === 'other' && (
-                <View style={roomStyles.avatar}>
-                    <Image
-                        source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
-                        style={roomStyles.avatarImage}
-                    />
-                </View>
-            )}
+    const renderItem = ({ item }: { item: DisplayMessage }) => {
+        // 🔍 Safety check: ensure text is a string (like ChatRoomScreen)
+        const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
+
+        return (
             <View style={[
-                roomStyles.bubble,
-                item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
+                roomStyles.messageRow,
+                item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
             ]}>
                 {item.sender === 'other' && (
-                    <Text style={roomStyles.senderName}>{item.senderName}</Text>
+                    <View style={roomStyles.avatar}>
+                        <Image
+                            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
+                            style={roomStyles.avatarImage}
+                        />
+                    </View>
                 )}
-                <Text style={roomStyles.messageText}>{item.text}</Text>
-                <Text style={roomStyles.timestamp}>
-                    {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    })}
-                </Text>
-            </View>
-            {item.sender === 'me' && (
-                <View style={roomStyles.avatar}>
-                    <Image
-                        source={currentUser?.avatar ? { uri: currentUser.avatar } : require('../../assets/images/anonymous.png')}
-                        style={roomStyles.avatarImage}
-                    />
+                <View style={[
+                    roomStyles.bubble,
+                    item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
+                ]}>
+                    {item.sender === 'other' && (
+                        <Text style={roomStyles.senderName}>{item.senderName}</Text>
+                    )}
+
+                    {/* Type 1: Text Message */}
+                    {item.type === 1 && messageText && (
+                        <Text style={roomStyles.messageText}>{messageText}</Text>
+                    )}
+
+                    {/* Type 2: Voice Message */}
+                    {item.type === 2 && (
+                        <View style={roomStyles.voiceMessageContainer}>
+                            <Ionicons name="play-circle" size={24} color="#333" />
+                            <Text style={roomStyles.voiceMessageText}>语音消息</Text>
+                        </View>
+                    )}
+
+                    {/* Type 3: Image Message */}
+                    {item.type === 3 && item.imageUrls && item.imageUrls.length > 0 && (
+                        <View style={roomStyles.imageGridContainer}>
+                            {item.imageUrls.map((url, index) => (
+                                <TouchableOpacity key={index} activeOpacity={0.8}>
+                                    <Image
+                                        source={{ uri: url }}
+                                        style={roomStyles.messageImage}
+                                        resizeMode="cover"
+                                    />
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+
+                    <Text style={roomStyles.timestamp}>
+                        {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}
+                    </Text>
                 </View>
-            )}
-        </View>
-    );
+                {item.sender === 'me' && (
+                    <View style={roomStyles.avatar}>
+                        <Image
+                            source={currentUser?.avatar ? { uri: currentUser.avatar } : require('../../assets/images/anonymous.png')}
+                            style={roomStyles.avatarImage}
+                        />
+                    </View>
+                )}
+            </View>
+        );
+    };
 
     const renderFooter = () => {
         if (!isLoading) return null;
@@ -682,6 +917,29 @@ export default function GroupRoomScreen() {
             <Text style={roomStyles.toolbarLabel}>{label}</Text>
         </TouchableOpacity>
     );
+
+    // ✅ Only show loading screen when loading AND messages are empty (like ChatRoomScreen)
+    if (isLoading && messages.length === 0) {
+        return (
+            <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
+                <SafeAreaView style={{ flex: 1 }}>
+                    <View style={roomStyles.header}>
+                        <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+                            <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
+                        </TouchableOpacity>
+                        <Text style={roomStyles.headerTitle}>{chatName}</Text>
+                        <TouchableOpacity style={roomStyles.moreButton} onPress={() => navigation.navigate('GroupMemberList', { chatId })}>
+                            <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                    <View style={roomStyles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#FFD966" />
+                        <Text style={roomStyles.loadingText}>加载消息中...</Text>
+                    </View>
+                </SafeAreaView>
+            </LinearGradient>
+        );
+    }
 
     return (
         <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
@@ -716,9 +974,10 @@ export default function GroupRoomScreen() {
                         ListFooterComponent={renderFooter}
                         refreshControl={
                             <RefreshControl
-                                refreshing={isRefreshing}
+                                refreshing={refreshing} // ✅ Use refreshing state (like ChatRoomScreen)
                                 onRefresh={handleRefresh}
-                                tintColor="#666"
+                                colors={['#FFD966']} // Android
+                                tintColor="#FFD966" // iOS
                             />
                         }
                     />
@@ -825,6 +1084,18 @@ const roomStyles = RNStyleSheet.create({
     },
     moreButton: { padding: 4 },
 
+    // ✅ Loading styles (like ChatRoomScreen)
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    loadingText: {
+        marginTop: scaleHeight(12),
+        fontSize: scaleFont(14),
+        color: colors.text.grayDark,
+    },
+
     keyboardAvoidingView: { flex: 1 },
     chatList: { paddingHorizontal: 12, paddingVertical: 16 },
 
@@ -925,5 +1196,31 @@ const roomStyles = RNStyleSheet.create({
         marginTop: 8,
         fontSize: typography.fontSize12,
         color: colors.text.grayDark,
+    },
+
+    // ✅ Voice message styles (like ChatRoomScreen)
+    voiceMessageContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: scaleWidth(8),
+        paddingVertical: scaleHeight(4),
+    },
+    voiceMessageText: {
+        fontSize: scaleFont(14),
+        color: colors.text.blackMedium,
+    },
+
+    // ✅ Image message styles (like ChatRoomScreen)
+    imageGridContainer: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: scaleWidth(4),
+        marginBottom: scaleHeight(4),
+    },
+    messageImage: {
+        width: scaleWidth(120),
+        height: scaleWidth(120),
+        borderRadius: borders.radius8,
+        backgroundColor: colors.background.grayLight,
     },
 });
