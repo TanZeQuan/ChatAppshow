@@ -39,20 +39,15 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  const { chatList, setChats } = useChatStore();
+  const { chatList, setChats, addChat } = useChatStore();
   const { user } = useUserStore();
   const [searchQuery, setSearchQuery] = useState('');
 
   const currentUserId = user?.id;
 
-  // Refresh chat list when screen comes into focus
-  useFocusEffect(
-    React.useCallback(() => {
-      // Silently refresh data without showing refresh indicator
-      silentRefresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-  );
+  // ✅ REMOVED: Don't auto-refresh on focus to preserve local timestamp updates
+  // Only refresh when WebSocket receives new messages
+  // This allows the "recently clicked chat" to stay at the top
 
   // Listen for WebSocket messages (GLOBAL - works even when not in chat room)
   useEffect(() => {
@@ -71,19 +66,29 @@ export default function ChatListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sort chats by timestamp (most recent first)
-  const sortedChats = [...chatList].sort((a, b) => {
-    if (!a.timestamp) return 1;
-    if (!b.timestamp) return -1;
-    return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-  });
-
-  // Filter chats based on search query
-  const filteredChats = sortedChats.filter(chat =>
+  // ✅ chatList is already sorted by timestamp in chatStore.setChats()
+  // Just filter based on search query
+  const filteredChats = chatList.filter(chat =>
     chat.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleChatPress = (chat: any) => {
+    // ✅ Update timestamp when user clicks into chat
+    // This ensures the chat moves to the top of the list
+    const newTimestamp = new Date().toISOString();
+    const updatedChat = {
+      ...chat,
+      timestamp: newTimestamp, // Update to current time
+    };
+
+    console.log(`🔄 [ChatList] Updating chat "${chat.name}" timestamp:`, {
+      old: chat.timestamp,
+      new: newTimestamp,
+      isGroup: chat.isGroup,
+    });
+
+    addChat(updatedChat); // Update in store
+
     // ChatListScreen 只显示已有的聊天记录（从 /chats/read 获取）
     // 所有聊天都有真正的 chat_id，直接跳转即可
     // 创建新聊天的逻辑在 ContactsScreen 中处理
@@ -144,6 +149,26 @@ export default function ChatListScreen() {
             ? chat.message[chat.message.length - 1]?.type
             : chat.last_message_type;
 
+          // ✅ Preserve local timestamp if it's newer than backend timestamp
+          // This ensures recently clicked chats stay at the top
+          const backendTimestamp = chat.last_message_time || chat.timestamp || new Date().toISOString();
+          const localTimestamp = existingChat?.timestamp;
+
+          // Use local timestamp if it exists AND is newer than backend
+          let finalTimestamp = backendTimestamp;
+          if (localTimestamp) {
+            const localTime = new Date(localTimestamp).getTime();
+            const backendTime = new Date(backendTimestamp).getTime();
+            if (localTime > backendTime) {
+              finalTimestamp = localTimestamp; // Keep the newer local timestamp
+              console.log(`✅ [ChatList] Preserving local timestamp for "${chat.name || chat.chat_name}":`, {
+                backend: backendTimestamp,
+                local: localTimestamp,
+                kept: 'local'
+              });
+            }
+          }
+
           return {
             id: chat.chat_id,
             name: chat.name || chat.chat_name || '未命名聊天',
@@ -152,14 +177,18 @@ export default function ChatListScreen() {
             members: chat.members || [],
             memberIds: finalMemberIds,
             lastMessage: formatLastMessagePreview(lastMessageText, lastMessageType),
-            timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
+            timestamp: finalTimestamp, // ✅ Use preserved timestamp
             unreadCount: chat.unread || chat.unread_count || 0,
             online: false,
             rawData: chat,
           };
         });
 
-        console.log('✅ Formatted chats list:', formattedChats.length, 'chats');
+        console.log('✅ [ChatList] Formatted chats:', formattedChats.map(c => ({
+          name: c.name,
+          timestamp: c.timestamp,
+          isGroup: c.isGroup,
+        })));
         // console.log('📋 First chat:', JSON.stringify(formattedChats[0], null, 2));
 
         // Update chat store

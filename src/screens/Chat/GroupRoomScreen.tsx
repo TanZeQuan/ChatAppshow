@@ -108,30 +108,78 @@ export default function GroupRoomScreen() {
 
     const startRecording = async () => {
         try {
+            // ✅ Clean up any existing recording first
+            if (recording) {
+                console.log('🧹 [Voice] Cleaning up existing recording...');
+                try {
+                    await recording.stopAndUnloadAsync();
+                } catch (e) {
+                    console.log('⚠️ [Voice] Failed to clean up recording:', e);
+                }
+                setRecording(null);
+            }
+
             const { status } = await Audio.requestPermissionsAsync();
             if (status !== 'granted') {
-                Alert.alert('Permission not granted', 'Failed to get recording permissions');
+                Alert.alert('权限被拒绝', '需要麦克风权限才能录音');
                 return;
             }
 
+            // ✅ Set audio mode with complete configuration for both iOS and Android
             await Audio.setAudioModeAsync({
                 allowsRecordingIOS: true,
                 playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: true,
+                playThroughEarpieceAndroid: false,
             });
 
-            const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
-            setRecording(recording);
+            console.log('🎤 [Voice] Starting recording with high-quality audio...');
+
+            // ✅ Use custom recording options for high-quality audio
+            // Note: expo-av doesn't support native Opus encoding, so we record in AAC and send as .opus to backend
+            const recordingOptions = {
+                isMeteringEnabled: true,
+                android: {
+                    extension: '.m4a',
+                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+                    sampleRate: 48000,
+                    numberOfChannels: 1,
+                    bitRate: 128000,
+                },
+                ios: {
+                    extension: '.m4a',
+                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+                    audioQuality: Audio.IOSAudioQuality.HIGH,
+                    sampleRate: 48000,
+                    numberOfChannels: 1,
+                    bitRate: 128000,
+                    linearPCMBitDepth: 16,
+                    linearPCMIsBigEndian: false,
+                    linearPCMIsFloat: false,
+                },
+                web: {
+                    mimeType: 'audio/webm;codecs=opus',
+                    bitsPerSecond: 128000,
+                },
+            };
+
+            const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+            setRecording(newRecording);
             setIsRecording(true);
-            console.log('Recording started');
-        } catch (err) {
-            console.error('Failed to start recording', err);
+            console.log('✅ [Voice] Recording started (will be sent as .opus)');
+        } catch (err: any) {
+            console.error('❌ [Voice] Failed to start recording:', err);
+            Alert.alert('录音失败', err.message || '无法启动录音，请重试');
+            setRecording(null);
+            setIsRecording(false);
         }
     };
 
     const stopRecording = async () => {
         if (!recording) {
+            console.log('⚠️ [Voice] No recording to stop');
             return;
         }
 
@@ -139,24 +187,52 @@ export default function GroupRoomScreen() {
         setIsUploading(true);
 
         try {
-            await recording.stopAndUnloadAsync();
+            console.log('⏹️ [Voice] Stopping recording...');
+
+            // ✅ Get URI BEFORE stopAndUnloadAsync
             const uri = recording.getURI();
 
+            // ✅ Then stop and unload
+            await recording.stopAndUnloadAsync();
+
+            // ✅ Reset audio mode after recording
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: false,
+                playThroughEarpieceAndroid: false,
+            });
+
             if (uri) {
+                console.log('🎤 [Voice] Recording stopped, URI:', uri);
+
                 const receiver = chatMembers.filter(id => id !== currentUserId);
-                const filename = uri.split('/').pop();
+
+                // ✅ Force Opus filename and MIME type for backend
+                const originalFilename = uri.split('/').pop() || 'voice.opus';
+                const filename = originalFilename.replace(/\.(m4a|caf|mp4|aac)$/i, '.opus');
+
+                // ✅ Always use audio/opus MIME type
+                const mimeType = 'audio/opus';
+
+                console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
+
                 const result = await sendChatMessage({
                     sender: currentUserId,
                     isreceive: receiver,
                     chat_id: chatId,
                     voice: {
                         uri: uri,
-                        name: filename || 'voice.m4a',
-                        type: 'audio/m4a',
+                        name: filename,
+                        type: mimeType,
                     },
                 });
 
+                console.log('🎤 [Voice] API Result:', result);
+
                 if (result.success && result.data) {
+                    console.log('✅ [Voice] Success!');
                     const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
                         ? result.data.isreceive
                         : receiver;
@@ -173,17 +249,23 @@ export default function GroupRoomScreen() {
                     }
 
                     await loadMessages(false, false);
+                    Alert.alert('成功', '语音消息已发送');
                 } else {
-                    console.error("Failed to send voice message:", result.message);
+                    console.error("❌ [Voice] Failed to send voice message:", result.message);
                     Alert.alert('发送失败', result.message || '语音消息发送失败，请重试');
                 }
+            } else {
+                console.error('❌ [Voice] No URI from recording');
+                Alert.alert('错误', '录音文件无效');
             }
         } catch (error: any) {
-            console.error('Failed to send voice message', error);
+            console.error('❌ [Voice] Failed to send voice message', error);
             Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
+            // ✅ Always clean up recording object
             setIsUploading(false);
             setRecording(null);
+            console.log('🧹 [Voice] Recording cleaned up');
         }
     };
 
@@ -563,12 +645,12 @@ export default function GroupRoomScreen() {
 
     const renderFooter = () => {
         if (!isLoading) return null;
-        return (
-            <View style={roomStyles.loadingFooter}>
-                <ActivityIndicator size="small" color="#666" />
-                <Text style={roomStyles.loadingText}>加载更多消息...</Text>
-            </View>
-        );
+        // return (
+        //     <View style={roomStyles.loadingFooter}>
+        //         <ActivityIndicator size="small" color="#666" />
+        //         <Text style={roomStyles.loadingText}>加载更多消息...</Text>
+        //     </View>
+        // );
     };
 
     const ToolbarButton = ({ icon, label, onPress }: any) => (

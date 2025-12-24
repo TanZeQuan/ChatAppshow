@@ -166,15 +166,27 @@ export const useChatStore = create<ChatStore>()(
         const existingIndex = currentChatList.findIndex(c => c.id === processedChat.id);
 
         if (existingIndex !== -1) {
-          // Update existing chat
+          // Update existing chat and move to top
           const updatedChatList = [...currentChatList];
           updatedChatList[existingIndex] = {
             ...updatedChatList[existingIndex],
             ...processedChat, // Use processedChat here
           };
+
+          console.log(`📌 [chatStore] addChat - updating "${processedChat.name}":`, {
+            oldTimestamp: updatedChatList[existingIndex].timestamp,
+            newTimestamp: processedChat.timestamp,
+            isGroup: processedChat.isGroup,
+          });
+
+          // ✅ Move updated chat to top of list
+          const [movedChat] = updatedChatList.splice(existingIndex, 1);
+          updatedChatList.unshift(movedChat);
+
           set({ chatList: updatedChatList });
         } else {
           // Add new chat to the top of the list
+          console.log(`➕ [chatStore] addChat - adding new "${processedChat.name}"`);
           set({
             chatList: [processedChat, ...currentChatList], // Use processedChat here
           });
@@ -183,7 +195,20 @@ export const useChatStore = create<ChatStore>()(
 
       // ⭐ Set all chats (for API bulk updates)
       setChats: (chats) => {
-        set({ chatList: chats });
+        // ✅ Always sort by timestamp (most recent first) before setting
+        const sortedChats = [...chats].sort((a, b) => {
+          if (!a.timestamp) return 1;
+          if (!b.timestamp) return -1;
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        });
+
+        console.log('📊 [chatStore] setChats - sorted order:', sortedChats.map(c => ({
+          name: c.name,
+          timestamp: c.timestamp,
+          isGroup: c.isGroup,
+        })));
+
+        set({ chatList: sortedChats });
       },
 
       // ⭐ Update last message in chat list

@@ -285,7 +285,7 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
+    // // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
     // const pollingInterval = setInterval(() => {
     //   loadMessages(false, false); // loadMore=false, showLoading=false
     // }, 3000);
@@ -332,29 +332,78 @@ export default function ChatRoomScreen() {
 
   const startRecording = async () => {
     try {
+      // ✅ Clean up any existing recording first
+      if (recording) {
+        console.log('🧹 [Voice] Cleaning up existing recording...');
+        try {
+          await recording.stopAndUnloadAsync();
+        } catch (e) {
+          console.log('⚠️ [Voice] Failed to clean up recording:', e);
+        }
+        setRecording(null);
+      }
+
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission not granted', 'Failed to get recording permissions');
+        Alert.alert('权限被拒绝', '需要麦克风权限才能录音');
         return;
       }
 
+      // ✅ Set audio mode with complete configuration for both iOS and Android
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
+      console.log('🎤 [Voice] Starting recording with high-quality audio...');
+
+      // ✅ Use custom recording options for high-quality audio
+      // Note: expo-av doesn't support native Opus encoding, so we record in AAC and send as .opus to backend
+      const recordingOptions = {
+        isMeteringEnabled: true,
+        android: {
+          extension: '.m4a',
+          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+          audioEncoder: Audio.AndroidAudioEncoder.AAC,
+          sampleRate: 48000,
+          numberOfChannels: 1,
+          bitRate: 128000,
+        },
+        ios: {
+          extension: '.m4a',
+          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+          audioQuality: Audio.IOSAudioQuality.HIGH,
+          sampleRate: 48000,
+          numberOfChannels: 1,
+          bitRate: 128000,
+          linearPCMBitDepth: 16,
+          linearPCMIsBigEndian: false,
+          linearPCMIsFloat: false,
+        },
+        web: {
+          mimeType: 'audio/webm;codecs=opus',
+          bitsPerSecond: 128000,
+        },
+      };
+
+      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
+      setRecording(newRecording);
       setIsRecording(true);
-    } catch (err) {
-      console.error('Failed to start recording', err);
+      console.log('✅ [Voice] Recording started (will be sent as .opus)');
+    } catch (err: any) {
+      console.error('❌ [Voice] Failed to start recording:', err);
+      Alert.alert('录音失败', err.message || '无法启动录音，请重试');
+      setRecording(null);
+      setIsRecording(false);
     }
   };
 
   const stopRecording = async () => {
     if (!recording) {
+      console.log('⚠️ [Voice] No recording to stop');
       return;
     }
 
@@ -362,28 +411,34 @@ export default function ChatRoomScreen() {
     setIsUploading(true);
 
     try {
-      await recording.stopAndUnloadAsync();
+      console.log('⏹️ [Voice] Stopping recording...');
+
+      // ✅ Get URI BEFORE stopAndUnloadAsync
       const uri = recording.getURI();
+
+      // ✅ Then stop and unload
+      await recording.stopAndUnloadAsync();
+
+      // ✅ Reset audio mode after recording
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
 
       if (uri) {
         console.log('🎤 [Voice] Recording stopped, URI:', uri);
 
         const receiver = chatMembers.filter(id => id !== currentUserId);
-        const filename = uri.split('/').pop() || 'voice.m4a';
 
-        // ✅ Determine correct MIME type based on platform and file extension
-        const extension = filename.split('.').pop()?.toLowerCase();
-        let mimeType = 'audio/m4a'; // default for iOS/Android
+        // ✅ Force Opus filename and MIME type for backend
+        const originalFilename = uri.split('/').pop() || 'voice.opus';
+        const filename = originalFilename.replace(/\.(m4a|caf|mp4|aac)$/i, '.opus');
 
-        if (Platform.OS === 'ios') {
-          if (extension === 'caf') mimeType = 'audio/x-caf';
-          else if (extension === 'm4a') mimeType = 'audio/m4a';
-          else mimeType = 'audio/m4a';
-        } else if (Platform.OS === 'android') {
-          if (extension === 'm4a') mimeType = 'audio/m4a';
-          else if (extension === 'mp4') mimeType = 'audio/mp4';
-          else mimeType = 'audio/m4a';
-        }
+        // ✅ Always use audio/opus MIME type
+        const mimeType = 'audio/opus';
 
         console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
         console.log('🎤 [Voice] Receiver:', receiver);
@@ -413,7 +468,7 @@ export default function ChatRoomScreen() {
             console.log('📨 [Voice] Sending WebSocket forward...');
             WebSocketManager.sendForwardMessage({
               type: result.data.type,
-              message: result.data.message, // This should be the URL of the voice message
+              message: result.data.message,
               message_id: result.data.message_id,
               sender: currentUserId,
               receiver: actualReceivers,
@@ -421,19 +476,24 @@ export default function ChatRoomScreen() {
             });
           }
 
-          await loadMessages(false, false); // Silent refresh after sending
+          await loadMessages(false, false);
           Alert.alert('成功', '语音消息已发送');
         } else {
           console.error("❌ [Voice] Failed to send voice message:", result.message);
           Alert.alert('发送失败', result.message || '语音消息发送失败，请重试');
         }
+      } else {
+        console.error('❌ [Voice] No URI from recording');
+        Alert.alert('错误', '录音文件无效');
       }
     } catch (error: any) {
       console.error('❌ [Voice] Failed to send voice message', error);
       Alert.alert('发送失败', error.message || '网络错误，请重试');
     } finally {
+      // ✅ Always clean up recording object
       setIsUploading(false);
       setRecording(null);
+      console.log('🧹 [Voice] Recording cleaned up');
     }
   };
 

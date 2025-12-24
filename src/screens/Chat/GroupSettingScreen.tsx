@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
+import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import { borders, colors, typography } from "../../styles";
@@ -84,6 +85,15 @@ export default function GroupSettingScreen() {
     const [friendsList, setFriendsList] = useState<any[]>([]);
     const [loadingFriends, setLoadingFriends] = useState(false);
 
+    // ✅ Use ref to keep the latest function reference for WebSocket callback
+    const chatIdRef = useRef(chatId);
+    const loadFriendsListRef = useRef<((showLoading?: boolean) => Promise<void>) | undefined>(undefined);
+
+    // Update refs when values change
+    useEffect(() => {
+        chatIdRef.current = chatId;
+    }, [chatId]);
+
     // Sync state with store
     useEffect(() => {
         setNewGroupName(chatName);
@@ -102,13 +112,17 @@ export default function GroupSettingScreen() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Load friends list
-    const loadFriendsList = useCallback(async () => {
+    // Load friends list with optional loading state (for silent refresh)
+    const loadFriendsList = useCallback(async (showLoading = true) => {
         if (!currentUserId) return;
-        setLoadingFriends(true);
+
+        if (showLoading) {
+            setLoadingFriends(true);
+        }
+
         try {
             // Get ACCEPTED friends
-            const result = await readFriends(2); 
+            const result = await readFriends(2);
             if (result.success && result.data) {
                 const allFriends = [
                     ...(result.data.request || []),
@@ -119,9 +133,35 @@ export default function GroupSettingScreen() {
         } catch (error) {
             console.error('Failed to load friends:', error);
         } finally {
-            setLoadingFriends(false);
+            if (showLoading) {
+                setLoadingFriends(false);
+            }
         }
     }, [currentUserId]);
+
+    // Update ref when function changes
+    useEffect(() => {
+        loadFriendsListRef.current = loadFriendsList;
+    }, [loadFriendsList]);
+
+    // ✅ Listen for WebSocket messages (silent refresh - same as ChatRoomScreen)
+    useEffect(() => {
+        const handleWebSocketMessage = (data: any) => {
+            if (data.type && data.message) {
+                // If chat_id matches or not provided, do silent refresh
+                if (!data.chat_id || data.chat_id === chatIdRef.current) {
+                    // Silent refresh - no loading animation (showLoading = false)
+                    loadFriendsListRef.current?.(false);
+                }
+            }
+        };
+
+        WebSocketManager.addMessageCallback(handleWebSocketMessage);
+
+        return () => {
+            WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+        };
+    }, []);
 
     // Refresh handler
     const handleRefresh = useCallback(async () => {
