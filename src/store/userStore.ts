@@ -61,6 +61,22 @@ export const useUserStore = create<UserStore>()(
         clearContacts();
         clearFriendRequests();
 
+        // ✅ Method 1: Wait for Zustand persist middleware to finish
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // ✅ Method 2: Manually clear AsyncStorage to ensure complete cleanup
+        try {
+          await AsyncStorage.multiRemove([
+            'user-storage',
+            'chat-storage',
+            'contact-storage',
+            'friend-request-storage'
+          ]);
+          console.log('✅ [userStore] All storage keys manually removed');
+        } catch (error) {
+          console.error('❌ [userStore] Failed to remove storage keys:', error);
+        }
+
         // Verify AsyncStorage was actually cleared
         try {
           const userStorageCheck = await AsyncStorage.getItem('user-storage');
@@ -71,6 +87,8 @@ export const useUserStore = create<UserStore>()(
               userStorage: !!userStorageCheck,
               chatStorage: !!chatStorageCheck
             });
+          } else {
+            console.log('✅ [userStore] Storage verification passed - all cleared');
           }
         } catch (error) {
           console.error('❌ [userStore] Failed to verify storage cleanup:', error);

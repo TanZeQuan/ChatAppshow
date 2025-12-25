@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   inputField: {
     flex: 1,
-    fontSize: typography.fontSize16,
+    fontSize: typography.fontSize15,
     color: colors.text.dark,
     height: '100%',
   },

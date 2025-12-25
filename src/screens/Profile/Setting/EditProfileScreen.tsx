@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Image, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { colors, borders, typography } from "../../../styles";
-import { useUserStore } from '../../../store/userStore';
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { readUsers } from '../../../api/User';
+import { useUserStore } from '../../../store/userStore';
+import { borders, colors, typography } from "../../../styles";
 
 export default function EditProfileScreen() {
   const navigation = useNavigation<any>();
@@ -95,12 +95,12 @@ export default function EditProfileScreen() {
       {/* List */}
       <View style={styles.listBox}>
         {/* Avatar - Display only, no interaction */}
-        <View style={styles.row}>
+        {/* <View style={styles.row}>
           <Text style={styles.rowLabel}>头像</Text>
           <View style={styles.rightContent}>
             <Image source={avatar ? { uri: avatar } : require('../../../assets/images/anonymous.png')} style={styles.avatar} />
           </View>
-        </View>
+        </View> */}
 
         {/* Name - Editable */}
         <TouchableOpacity
