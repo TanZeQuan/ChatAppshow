@@ -356,7 +356,8 @@ const profileStyles = RNStyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: scaleWidth(16),
-    paddingVertical: scaleHeight(16),
+    paddingTop: scaleHeight(40),
+    paddingBottom: scaleHeight(16),
   },
 
   avatarTouchable: {

@@ -8,7 +8,6 @@ export const createUser = async (data: {
   name?: string;
   roles?: string;
   status?: number;
-  image?: { uri: string; type?: string; name?: string } | null;
 }) => {
   try {
     console.log('[createUser] Starting registration request...');
@@ -27,23 +26,6 @@ export const createUser = async (data: {
     console.log('[createUser] Data payload:', dataPayload);
     formData.append('data', JSON.stringify(dataPayload));
 
-    // Append image if it exists and has a valid URI
-    if (data.image && data.image.uri) {
-      const { uri, type = "image/jpeg", name = "avatar.jpg" } = data.image;
-      console.log('[createUser] Appending image:', { uri, type, name });
-
-      // ✅ React Native FormData requires this specific format
-      formData.append("image", {
-        uri,
-        type,
-        name,
-      } as any);
-
-      console.log('[createUser] Image appended to FormData');
-    } else {
-      console.log('[createUser] No image to append');
-    }
-
     console.log('[createUser] Sending POST to /users/new...');
     console.log('[createUser] FormData prepared, making request...');
 
@@ -51,7 +33,7 @@ export const createUser = async (data: {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      // ✅ Add timeout override for registration (may take longer with image upload)
+      // ✅ Add timeout override for registration
       timeout: 30000, // 30 seconds
     });
 

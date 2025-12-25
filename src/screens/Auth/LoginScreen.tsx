@@ -2,13 +2,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { login } from '../../api/Auth';
 import { readUsers } from '../../api/User';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useUserStore } from '../../store/userStore';
 import { borders, colors, typography } from "../../styles";
+
+const { width, height } = Dimensions.get("window");
+
+// Responsive scaling functions
+const scaleWidth = (size: number) => (width / 375) * size;
+const scaleHeight = (size: number) => (height / 812) * size;
+
+// Check if it's a small device
+const isSmallDevice = height < 700;
 
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
@@ -184,10 +193,12 @@ const styles = StyleSheet.create({
   },
 
   // Logo
-  logoContainer: { marginBottom: 20 },
+  logoContainer: {
+    marginBottom: isSmallDevice ? scaleHeight(12) : scaleHeight(16),
+  },
   logoCard: {
-    width: 128,
-    height: 128,
+    width: scaleWidth(isSmallDevice ? 90 : 110),
+    height: scaleWidth(isSmallDevice ? 90 : 110),
     backgroundColor: colors.background.white,
     borderRadius: borders.radius24,
     alignItems: 'center',
@@ -198,7 +209,10 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 5,
   },
-  logoImage: { width: 130, height: 130 },
+  logoImage: {
+    width: scaleWidth(isSmallDevice ? 92 : 112),
+    height: scaleWidth(isSmallDevice ? 92 : 112),
+  },
 
   // 背景装饰
   // bgShape1: {

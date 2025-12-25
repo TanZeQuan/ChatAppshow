@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from "expo-linear-gradient";
 import React, { useState } from "react";
 import {
@@ -39,31 +38,10 @@ export default function RegisterScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [image, setImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Changed to useState
-
-  const pickImage = async () => {
-    // Request permissions before launching the image library
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('抱歉', '我们需要相册权限才能让你选择头像。');
-      return;
-    }
-
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.5,
-    });
-
-    if (!result.canceled) {
-      setImage(result.assets[0]);
-    }
-  };
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleRegister = async () => {
     // Validation
@@ -80,27 +58,6 @@ export default function RegisterScreen() {
     setIsLoading(true);
 
     // Prepare data to send
-    // ✅ Fix image MIME type - get proper MIME type from file extension
-    let imageData = null;
-    if (image && image.uri) {
-      const fileName = image.fileName || 'avatar.jpg';
-      const extension = fileName.split('.').pop()?.toLowerCase();
-
-      let mimeType = 'image/jpeg'; // default
-      if (extension === 'png') mimeType = 'image/png';
-      else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-      else if (extension === 'gif') mimeType = 'image/gif';
-      else if (extension === 'webp') mimeType = 'image/webp';
-
-      console.log(`📸 [Register] Image MIME type: ${fileName} → ${mimeType}`);
-
-      imageData = {
-        uri: image.uri,
-        type: mimeType,  // ✅ Use correct MIME type
-        name: fileName
-      };
-    }
-
     const postData = {
       phone: phone,
       passcode: password,
@@ -108,7 +65,6 @@ export default function RegisterScreen() {
       email: email,
       roles: "user",
       status: 1,
-      image: imageData,
     };
 
     console.log("Data to be sent to backend:", postData);
@@ -235,7 +191,7 @@ export default function RegisterScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.container}>
-              {/* Logo
+              {/* Logo */}
               <View style={styles.logoContainer}>
                 <View style={styles.logoCard}>
                   <Image
@@ -244,20 +200,9 @@ export default function RegisterScreen() {
                     resizeMode="contain"
                   />
                 </View>
-              </View> */}
+              </View>
 
               <Text style={styles.title}>创建账号</Text>
-
-              {/* Avatar Picker */}
-              <View style={styles.avatarContainer}>
-                <Image
-                  source={image ? { uri: image.uri } : require("../../assets/images/anonymous.png")}
-                  style={styles.avatar}
-                />
-                <TouchableOpacity style={styles.avatarEditButton} onPress={pickImage}>
-                  <Ionicons name="camera-outline" size={scaleFont(20)} color="#fff" />
-                </TouchableOpacity>
-              </View>
 
               {/* 姓名 */}
               <View style={styles.inputContainer}>
@@ -429,34 +374,6 @@ const styles = StyleSheet.create({
   logoImage: {
     width: scaleWidth(isSmallDevice ? 92 : 112),
     height: scaleWidth(isSmallDevice ? 92 : 112),
-  },
-
-  // Avatar
-  avatarContainer: {
-    marginBottom: scaleHeight(20),
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatar: {
-    width: scaleWidth(100),
-    height: scaleWidth(100),
-    borderRadius: scaleWidth(50),
-    borderWidth: 3,
-    borderColor: colors.background.white,
-  },
-  avatarEditButton: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    backgroundColor: colors.functional.blue,
-    width: scaleWidth(32),
-    height: scaleWidth(32),
-    borderRadius: scaleWidth(16),
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: colors.background.white,
   },
 
   // Title
