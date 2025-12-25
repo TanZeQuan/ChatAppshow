@@ -62,6 +62,28 @@ export const baseRoomStyles = RNStyleSheet.create({
     marginRight: scaleWidth(8),
   },
 
+  // ✅ Search navigation controls
+  searchNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: scaleWidth(8),
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius18,
+    paddingHorizontal: scaleWidth(8),
+    paddingVertical: scaleWidth(4),
+  },
+  navButton: {
+    padding: scaleWidth(4),
+  },
+  matchCounter: {
+    fontSize: scaleFont(13),
+    color: colors.text.dark,
+    marginHorizontal: scaleWidth(6),
+    fontWeight: typography.fontWeight600,
+    minWidth: scaleWidth(40),
+    textAlign: 'center',
+  },
+
   // Loading
   loadingContainer: {
     flex: 1,

@@ -592,8 +592,17 @@ export default function GroupRoomScreen() {
                     });
 
                     if (isRefresh) {
-                        setMessages(chatId, transformedMessages);
-                        offsetRef.current = transformedMessages.length;
+                        // ✅ Always deduplicate, even on refresh (to prevent concurrent calls from creating duplicates)
+                        const existingMessages = useChatStore.getState().chats[chatId] || [];
+                        const allMessages = [...transformedMessages];
+
+                        // If we have existing messages and new messages, prefer new messages but deduplicate by ID
+                        const uniqueMessages = Array.from(
+                            new Map(allMessages.map(m => [m.id, m])).values()
+                        );
+
+                        setMessages(chatId, uniqueMessages);
+                        offsetRef.current = uniqueMessages.length;
                     } else {
                         const existingMessages = useChatStore.getState().chats[chatId] || [];
                         const allMessages = [...existingMessages, ...transformedMessages];
@@ -665,26 +674,34 @@ export default function GroupRoomScreen() {
 
     // ✅ Handle next match navigation
     const handleNextMatch = useCallback(() => {
-        const nextMessageIndex = goToNextMatch();
+        const nextMessageIndex = goToNextMatch(messages);
         if (nextMessageIndex >= 0) {
             scrollToMatch(nextMessageIndex);
         }
-    }, [goToNextMatch, scrollToMatch]);
+    }, [goToNextMatch, scrollToMatch, messages]);
 
     // ✅ Handle previous match navigation
     const handlePrevMatch = useCallback(() => {
-        const prevMessageIndex = goToPrevMatch();
+        const prevMessageIndex = goToPrevMatch(messages);
         if (prevMessageIndex >= 0) {
             scrollToMatch(prevMessageIndex);
         }
-    }, [goToPrevMatch, scrollToMatch]);
+    }, [goToPrevMatch, scrollToMatch, messages]);
 
-    // ✅ Auto-scroll to first match when search results change
+    // ✅ Auto-scroll to first match when search query changes (not when polling refreshes)
+    const prevSearchQueryRef = useRef('');
     useEffect(() => {
-        if (searchMode && totalMatches > 0 && matchedIndices.length > 0) {
-            scrollToMatch(matchedIndices[0]);
+        if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
+            // Search query changed - scroll to first match
+            if (matchedIndices.length > 0) {
+                scrollToMatch(matchedIndices[0]);
+            }
+            prevSearchQueryRef.current = searchQuery;
+        } else if (!searchMode || !searchQuery.trim()) {
+            // Reset when exiting search mode
+            prevSearchQueryRef.current = '';
         }
-    }, [searchMode, totalMatches, matchedIndices, scrollToMatch]);
+    }, [searchMode, searchQuery, matchedIndices, scrollToMatch]);
 
     // Use refs to store stable references for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -1100,9 +1117,6 @@ export default function GroupRoomScreen() {
                 {searchMode ? (
                     // Search mode header
                     <View style={roomStyles.header}>
-                        <TouchableOpacity style={roomStyles.backButton} onPress={disableSearch}>
-                            <Ionicons name="arrow-back" size={24} color="#333" />
-                        </TouchableOpacity>
                         <TextInput
                             style={roomStyles.searchInput}
                             placeholder="搜索消息..."
@@ -1160,6 +1174,7 @@ export default function GroupRoomScreen() {
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 >
                     <FlatList
+                        ref={flatListRef}
                         data={messages}
                         renderItem={renderItem}
                         keyExtractor={(item) => item.id}
@@ -1168,6 +1183,18 @@ export default function GroupRoomScreen() {
                         onEndReached={handleLoadMore}
                         onEndReachedThreshold={0.5}
                         ListFooterComponent={renderFooter}
+                        onScrollToIndexFailed={(info) => {
+                            // Handle scroll failure by waiting and retrying
+                            setTimeout(() => {
+                                if (flatListRef.current) {
+                                    flatListRef.current.scrollToIndex({
+                                        index: info.index,
+                                        animated: true,
+                                        viewPosition: 0.5,
+                                    });
+                                }
+                            }, 100);
+                        }}
                         refreshControl={
                             <RefreshControl
                                 refreshing={refreshing} // ✅ Use refreshing state (like ChatRoomScreen)

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useRef } from 'react';
 import { Alert } from 'react-native';
 import { useChatStore } from '../store/chatStore';
 
@@ -84,6 +84,11 @@ export function useSearchChatHistory() {
   const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
 
+  // ✅ Track previous search query to detect changes
+  const prevSearchQueryRef = useRef('');
+  // ✅ Track current message ID to maintain position across polling refreshes
+  const currentMessageIdRef = useRef<string>('');
+
   const enableSearch = useCallback(() => {
     setSearchMode(true);
   }, []);
@@ -93,6 +98,8 @@ export function useSearchChatHistory() {
     setSearchQuery('');
     setMatchedIndices([]);
     setCurrentMatchIndex(0);
+    prevSearchQueryRef.current = '';
+    currentMessageIdRef.current = '';
   }, []);
 
   /**
@@ -106,6 +113,8 @@ export function useSearchChatHistory() {
     if (!searchQuery.trim()) {
       setMatchedIndices([]);
       setCurrentMatchIndex(0);
+      prevSearchQueryRef.current = '';
+      currentMessageIdRef.current = '';
       return messages;
     }
 
@@ -122,11 +131,51 @@ export function useSearchChatHistory() {
 
     setMatchedIndices(matches);
 
-    // Reset to first match when matches change
-    if (matches.length > 0) {
-      setCurrentMatchIndex(0);
+    // ✅ Only reset to first match if search query changed
+    const isSearchQueryChanged = prevSearchQueryRef.current !== searchQuery;
+
+    if (isSearchQueryChanged) {
+      // Search query changed - reset to first match
+      if (matches.length > 0) {
+        setCurrentMatchIndex(0);
+        currentMessageIdRef.current = messages[matches[0]]?.id || '';
+      } else {
+        setCurrentMatchIndex(0);
+        currentMessageIdRef.current = '';
+      }
+      prevSearchQueryRef.current = searchQuery;
     } else {
-      setCurrentMatchIndex(0);
+      // Search query same (polling refresh) - try to keep same message ID
+      setCurrentMatchIndex(prev => {
+        if (matches.length === 0) {
+          currentMessageIdRef.current = '';
+          return 0;
+        }
+
+        // ✅ Try to find the same message ID in the new matches
+        if (currentMessageIdRef.current) {
+          const newIndex = matches.findIndex(matchIndex =>
+            messages[matchIndex]?.id === currentMessageIdRef.current
+          );
+
+          if (newIndex !== -1) {
+            // Found the same message - stay on it
+            return newIndex;
+          }
+        }
+
+        // If current message ID not found or not set, keep the index if valid
+        if (prev >= matches.length) {
+          // Out of range - go to last match
+          const newMatchIndex = matches.length - 1;
+          currentMessageIdRef.current = messages[matches[newMatchIndex]]?.id || '';
+          return newMatchIndex;
+        }
+
+        // Keep current index and update the message ID
+        currentMessageIdRef.current = messages[matches[prev]]?.id || '';
+        return prev;
+      });
     }
 
     // ✅ Always return all messages, highlighting is handled by UI
@@ -136,25 +185,39 @@ export function useSearchChatHistory() {
   /**
    * Navigate to next matched message
    */
-  const goToNextMatch = useCallback(() => {
+  const goToNextMatch = useCallback((messages: any[]) => {
     if (matchedIndices.length === 0) return -1;
 
     const nextIndex = (currentMatchIndex + 1) % matchedIndices.length;
     setCurrentMatchIndex(nextIndex);
-    return matchedIndices[nextIndex];
+
+    // ✅ Update current message ID to maintain position
+    const messageIndex = matchedIndices[nextIndex];
+    if (messages && messages[messageIndex]) {
+      currentMessageIdRef.current = messages[messageIndex].id;
+    }
+
+    return messageIndex;
   }, [matchedIndices, currentMatchIndex]);
 
   /**
    * Navigate to previous matched message
    */
-  const goToPrevMatch = useCallback(() => {
+  const goToPrevMatch = useCallback((messages: any[]) => {
     if (matchedIndices.length === 0) return -1;
 
     const prevIndex = currentMatchIndex === 0
       ? matchedIndices.length - 1
       : currentMatchIndex - 1;
     setCurrentMatchIndex(prevIndex);
-    return matchedIndices[prevIndex];
+
+    // ✅ Update current message ID to maintain position
+    const messageIndex = matchedIndices[prevIndex];
+    if (messages && messages[messageIndex]) {
+      currentMessageIdRef.current = messages[messageIndex].id;
+    }
+
+    return messageIndex;
   }, [matchedIndices, currentMatchIndex]);
 
   /**

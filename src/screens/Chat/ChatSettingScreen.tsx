@@ -167,10 +167,11 @@ export default function ChatSettingScreen() {
   };
 
   const handleSearchHistory = () => {
+    // ✅ Navigate back and update params - will merge with existing screen
     navigation.navigate('ChatRoom', {
       chatId,
       chatName,
-      searchMode: true,  // ✅ Enable search mode
+      searchMode: true,
     });
   };
 

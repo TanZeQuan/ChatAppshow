@@ -97,8 +97,17 @@ export default function ChatRoomScreen() {
     enableSearch,
     disableSearch,
     setSearchQuery,
-    filterMessages
+    filterMessages,
+    matchedIndices,
+    currentMatchIndex,
+    currentMatchNumber,
+    totalMatches,
+    goToNextMatch,
+    goToPrevMatch
   } = useSearchChatHistory();
+
+  // ✅ FlatList ref for scrolling to matched messages
+  const flatListRef = useRef<FlatList>(null);
 
   // 🔧 Initialize chatMembers from store if available
   useEffect(() => {
@@ -284,9 +293,24 @@ export default function ChatRoomScreen() {
             };
           });
 
-          // Store messages in chatStore
+          // Store messages in chatStore with deduplication
           const { setMessages } = useChatStore.getState();
-          setMessages(chatId, transformedMessages);
+
+          if (loadMore) {
+            // Loading more messages - append and deduplicate
+            const existingMessages = useChatStore.getState().chats[chatId] || [];
+            const allMessages = [...existingMessages, ...transformedMessages];
+            const uniqueMessages = Array.from(
+              new Map(allMessages.map(m => [m.id, m])).values()
+            );
+            setMessages(chatId, uniqueMessages);
+          } else {
+            // ✅ Refresh - deduplicate to prevent concurrent polling/websocket calls from creating duplicates
+            const uniqueMessages = Array.from(
+              new Map(transformedMessages.map(m => [m.id, m])).values()
+            );
+            setMessages(chatId, uniqueMessages);
+          }
         }
 
         if (loadMore) {
@@ -337,6 +361,52 @@ export default function ChatRoomScreen() {
       enableSearch();
     }
   }, [params.searchMode, enableSearch]);
+
+  // ✅ Scroll to matched message
+  const scrollToMatch = useCallback((messageIndex: number) => {
+    if (messageIndex >= 0 && flatListRef.current) {
+      try {
+        flatListRef.current.scrollToIndex({
+          index: messageIndex,
+          animated: true,
+          viewPosition: 0.5, // Center the item
+        });
+      } catch (error) {
+        console.log('Failed to scroll to match:', error);
+      }
+    }
+  }, []);
+
+  // ✅ Handle next match navigation
+  const handleNextMatch = useCallback(() => {
+    const nextMessageIndex = goToNextMatch(messages);
+    if (nextMessageIndex >= 0) {
+      scrollToMatch(nextMessageIndex);
+    }
+  }, [goToNextMatch, scrollToMatch, messages]);
+
+  // ✅ Handle previous match navigation
+  const handlePrevMatch = useCallback(() => {
+    const prevMessageIndex = goToPrevMatch(messages);
+    if (prevMessageIndex >= 0) {
+      scrollToMatch(prevMessageIndex);
+    }
+  }, [goToPrevMatch, scrollToMatch, messages]);
+
+  // ✅ Auto-scroll to first match when search query changes (not when polling refreshes)
+  const prevSearchQueryRef = useRef('');
+  useEffect(() => {
+    if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
+      // Search query changed - scroll to first match
+      if (matchedIndices.length > 0) {
+        scrollToMatch(matchedIndices[0]);
+      }
+      prevSearchQueryRef.current = searchQuery;
+    } else if (!searchMode || !searchQuery.trim()) {
+      // Reset when exiting search mode
+      prevSearchQueryRef.current = '';
+    }
+  }, [searchMode, searchQuery, matchedIndices, scrollToMatch]);
 
   // Use refs to store stable references for WebSocket callback
   const chatIdRef = useRef(chatId);
@@ -858,13 +928,17 @@ export default function ChatRoomScreen() {
     setInputText((prev) => prev + emoji.emoji);
   };
 
-  const renderItem = ({ item }: { item: DisplayMessage }) => {
+  const renderItem = ({ item, index }: { item: DisplayMessage; index: number }) => {
     // 🔍 Safety check: ensure text is a string
     const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
 
     // ✅ Check if message matches search query (for orange highlight)
     const isSearchMatched = searchMode && searchQuery.trim() &&
                             messageText.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // ✅ Check if this is the currently focused match
+    const isCurrentMatch = searchMode && matchedIndices.length > 0 &&
+                           index === matchedIndices[currentMatchIndex];
 
     return (
       <View style={[
@@ -882,7 +956,12 @@ export default function ChatRoomScreen() {
         <View style={[
           roomStyles.bubble,
           item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
-          isSearchMatched && { backgroundColor: '#FFA500' },  // ✅ Orange highlight
+          isSearchMatched && { backgroundColor: '#FFA500' },  // ✅ Orange highlight for any match
+          isCurrentMatch && {
+            backgroundColor: '#FF8C00',  // ✅ Darker orange for current match
+            borderWidth: 2,
+            borderColor: '#FF6347',
+          },
         ]}>
           {/* Type 1: Text Message */}
           {item.type === 1 && messageText && (
@@ -1002,9 +1081,6 @@ export default function ChatRoomScreen() {
         {searchMode ? (
           // Search mode header
           <View style={roomStyles.header}>
-            <TouchableOpacity style={roomStyles.backButton} onPress={disableSearch}>
-              <Ionicons name="arrow-back" size={24} color="#333" />
-            </TouchableOpacity>
             <TextInput
               style={roomStyles.searchInput}
               placeholder="搜索消息..."
@@ -1013,10 +1089,27 @@ export default function ChatRoomScreen() {
               onChangeText={setSearchQuery}
               autoFocus
             />
-            {searchQuery.length > 0 && (
-              <Text style={roomStyles.searchResultText}>
-                {messages.length} 条
-              </Text>
+            {/* ✅ Navigation controls */}
+            {totalMatches > 0 && (
+              <View style={roomStyles.searchNavigation}>
+                <TouchableOpacity
+                  style={roomStyles.navButton}
+                  onPress={handlePrevMatch}
+                  disabled={totalMatches === 0}
+                >
+                  <Ionicons name="chevron-up" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
+                </TouchableOpacity>
+                <Text style={roomStyles.matchCounter}>
+                  {currentMatchNumber}/{totalMatches}
+                </Text>
+                <TouchableOpacity
+                  style={roomStyles.navButton}
+                  onPress={handleNextMatch}
+                  disabled={totalMatches === 0}
+                >
+                  <Ionicons name="chevron-down" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
+                </TouchableOpacity>
+              </View>
             )}
             <TouchableOpacity style={roomStyles.iconButton} onPress={disableSearch}>
               <Ionicons name="close" size={24} color="#333" />
@@ -1040,11 +1133,24 @@ export default function ChatRoomScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
           <FlatList
+            ref={flatListRef}
             data={[...messages]}
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
             inverted
+            onScrollToIndexFailed={(info) => {
+              // Handle scroll failure by waiting and retrying
+              setTimeout(() => {
+                if (flatListRef.current) {
+                  flatListRef.current.scrollToIndex({
+                    index: info.index,
+                    animated: true,
+                    viewPosition: 0.5,
+                  });
+                }
+              }, 100);
+            }}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
