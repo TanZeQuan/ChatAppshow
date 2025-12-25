@@ -298,8 +298,15 @@ export default function GroupSettingScreen() {
 
     // Navigation handlers
     const handleSearchHistory = useCallback(() => {
-        navigation.navigate('SearchMessages', { chatId, chatName });
-    }, [navigation, chatId, chatName]);
+        navigation.navigate('GroupRoom', {
+            chatId,
+            chatName,
+            isGroup: true,
+            members: groupChat?.members || [],
+            memberIds: allMemberIds,
+            searchMode: true,  // ✅ Enable search mode
+        });
+    }, [navigation, chatId, chatName, groupChat?.members, allMemberIds]);
 
     const handleClearHistory = useCallback(() => {
         Alert.alert(
@@ -802,7 +809,7 @@ export default function GroupSettingScreen() {
                         </View>
 
                         {/* 显示群成员昵称 */}
-                        <View style={styles.settingItem}>
+                        {/* <View style={styles.settingItem}>
                             <View style={styles.iconContainer}>
                                 <Ionicons name="eye-outline" size={20} color={colors.text.white} />
                             </View>
@@ -815,7 +822,7 @@ export default function GroupSettingScreen() {
                                 trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
                                 thumbColor={colors.background.white}
                             />
-                        </View>
+                        </View> */}
                     </View>
                 </View>
 
@@ -846,7 +853,7 @@ export default function GroupSettingScreen() {
                 </View>
 
                 {/* Other Settings */}
-                <View style={styles.section}>
+                {/* <View style={styles.section}>
                     <Text style={styles.sectionTitle}>其他</Text>
                     <View style={styles.card}>
                         <TouchableOpacity style={[styles.settingItem, styles.borderBottom]}>
@@ -859,7 +866,7 @@ export default function GroupSettingScreen() {
                             <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
                         </TouchableOpacity>
                     </View>
-                </View>
+                </View> */}
 
                 {/* Danger Zone */}
                 <View style={styles.section}>

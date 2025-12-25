@@ -24,6 +24,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { ensureFullImageUrl } from '../../api/service';
+import { useSearchChatHistory } from '../../components/ChatHistory';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
@@ -54,6 +55,7 @@ interface DisplayMessage {
 interface RouteParams {
   chatId: string;
   chatName: string;
+  searchMode?: boolean;  // ✅ Search mode parameter
 }
 
 export default function ChatRoomScreen() {
@@ -87,6 +89,16 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
+
+  // ✅ Search functionality
+  const {
+    searchMode,
+    searchQuery,
+    enableSearch,
+    disableSearch,
+    setSearchQuery,
+    filterMessages
+  } = useSearchChatHistory();
 
   // 🔧 Initialize chatMembers from store if available
   useEffect(() => {
@@ -318,6 +330,13 @@ export default function ChatRoomScreen() {
       clearInterval(pollingInterval);
     };
   }, [loadMessages]);
+
+  // ✅ Auto-enable search mode if navigated from settings
+  useEffect(() => {
+    if (params.searchMode === true) {
+      enableSearch();
+    }
+  }, [params.searchMode, enableSearch]);
 
   // Use refs to store stable references for WebSocket callback
   const chatIdRef = useRef(chatId);
@@ -626,15 +645,20 @@ export default function ChatRoomScreen() {
     };
   }, [sound]);
 
-  const messages: DisplayMessage[] = storedMessages.map(msg => ({
-    ...msg,
-    sender: msg.senderId === currentUserId ? 'me' : 'other',
-    senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
-    // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
-    voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
-      ? String((msg.voiceUrl as any).message)
-      : msg.voiceUrl,
-  }));
+  const messages: DisplayMessage[] = useMemo(() => {
+    const transformedMessages = storedMessages.map(msg => ({
+      ...msg,
+      sender: msg.senderId === currentUserId ? 'me' : 'other',
+      senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
+      // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
+      voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
+        ? String((msg.voiceUrl as any).message)
+        : msg.voiceUrl,
+    }));
+
+    // ✅ Apply search filter if in search mode
+    return searchMode ? filterMessages(transformedMessages) : transformedMessages;
+  }, [storedMessages, currentUserId, currentUserName, chatName, searchMode, filterMessages]);
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
@@ -838,6 +862,10 @@ export default function ChatRoomScreen() {
     // 🔍 Safety check: ensure text is a string
     const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
 
+    // ✅ Check if message matches search query (for orange highlight)
+    const isSearchMatched = searchMode && searchQuery.trim() &&
+                            messageText.toLowerCase().includes(searchQuery.toLowerCase());
+
     return (
       <View style={[
         roomStyles.messageRow,
@@ -854,6 +882,7 @@ export default function ChatRoomScreen() {
         <View style={[
           roomStyles.bubble,
           item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
+          isSearchMatched && { backgroundColor: '#FFA500' },  // ✅ Orange highlight
         ]}>
           {/* Type 1: Text Message */}
           {item.type === 1 && messageText && (
@@ -969,15 +998,42 @@ export default function ChatRoomScreen() {
   return (
     <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
-        <View style={roomStyles.header}>
-          <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
-          </TouchableOpacity>
-          <Text style={roomStyles.headerTitle}>{chatName}</Text>
-          <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
-            <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
-          </TouchableOpacity>
-        </View>
+        {/* ✅ Dynamic Header: Search mode vs Normal mode */}
+        {searchMode ? (
+          // Search mode header
+          <View style={roomStyles.header}>
+            <TouchableOpacity style={roomStyles.backButton} onPress={disableSearch}>
+              <Ionicons name="arrow-back" size={24} color="#333" />
+            </TouchableOpacity>
+            <TextInput
+              style={roomStyles.searchInput}
+              placeholder="搜索消息..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <Text style={roomStyles.searchResultText}>
+                {messages.length} 条
+              </Text>
+            )}
+            <TouchableOpacity style={roomStyles.iconButton} onPress={disableSearch}>
+              <Ionicons name="close" size={24} color="#333" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          // Normal mode header
+          <View style={roomStyles.header}>
+            <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
+            </TouchableOpacity>
+            <Text style={roomStyles.headerTitle}>{chatName}</Text>
+            <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
+              <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         <KeyboardAvoidingView
           style={roomStyles.keyboardAvoidingView}

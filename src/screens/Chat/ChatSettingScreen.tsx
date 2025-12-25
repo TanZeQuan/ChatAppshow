@@ -167,9 +167,10 @@ export default function ChatSettingScreen() {
   };
 
   const handleSearchHistory = () => {
-    navigation.navigate('ChatHistory', {
+    navigation.navigate('ChatRoom', {
       chatId,
       chatName,
+      searchMode: true,  // ✅ Enable search mode
     });
   };
 

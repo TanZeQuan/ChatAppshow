@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readUserChats, readChatMessages } from '../../api/Chat';
+import { readChatMessages, readUserChats } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
 import { ChatListItem, useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -310,32 +310,11 @@ export default function ChatListScreen() {
     }
   };
 
-  const renderGroupAvatar = (members: any[]) => {
-    // Show first 4 members in a grid for group avatar
-    const displayMembers = members?.slice(0, 4) || [];
-
-    if (displayMembers.length <= 1) {
-      return (
-        <View style={styles.groupAvatarPlaceholder}>
-          <Ionicons name="people" size={24} color="#999" />
-        </View>
-      );
-    }
-
+  const renderGroupAvatar = () => {
+    // ✅ 统一显示群组默认图标
     return (
-      <View style={styles.groupAvatarContainer}>
-        {displayMembers.map((member, index) => (
-          <Image
-            key={index}
-            source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
-            style={[
-              styles.groupAvatarImage,
-              displayMembers.length === 2 && styles.groupAvatar2,
-              displayMembers.length === 3 && styles.groupAvatar3,
-              displayMembers.length === 4 && styles.groupAvatar4,
-            ]}
-          />
-        ))}
+      <View style={styles.groupAvatarPlaceholder}>
+        <Ionicons name="people" size={24} color="#999" />
       </View>
     );
   };
@@ -348,7 +327,7 @@ export default function ChatListScreen() {
     >
       <View style={styles.avatarContainer}>
         {item.isGroup ? (
-          renderGroupAvatar(item.members)
+          renderGroupAvatar()
         ) : item.avatar ? (
           <Image source={{ uri: item.avatar }} style={styles.avatar} />
         ) : (
@@ -367,14 +346,14 @@ export default function ChatListScreen() {
         <View style={styles.chatHeader}>
           <View style={styles.nameContainer}>
             <Text style={styles.name}>{item.name}</Text>
-            {item.isGroup && (
+            {/* {item.isGroup && (
               <View style={styles.groupBadge}>
                 <Ionicons name="people" size={12} color="#666" />
                 <Text style={styles.groupBadgeText}>
                   {item.members?.length || 0}
                 </Text>
               </View>
-            )}
+            )} */}
           </View>
 
           <View style={styles.rightSection}>

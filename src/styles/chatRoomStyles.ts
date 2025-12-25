@@ -41,6 +41,26 @@ export const baseRoomStyles = RNStyleSheet.create({
   moreButton: {
     padding: scaleWidth(4),
   },
+  iconButton: {
+    padding: scaleWidth(4),
+  },
+
+  // Search header
+  searchInput: {
+    flex: 1,
+    height: scaleHeight(36),
+    backgroundColor: colors.background.white,
+    borderRadius: borders.radius18,
+    paddingHorizontal: scaleWidth(12),
+    fontSize: scaleFont(14),
+    color: colors.text.dark,
+    marginHorizontal: scaleWidth(8),
+  },
+  searchResultText: {
+    fontSize: scaleFont(12),
+    color: colors.text.grayMedium,
+    marginRight: scaleWidth(8),
+  },
 
   // Loading
   loadingContainer: {

@@ -61,8 +61,7 @@ type ChatStore = {
   clearChat: (chatId: string) => void;
   clearAllChats: () => void;
   getLastMessage: (chatId: string) => Message | null;
-  markAsRead: (chatId: string) => void;
-  incrementUnread: (chatId: string) => void;
+  // ❌ Removed: markAsRead and incrementUnread (now API-driven)
 
   // ✅ Member cache management
   getMemberInfo: (userId: string) => MemberInfo | undefined;
@@ -258,35 +257,9 @@ export const useChatStore = create<ChatStore>()(
         return get().chatList.find(c => c.id === chatId);
       },
 
-      // ⭐ Mark chat as read
-      markAsRead: (chatId) => {
-        const currentChatList = get().chatList;
-        const chatIndex = currentChatList.findIndex(c => c.id === chatId);
-
-        if (chatIndex !== -1) {
-          const updatedChatList = [...currentChatList];
-          updatedChatList[chatIndex] = {
-            ...updatedChatList[chatIndex],
-            unreadCount: 0,
-          };
-          set({ chatList: updatedChatList });
-        }
-      },
-
-      // ⭐ Increment unread count
-      incrementUnread: (chatId) => {
-        const currentChatList = get().chatList;
-        const chatIndex = currentChatList.findIndex(c => c.id === chatId);
-
-        if (chatIndex !== -1) {
-          const updatedChatList = [...currentChatList];
-          updatedChatList[chatIndex] = {
-            ...updatedChatList[chatIndex],
-            unreadCount: updatedChatList[chatIndex].unreadCount + 1,
-          };
-          set({ chatList: updatedChatList });
-        }
-      },
+      // ❌ Removed markAsRead and incrementUnread
+      // unreadCount is now fully managed by backend API (/chats/read)
+      // ChatList refreshes via polling (3s) + WebSocket
 
       clearChat: (chatId) => {
         const chats = { ...get().chats };

@@ -132,7 +132,7 @@ export default function ProfileScreen() {
       onPress: () => Alert.alert('提示', '帮助中心功能暂未开放')
     },
     { icon: 'settings-outline', label: '设置', navigateTo: 'SettingScreen' },
-    { icon: 'people-outline', label: '会议', navigateTo: 'MeetingScreen' },
+    // { icon: 'people-outline', label: '会议', navigateTo: 'MeetingScreen' },
   ];
 
   const pickImage = async () => {

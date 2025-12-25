@@ -25,6 +25,7 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { readUsers } from '../../api/User';
 import { ensureFullImageUrl } from '../../api/service';
+import { useSearchChatHistory } from '../../components/ChatHistory';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
@@ -57,6 +58,7 @@ interface RouteParams {
     chatName?: string;
     isGroup?: boolean;
     members?: any[];
+    searchMode?: boolean;  // ✅ Search mode parameter
 }
 
 export default function GroupRoomScreen() {
@@ -90,6 +92,25 @@ export default function GroupRoomScreen() {
     const [refreshing, setRefreshing] = useState(false); // ✅ For RefreshControl
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
     const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
+
+    // ✅ Search functionality
+    const {
+        searchMode,
+        searchQuery,
+        enableSearch,
+        disableSearch,
+        setSearchQuery,
+        filterMessages,
+        matchedIndices,
+        currentMatchIndex,
+        currentMatchNumber,
+        totalMatches,
+        goToNextMatch,
+        goToPrevMatch
+    } = useSearchChatHistory();
+
+    // ✅ FlatList ref for scrolling to matched messages
+    const flatListRef = useRef<FlatList>(null);
 
     // ✅ Use ref for offset to avoid unnecessary re-renders (like ChatRoomScreen)
     const offsetRef = useRef(0);
@@ -376,7 +397,7 @@ export default function GroupRoomScreen() {
 
     // ✅ Transform messages - directly use name/avatar from stored messages
     const messages: DisplayMessage[] = useMemo(() => {
-        return storedMessages.map(msg => {
+        const transformedMessages = storedMessages.map(msg => {
             const finalName = msg.senderId === currentUserId
                 ? `${currentUser?.name || '我'} (我)`
                 : (msg.name || '未知成员');
@@ -390,7 +411,10 @@ export default function GroupRoomScreen() {
                     : msg.avatar,
             };
         });
-    }, [storedMessages, currentUserId, currentUser]);
+
+        // ✅ Apply search filter if in search mode
+        return searchMode ? filterMessages(transformedMessages) : transformedMessages;
+    }, [storedMessages, currentUserId, currentUser, searchMode, filterMessages]);
 
     // Load initial messages
     const loadMessages = useCallback(async (isRefresh = false, showLoading = true) => {
@@ -616,6 +640,51 @@ export default function GroupRoomScreen() {
             // Cleanup intervals on unmount
         };
     }, [loadMessages]);
+
+    // ✅ Auto-enable search mode if navigated from settings
+    useEffect(() => {
+        if (params.searchMode === true) {
+            enableSearch();
+        }
+    }, [params.searchMode, enableSearch]);
+
+    // ✅ Scroll to matched message
+    const scrollToMatch = useCallback((messageIndex: number) => {
+        if (messageIndex >= 0 && flatListRef.current) {
+            try {
+                flatListRef.current.scrollToIndex({
+                    index: messageIndex,
+                    animated: true,
+                    viewPosition: 0.5, // Center the item
+                });
+            } catch (error) {
+                console.log('Failed to scroll to match:', error);
+            }
+        }
+    }, []);
+
+    // ✅ Handle next match navigation
+    const handleNextMatch = useCallback(() => {
+        const nextMessageIndex = goToNextMatch();
+        if (nextMessageIndex >= 0) {
+            scrollToMatch(nextMessageIndex);
+        }
+    }, [goToNextMatch, scrollToMatch]);
+
+    // ✅ Handle previous match navigation
+    const handlePrevMatch = useCallback(() => {
+        const prevMessageIndex = goToPrevMatch();
+        if (prevMessageIndex >= 0) {
+            scrollToMatch(prevMessageIndex);
+        }
+    }, [goToPrevMatch, scrollToMatch]);
+
+    // ✅ Auto-scroll to first match when search results change
+    useEffect(() => {
+        if (searchMode && totalMatches > 0 && matchedIndices.length > 0) {
+            scrollToMatch(matchedIndices[0]);
+        }
+    }, [searchMode, totalMatches, matchedIndices, scrollToMatch]);
 
     // Use refs to store stable references for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -870,9 +939,17 @@ export default function GroupRoomScreen() {
         }
     };
 
-    const renderItem = ({ item }: { item: DisplayMessage }) => {
+    const renderItem = ({ item, index }: { item: DisplayMessage; index: number }) => {
         // 🔍 Safety check: ensure text is a string (like ChatRoomScreen)
         const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
+
+        // ✅ Check if message matches search query (for orange highlight)
+        const isSearchMatched = searchMode && searchQuery.trim() &&
+                                messageText.toLowerCase().includes(searchQuery.toLowerCase());
+
+        // ✅ Check if this is the currently focused match
+        const isCurrentMatch = searchMode && matchedIndices.length > 0 &&
+                               index === matchedIndices[currentMatchIndex];
 
         return (
             <View style={[
@@ -890,6 +967,12 @@ export default function GroupRoomScreen() {
                 <View style={[
                     roomStyles.bubble,
                     item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
+                    isSearchMatched && { backgroundColor: '#FFA500' },  // ✅ Orange highlight for any match
+                    isCurrentMatch && {
+                        backgroundColor: '#FF8C00',  // ✅ Darker orange for current match
+                        borderWidth: 2,
+                        borderColor: '#FF6347',
+                    },
                 ]}>
                     {item.sender === 'other' && (
                         <Text style={roomStyles.senderName}>{item.senderName}</Text>
@@ -1013,20 +1096,64 @@ export default function GroupRoomScreen() {
     return (
         <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
             <SafeAreaView style={{ flex: 1 }}>
-                <View style={roomStyles.header}>
-                    <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
-                        <Ionicons name="chevron-back" size={24} color="#333" />
-                    </TouchableOpacity>
-                    <View style={roomStyles.headerCenter}>
-                        <Text style={roomStyles.headerTitle}>{chatName}</Text>
-                        <Text style={roomStyles.headerSubtitle}>
-                            {groupChat?.members?.length || memberIds.length || 0} 位成员
-                        </Text>
+                {/* ✅ Dynamic Header: Search mode vs Normal mode */}
+                {searchMode ? (
+                    // Search mode header
+                    <View style={roomStyles.header}>
+                        <TouchableOpacity style={roomStyles.backButton} onPress={disableSearch}>
+                            <Ionicons name="arrow-back" size={24} color="#333" />
+                        </TouchableOpacity>
+                        <TextInput
+                            style={roomStyles.searchInput}
+                            placeholder="搜索消息..."
+                            placeholderTextColor="#999"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoFocus
+                        />
+                        {/* ✅ Navigation controls */}
+                        {totalMatches > 0 && (
+                            <View style={roomStyles.searchNavigation}>
+                                <TouchableOpacity
+                                    style={roomStyles.navButton}
+                                    onPress={handlePrevMatch}
+                                    disabled={totalMatches === 0}
+                                >
+                                    <Ionicons name="chevron-up" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
+                                </TouchableOpacity>
+                                <Text style={roomStyles.matchCounter}>
+                                    {currentMatchNumber}/{totalMatches}
+                                </Text>
+                                <TouchableOpacity
+                                    style={roomStyles.navButton}
+                                    onPress={handleNextMatch}
+                                    disabled={totalMatches === 0}
+                                >
+                                    <Ionicons name="chevron-down" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
+                                </TouchableOpacity>
+                            </View>
+                        )}
+                        <TouchableOpacity style={roomStyles.iconButton} onPress={disableSearch}>
+                            <Ionicons name="close" size={24} color="#333" />
+                        </TouchableOpacity>
                     </View>
-                    <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
-                        <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
-                    </TouchableOpacity>
-                </View>
+                ) : (
+                    // Normal mode header
+                    <View style={roomStyles.header}>
+                        <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+                            <Ionicons name="chevron-back" size={24} color="#333" />
+                        </TouchableOpacity>
+                        <View style={roomStyles.headerCenter}>
+                            <Text style={roomStyles.headerTitle}>{chatName}</Text>
+                            <Text style={roomStyles.headerSubtitle}>
+                                {groupChat?.members?.length || memberIds.length || 0} 位成员
+                            </Text>
+                        </View>
+                        <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
+                            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+                        </TouchableOpacity>
+                    </View>
+                )}
 
                 <KeyboardAvoidingView
                     style={roomStyles.keyboardAvoidingView}
