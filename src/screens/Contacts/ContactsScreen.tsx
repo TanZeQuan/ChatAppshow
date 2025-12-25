@@ -268,8 +268,6 @@ export default function ContactsScreen() {
         });
       } else if (result.success && result.message === "Chat existed.") {
         // WORKAROUND 2.0: Find the new chat by diffing the chat list before and after refreshing.
-        console.log("Chat existed, but no ID returned. Finding it by diffing chat lists...");
-        
         const oldChatIds = new Set(useChatStore.getState().chatList.map(c => c.id));
 
         // This is a simplified refresh function that only updates chat list
@@ -298,7 +296,6 @@ export default function ContactsScreen() {
         const newlyFoundChat = updatedChatList.find(c => !oldChatIds.has(c.id));
 
         if (newlyFoundChat) {
-          console.log('✅ Found new chat by diffing lists:', newlyFoundChat.id);
           parentNavigation.navigate("ChatStack", {
             screen: "ChatRoom",
             params: {

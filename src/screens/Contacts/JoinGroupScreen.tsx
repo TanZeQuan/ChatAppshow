@@ -22,7 +22,6 @@ export default function JoinGroupScreen() {
 
   const handleScanGroupCard = () => {
     // Navigate to QR scanner for group
-    console.log("Scan Group Card");
   };
 
   useFocusEffect(

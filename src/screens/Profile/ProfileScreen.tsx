@@ -68,14 +68,6 @@ export default function ProfileScreen() {
         const currentStoreAvatar = useUserStore.getState().user?.avatar || '';
         const finalAvatar = isInvalidAvatar ? currentStoreAvatar : backendAvatar;
 
-        console.log('🖼️ Avatar validation:', {
-          backend: backendAvatar,
-          currentStore: currentStoreAvatar,
-          paramUser: user.avatar,
-          isInvalid: isInvalidAvatar,
-          final: finalAvatar
-        });
-
         const updatedUser = {
           id: userData.user_id || user.id,
           name: userData.name || userData.username || userData.full_name || user.name || 'Unknown',
@@ -168,8 +160,6 @@ export default function ProfileScreen() {
           image: { uri, type: "image/jpeg", name: "avatar.jpg" },
         });
 
-        console.log('updateUserInfo 返回:', res);
-
         if (res.success) {
           // Fetch updated user data with server URL
           await fetchUserData();
@@ -210,8 +200,6 @@ export default function ProfileScreen() {
           image: { uri, type: "image/jpeg", name: "avatar.jpg" },
         });
 
-        console.log('updateUserInfo 返回:', res);
-
         if (res.success) {
           // Fetch updated user data with server URL
           await fetchUserData();
@@ -245,7 +233,6 @@ export default function ProfileScreen() {
         text: "退出登录",
         style: "destructive",
         onPress: () => {
-          console.log('🔌 ProfileScreen: Logging out, disconnecting WebSocket');
           logout();
         }
       }
@@ -357,7 +344,7 @@ const profileStyles = RNStyleSheet.create({
     alignItems: "center",
     paddingHorizontal: scaleWidth(16),
     paddingTop: scaleHeight(40),
-    paddingBottom: scaleHeight(16),
+    paddingBottom: scaleHeight(5),
   },
 
   avatarTouchable: {

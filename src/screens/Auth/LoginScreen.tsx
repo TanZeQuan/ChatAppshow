@@ -31,9 +31,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     try {
-      console.log('登录参数:', { phone, passcode: password });
       const loginResult = await login({ phone, passcode: password });
-      console.log('登录结果:', loginResult);
 
       if (!loginResult.error) {
         const userId = loginResult.response; 
@@ -52,11 +50,9 @@ export default function LoginScreen() {
           
           // Step 1: Connect to WebSocket and wait for login confirmation
           await WebSocketManager.connect(fullUser.id);
-          console.log("[LoginScreen] WebSocket connected and logged in.");
 
           // Step 2: Now set the user state. This will trigger navigation to the main app.
           useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
-          console.log("最终保存到 Store 的用户资料:", fullUser);
 
         } else {
           Alert.alert('登录后读取信息失败', userResult.message);

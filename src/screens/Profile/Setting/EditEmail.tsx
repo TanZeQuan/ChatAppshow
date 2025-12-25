@@ -68,12 +68,8 @@ export default function EditEmailScreen({ navigation }: Props) {
     setIsLoading(true);
 
     try {
-      console.log('更换邮箱 - user_id:', user.id, 'new email:', newEmail.trim());
-
       // Call API to change email
       const res = await changeUserEmail(user.id, newEmail.trim());
-
-      console.log('changeUserEmail 返回:', res);
 
       // Check if the API call failed
       if (!res.success) {
@@ -111,8 +107,6 @@ export default function EditEmailScreen({ navigation }: Props) {
           avatar: finalAvatar, // ✅ Use validated avatar
           about: userData.about || user.about || '',
         };
-
-        console.log('更新 store:', updatedUser);
 
         useUserStore.getState().setUser(
           updatedUser,

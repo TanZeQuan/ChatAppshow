@@ -10,9 +10,6 @@ export const createUser = async (data: {
   status?: number;
 }) => {
   try {
-    console.log('[createUser] Starting registration request...');
-    console.log('[createUser] Input data:', { ...data, passcode: '***' }); // Hide password in logs
-
     const formData = new FormData();
     const dataPayload: any = {
       phone: data.phone,
@@ -23,33 +20,21 @@ export const createUser = async (data: {
       status: data.status,
     };
 
-    console.log('[createUser] Data payload:', dataPayload);
     formData.append('data', JSON.stringify(dataPayload));
-
-    console.log('[createUser] Sending POST to /users/new...');
-    console.log('[createUser] FormData prepared, making request...');
 
     const response = await api.post('/users/new', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      // ✅ Add timeout override for registration
       timeout: 30000, // 30 seconds
     });
 
-    console.log('[createUser] ✅ Response received:', response.data);
     return response.data;
   } catch (error: any) {
-    console.error('[createUser] ❌ Error occurred:', {
+    console.error('[createUser] Error:', {
       message: error.message,
-      code: error.code,
       response: error.response?.data,
       status: error.response?.status,
-      config: {
-        url: error.config?.url,
-        method: error.config?.method,
-        baseURL: error.config?.baseURL
-      }
     });
 
     return {
@@ -123,19 +108,11 @@ export const updateUserInfo = async (
       } as any);
     }
 
-    console.log('updateUserInfo payload:', {
-      userId,
-      hasImage: !!updateData.image,
-      dataPayload
-    });
-
     const response = await api.post("/users/info/update", formData, {
       headers: {
         "Content-Type": "multipart/form-data"
       },
     });
-
-    console.log('updateUserInfo response:', response.data);
 
     // Check if response indicates an error
     if (response.data?.error === true) {
@@ -161,8 +138,6 @@ export const updateUserInfo = async (
 // ✅ Change user email
 export const changeUserEmail = async (userId: string, newEmail: string) => {
   try {
-    console.log('API Request - user_id:', userId, 'email:', newEmail);
-
     // Backend expects FormData with parameters wrapped in "data" field
     const formData = new FormData();
     formData.append("data", JSON.stringify({
@@ -175,8 +150,6 @@ export const changeUserEmail = async (userId: string, newEmail: string) => {
         'Content-Type': 'multipart/form-data',
       },
     });
-
-    console.log('API Response:', response.data);
 
     // Check if the response indicates an error
     if (response.data?.error === true) {

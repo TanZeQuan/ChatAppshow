@@ -57,16 +57,12 @@ export default function EditNameScreen({ navigation }: Props) {
     setIsLoading(true);
 
     try {
-      console.log('更新用户名 - user_id:', user.id, 'new name:', name.trim());
-
       // ✅ Follow backend API standard: only send name and about
       // ⚠️ Backend will clear avatar when not uploading image - frontend validation will protect it
       const res = await updateUserInfo(user.id, {
         name: name.trim(),
         about: user.about || '',  // Keep existing 'about' field
       });
-
-      console.log('updateUserInfo 返回:', res);
 
       if (!res.success) {
         Alert.alert("失败", res.message || "更新失败，请重试");
@@ -94,13 +90,6 @@ export default function EditNameScreen({ navigation }: Props) {
         const currentStoreAvatar = useUserStore.getState().user?.avatar || '';
         const finalAvatar = isInvalidAvatar ? currentStoreAvatar : backendAvatar;
 
-        console.log('🖼️ Avatar validation:', {
-          backend: backendAvatar,
-          currentStore: currentStoreAvatar,
-          isInvalid: isInvalidAvatar,
-          final: finalAvatar
-        });
-
         // Update store with complete user data
         const updatedUser = {
           id: userData.user_id || user.id,
@@ -110,8 +99,6 @@ export default function EditNameScreen({ navigation }: Props) {
           avatar: finalAvatar, // ✅ Use validated avatar (protected from backend clearing)
           about: userData.about || user.about || '',
         };
-
-        console.log('更新 store:', updatedUser);
 
         useUserStore.getState().setUser(
           updatedUser,

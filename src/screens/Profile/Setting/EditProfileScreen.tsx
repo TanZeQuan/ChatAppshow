@@ -23,7 +23,6 @@ export default function EditProfileScreen() {
     const fetchUser = async () => {
       try {
         const res = await readUsers(user.id);
-        console.log('EditProfile - readUsers 返回:', res);
 
         if (res.success && res.data?.response) {
           const userData = res.data.response;
@@ -42,14 +41,6 @@ export default function EditProfileScreen() {
           // ✅ If backend avatar is invalid, get current avatar from store (not from parameter)
           const currentStoreAvatar = useUserStore.getState().user?.avatar || '';
           const finalAvatar = isInvalidAvatar ? currentStoreAvatar : backendAvatar;
-
-          console.log('🖼️ EditProfile Avatar validation:', {
-            backend: backendAvatar,
-            currentStore: currentStoreAvatar,
-            paramUser: user.avatar,
-            isInvalid: isInvalidAvatar,
-            final: finalAvatar
-          });
 
           setAvatar(finalAvatar);
           setUsername(userData.name || user.name || "Unknown");

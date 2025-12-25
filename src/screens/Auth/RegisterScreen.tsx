@@ -67,14 +67,9 @@ export default function RegisterScreen() {
       status: 1,
     };
 
-    console.log("Data to be sent to backend:", postData);
-    console.log("API URL:", "https://balkingly-hemitropic-lelah.ngrok-free.dev/api/users/new");
-
-    // ✅ Test if API is reachable
+    // Test if API is reachable
     try {
-      console.log('🔍 [Register] Testing API connectivity...');
       const testResponse = await fetch('https://balkingly-hemitropic-lelah.ngrok-free.dev/api');
-      console.log('✅ [Register] API is reachable, status:', testResponse.status);
     } catch (testError) {
       console.error('❌ [Register] API connectivity test failed:', testError);
       Alert.alert(
@@ -89,16 +84,6 @@ export default function RegisterScreen() {
       // Call API
       const res = await createUser(postData);
 
-      // Log FULL backend response
-      console.log("=== FULL BACKEND RESPONSE ===");
-      console.log(JSON.stringify(res, null, 2));
-      console.log("res.success:", res.success);
-      console.log("res.message:", res.message);
-      console.log("res.error:", res.error);
-      console.log("res.data:", res.data);
-      console.log("res.user_id:", res.user_id);
-      console.log("res.token:", res.token);
-
       // Check if the message indicates success (case-insensitive)
       const messageText = (res.message || res.error || "").toUpperCase();
       const isSuccess = messageText.includes("SUCCESS") ||
@@ -107,8 +92,6 @@ export default function RegisterScreen() {
         res.data?.success === true;
 
       if (isSuccess) {
-        console.log("✅ Registration successful!");
-
         // Extract user_id from response (check different possible locations)
         const userId = res.user_id ||
           res.data?.user_id ||
@@ -119,9 +102,6 @@ export default function RegisterScreen() {
           res.data?.token ||
           res.data?.response?.token ||
           "";
-
-        console.log("Extracted user_id:", userId);
-        console.log("Extracted token:", token);
 
         // Update store with registered user data
         if (userId) {
@@ -136,7 +116,6 @@ export default function RegisterScreen() {
             },
             token
           );
-          console.log("✅ Store updated with user data");
         }
 
         // Show success message and navigate

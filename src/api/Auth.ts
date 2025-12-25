@@ -8,13 +8,9 @@ export const login = async ({ phone, passcode }: { phone: string; passcode: stri
       JSON.stringify({ phone, passcode })
     );
 
-    console.log("发送到后端的数据:", { phone, passcode });
-
     const response = await api.post('/login', formData, {
       headers: { "Content-Type": "multipart/form-data" },
     });
-
-    console.log("后端返回:", response.data);
 
     return response.data; // { error, message, response }
   } catch (error: any) {
