@@ -1,8 +1,11 @@
 import config from "../config/api";
 
-const WS_URL = config.WS_URL;
+// ✅ 新的 WebSocket URL（根据文档）
+const WS_URL = "wss://ws.ngrok-free.dev";
 
 type MessageCallback = (data: any) => void;
+type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
+type CallSignalCallback = (data: any) => void;
 
 class WebSocketManager {
   private static instance: WebSocketManager;
@@ -16,8 +19,10 @@ class WebSocketManager {
   private reconnectDelay = 3000;
 
   private messageCallbacks: MessageCallback[] = [];
+  private readReceiptCallbacks: ReadReceiptCallback[] = [];
+  private callSignalCallbacks: CallSignalCallback[] = [];
 
-  // 👉 login Promise control
+  // Login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
   private loginRejecter: ((e: Error) => void) | null = null;
   private loginTimeoutTimer: any = null;
@@ -35,17 +40,14 @@ class WebSocketManager {
      Connect + Login
   =============================== */
   connect(userId: string): Promise<boolean> {
-    // 🔍 Diagnostic: Log connection attempt
     console.log('🔌 [WebSocket] connect() called');
     console.log('  - New userId:', userId);
     console.log('  - Current userId:', this.userId);
     console.log('  - isConnected:', this.isConnected);
 
-    // ⚠️ If already connected but userId changed, disconnect first
+    // If already connected but userId changed, disconnect first
     if (this.isConnected && this.userId !== userId) {
       console.warn('⚠️ [WebSocket] UserId changed! Disconnecting old connection...');
-      console.warn('  - Old userId:', this.userId);
-      console.warn('  - New userId:', userId);
       this.disconnect();
     }
 
@@ -73,13 +75,13 @@ class WebSocketManager {
 
       /* ---------- OPEN ---------- */
       this.ws.onopen = () => {
-        console.log("✅ WS opened");
+        console.log("✅ WebSocket opened");
         this.sendLoginMessage();
 
-        // ⏳ login timeout - 后端登录成功不发送响应，2秒内没收到失败消息就认为成功
+        // ⏳ Login timeout - 首次连接成功是静默的（2秒内没收到错误就算成功）
         this.loginTimeoutTimer = setTimeout(() => {
           if (!this.isConnected) {
-            console.log("✅ Login success (no error received)");
+            console.log("✅ Login success (silent - no response from server)");
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.loginResolver?.(true);
@@ -93,24 +95,11 @@ class WebSocketManager {
         this.handleMessage(event);
       };
 
-      /* ---------- ERROR ---------- */
-      // this.ws.onerror = (error: any) => {
-        // console.error("❌ WebSocket error occurred");
-        // console.error("Error details:", error?.message || 'No error message available');
-        // console.error("Connection URL:", WS_URL);
-        // console.error("User ID:", this.userId);
-        // console.error("Is Connected:", this.isConnected);
-
-        // Don't reject the promise here, let onclose handle it
-        // This prevents duplicate error handling
-      // };
-
       /* ---------- CLOSE ---------- */
       this.ws.onclose = (event) => {
         console.warn("🔌 WebSocket closed");
         console.warn("Close code:", event.code);
         console.warn("Close reason:", event.reason || 'No reason provided');
-        console.warn("Was clean:", event.wasClean);
 
         this.isConnected = false;
         this.cleanupLoginPromise();
@@ -135,70 +124,75 @@ class WebSocketManager {
       user_id: this.userId,
     };
 
+    console.log("📤 [WebSocket] Sending login:", payload);
     this.ws.send(JSON.stringify(payload));
   }
 
   /* ===============================
-     Message Handler (SINGLE SOURCE)
+     Message Handler (根据新文档)
   =============================== */
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
-      /* ---------- LOGIN SUCCESS (按文档) ---------- */
-      if (
-        !this.isConnected &&
-        data.type === 1 &&
-        data.message === "Connected"
-      ) {
-        console.log("✅ Login success (from server)");
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        this.loginResolver?.(true);
-        this.cleanupLoginPromise();
+      console.log("📨 [WebSocket] Received:", data);
+
+      /* ---------- RECONNECTION SUCCESS ---------- */
+      if (data.status === 0 && data.message === "Reconnected") {
+        console.log("✅ Reconnected to WebSocket");
+        if (!this.isConnected) {
+          this.isConnected = true;
+          this.reconnectAttempts = 0;
+          this.loginResolver?.(true);
+          this.cleanupLoginPromise();
+        }
         return;
       }
 
-      /* ---------- LOGIN FAILED (按文档) ---------- */
-      if (!this.isConnected && data.type === 0) {
+      /* ---------- LOGIN FAILED ---------- */
+      if (data.status === 1 && data.message && data.message.includes("Invalid")) {
         console.error("❌ Login failed:", data.message);
-        this.loginRejecter?.(new Error(data.message || "Login failed"));
+        this.loginRejecter?.(new Error(data.message));
         this.cleanupLoginPromise();
         return;
       }
 
-      /* ---------- FORWARD ACK (按文档) ---------- */
-      // 文档格式: {type: 1, content: "Success"}
-      if (data.type === 1 && data.content === "Success") {
-        // console.log("✅ Message forwarded (documented format)");
-        // return;
-      }
-
-      // 兼容实际后端格式: {status: 1, message: "Success"}
+      /* ---------- FORWARD/READ_SIGNAL ACK ---------- */
       if (data.status === 1 && data.message === "Success") {
-        // console.log("✅ Message forwarded (backend format)");
+        console.log("✅ Operation confirmed (forward/read_signal)");
         return;
       }
 
-      // 🔧 Fix: Check for exact "Success" message to avoid treating ACK as chat message
-      if (data.type === 1 && data.message === "Success") {
+      /* ---------- INCOMING MESSAGE ---------- */
+      // Format: {status: 1, type: 1, message: "...", chat_id: "...", sender: "..."}
+      if (data.status === 1 && data.type && data.message && data.sender) {
+        console.log(`📩 New message from ${data.sender} in chat ${data.chat_id}`);
+        this.messageCallbacks.forEach((cb) => cb(data));
         return;
       }
 
-      /* ---------- INCOMING MESSAGE (按文档和实际) ---------- */
-      // 后端消息格式: {type: 1, message: "...", status: 1, ...}
-      // type 是数字: 1=文本, 2=图片等
-      // 只要有 type 和 message 就是聊天消息
-      if (data.type && data.message) {
-        this.messageCallbacks.forEach((cb, index) => {
-          cb(data);
-        });
+      /* ---------- READ RECEIPT ---------- */
+      // Format: {status: 1, chat_id: "...", reader_id: "..."}
+      if (data.status === 1 && data.chat_id && data.reader_id) {
+        console.log(`✔️ User ${data.reader_id} read messages in ${data.chat_id}`);
+        this.readReceiptCallbacks.forEach((cb) =>
+          cb({ chatId: data.chat_id, readerId: data.reader_id })
+        );
+        return;
+      }
+
+      /* ---------- CALL SIGNAL (WebRTC) ---------- */
+      // Format: {msg: "call_signal", type: "offer/answer/candidate/reject/end", ...}
+      if (data.msg === "call_signal" || data.type === "offer" || data.type === "answer" || data.type === "candidate") {
+        console.log(`📞 Call signal received:`, data.type);
+        this.callSignalCallbacks.forEach((cb) => cb(data));
         return;
       }
 
       /* ---------- FALLBACK ---------- */
+      console.log("⚠️ Unhandled message:", data);
       this.messageCallbacks.forEach((cb) => cb(data));
     } catch (err) {
-      console.error("❌ WS parse error", err);
+      console.error("❌ WebSocket parse error", err);
     }
   }
 
@@ -212,26 +206,87 @@ class WebSocketManager {
   }
 
   /* ===============================
-     Send Message
+     Send Forward Message (根据新文档)
   =============================== */
   sendForwardMessage(payload: {
-    type: "chat";
+    type: number; // ✅ 改为 number: 1=text, 2=voice, 3=files
     message: string;
-    message_id: string;
+    message_id: string; // ✅ Required for delivery tracking
     sender: string;
     receiver: string[];
     chat_id: string;
   }): boolean {
     if (!this.ws || !this.isConnected) {
-      console.warn("⚠️ WS not connected");
+      console.warn("⚠️ WebSocket not connected");
       return false;
     }
 
     const msg = {
       msg: "forward",
-      ...payload,
+      user_id: this.userId!, // ✅ 新增：当前用户ID（用于日志）
+      type: payload.type,
+      message: payload.message,
+      sender: payload.sender,
+      receiver: payload.receiver,
+      chat_id: payload.chat_id,
+      message_id: payload.message_id, // ✅ Required
     };
 
+    console.log("📤 [WebSocket] Sending forward:", msg);
+    this.ws.send(JSON.stringify(msg));
+    return true;
+  }
+
+  /* ===============================
+     Send Read Signal (新增)
+  =============================== */
+  sendReadSignal(payload: {
+    receiver: string[];
+    chat_id: string;
+  }): boolean {
+    if (!this.ws || !this.isConnected) {
+      console.warn("⚠️ WebSocket not connected");
+      return false;
+    }
+
+    const msg = {
+      msg: "read_signal",
+      user_id: this.userId!,
+      receiver: payload.receiver,
+      chat_id: payload.chat_id,
+    };
+
+    console.log("📤 [WebSocket] Sending read_signal:", msg);
+    this.ws.send(JSON.stringify(msg));
+    return true;
+  }
+
+  /* ===============================
+     Send Call Signal (新增 - WebRTC)
+  =============================== */
+  sendCallSignal(payload: {
+    type: "offer" | "answer" | "candidate" | "reject" | "end";
+    receiver: string[];
+    call_type?: 0 | 1; // 0=Voice, 1=Video
+    call_id?: string;
+    payload?: any; // SDP or ICE candidate
+  }): boolean {
+    if (!this.ws || !this.isConnected) {
+      console.warn("⚠️ WebSocket not connected");
+      return false;
+    }
+
+    const msg = {
+      msg: "call_signal",
+      type: payload.type,
+      user_id: this.userId!,
+      receiver: payload.receiver,
+      call_type: payload.call_type,
+      call_id: payload.call_id,
+      payload: payload.payload,
+    };
+
+    console.log("📤 [WebSocket] Sending call_signal:", msg);
     this.ws.send(JSON.stringify(msg));
     return true;
   }
@@ -239,11 +294,8 @@ class WebSocketManager {
   /* ===============================
      Logout / Disconnect
   =============================== */
-
   disconnect() {
     console.log('🔌 [WebSocket] disconnect() called');
-    console.log('  - Current userId:', this.userId);
-    console.log('  - isConnected:', this.isConnected);
 
     if (this.ws) {
       this.ws.close(1000, "Client disconnect");
@@ -262,7 +314,7 @@ class WebSocketManager {
   =============================== */
   private attemptReconnect() {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("❌ Max reconnect attempts reached. Please check your network connection.");
+      console.error("❌ Max reconnect attempts reached");
       return;
     }
 
@@ -273,7 +325,6 @@ class WebSocketManager {
 
     setTimeout(() => {
       if (this.userId) {
-        console.log(`Attempting to reconnect for user: ${this.userId}`);
         this.connect(this.userId).catch((error) => {
           console.error("Reconnect failed:", error.message);
         });
@@ -289,18 +340,35 @@ class WebSocketManager {
   }
 
   removeMessageCallback(cb: MessageCallback) {
-    const beforeLength = this.messageCallbacks.length;
     this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb);
-    const afterLength = this.messageCallbacks.length;
+  }
+
+  addReadReceiptCallback(cb: ReadReceiptCallback) {
+    this.readReceiptCallbacks.push(cb);
+  }
+
+  removeReadReceiptCallback(cb: ReadReceiptCallback) {
+    this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb);
+  }
+
+  addCallSignalCallback(cb: CallSignalCallback) {
+    this.callSignalCallbacks.push(cb);
+  }
+
+  removeCallSignalCallback(cb: CallSignalCallback) {
+    this.callSignalCallbacks = this.callSignalCallbacks.filter((x) => x !== cb);
   }
 
   isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
   }
 
-  // Debug method to check callback count
   getCallbackCount() {
-    return this.messageCallbacks.length;
+    return {
+      message: this.messageCallbacks.length,
+      readReceipt: this.readReceiptCallbacks.length,
+      callSignal: this.callSignalCallbacks.length,
+    };
   }
 }
 

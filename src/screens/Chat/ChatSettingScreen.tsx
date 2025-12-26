@@ -88,8 +88,8 @@ export default function ChatSettingScreen() {
       return;
     }
     try {
-      // Use status 1 as per previous correction
-      const result = await readFriends(1);
+      // ✅ 使用 isstatus = 2 获取已接受的好友
+      const result = await readFriends(2);
 
       if (result.success && result.data) {
         // Search in both request and approve arrays
@@ -98,18 +98,17 @@ export default function ChatSettingScreen() {
           ...(result.data.approve || [])
         ];
 
-        // Find the friend relationship using the correct otherUserId
+        // ✅ 根据实际数据结构查找：只有 user_id 字段
         const friendRelation = allFriends.find((friend: any) => {
-          // A friendship must involve both the current user and the other user.
-          const participants = [friend.request_id, friend.approve_id];
-          return participants.includes(currentUser.id) && participants.includes(otherUserId);
+          return friend.user_id === otherUserId;
         });
 
         if (friendRelation) {
           setFriendListId(friendRelation.list_id);
-          console.log("Found friend list_id:", friendRelation.list_id);
+          console.log("✅ Found friend list_id:", friendRelation.list_id, "for user:", otherUserId);
         } else {
-          console.log(`No friend relationship found for user: ${otherUserId}`);
+          console.log(`❌ No friend relationship found for user: ${otherUserId}`);
+          console.log("Available friends:", allFriends.map((f: any) => ({ user_id: f.user_id, name: f.name })));
         }
       }
     } catch (error) {
