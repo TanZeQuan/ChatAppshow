@@ -1,7 +1,6 @@
 import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Audio } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -25,7 +24,11 @@ import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import { ensureFullImageUrl } from '../../api/service';
 import { useSearchChatHistory } from '../../components/ChatHistory';
+import { ChatInputBar } from '../../components/ChatInputBar';
+import { MessageBubble } from '../../components/MessageBubble';
+import { SearchHeader } from '../../components/SearchHeader';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
+import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
 import { borders, colors, typography } from "../../styles";
@@ -90,6 +93,7 @@ export default function ChatRoomScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
   const [isNearBottom, setIsNearBottom] = useState(true); // ✅ Track if user is near bottom
+  const [isUploadingImage, setIsUploadingImage] = useState(false); // ✅ Separate state for image upload
 
   // ✅ Search functionality
   const {
@@ -133,14 +137,24 @@ export default function ChatRoomScreen() {
   // Use ref instead of state for offset to avoid unnecessary re-renders
   const offsetRef = useRef(0);
 
-  // Voice message state
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [playingVoice, setPlayingVoice] = useState<string | null>(null); // Track which voice is playing
-  const [sound, setSound] = useState<Audio.Sound | null>(null); // Current sound instance
-  const [voiceDurations, setVoiceDurations] = useState<Record<string, number>>({}); // Cache duration for each voice message
-  const [playbackPosition, setPlaybackPosition] = useState(0); // Current playback position in milliseconds
+  // ✅ Use voice recorder hook
+  const {
+    isRecording,
+    isUploading,
+    playingVoice,
+    voiceDurations,
+    playbackPosition,
+    startRecording,
+    stopRecording,
+    playAudio,
+    stopAudio,
+    formatTime,
+  } = useVoiceRecorder({
+    chatId,
+    currentUserId,
+    chatMembers,
+    onMessageSent: () => loadMessages(false, false), // Reload messages after sending
+  });
 
   // Wrap loadMessages in useCallback to prevent closure issues
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
@@ -511,278 +525,6 @@ export default function ChatRoomScreen() {
     }
   };
 
-  const startRecording = async () => {
-    try {
-      // ✅ Clean up any existing recording first
-      if (recording) {
-        console.log('🧹 [Voice] Cleaning up existing recording...');
-        try {
-          await recording.stopAndUnloadAsync();
-        } catch (e) {
-          console.log('⚠️ [Voice] Failed to clean up recording:', e);
-        }
-        setRecording(null);
-      }
-
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('权限被拒绝', '需要麦克风权限才能录音');
-        return;
-      }
-
-      // ✅ Set audio mode with complete configuration for both iOS and Android
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      console.log('🎤 [Voice] Starting recording with high-quality audio...');
-
-      // ✅ Use custom recording options for high-quality audio
-      // Note: expo-av doesn't support native Opus encoding, so we record in AAC and send as .opus to backend
-      const recordingOptions = {
-        isMeteringEnabled: true,
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 48000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 48000,
-          numberOfChannels: 1,
-          bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
-        },
-        web: {
-          mimeType: 'audio/webm;codecs=opus',
-          bitsPerSecond: 128000,
-        },
-      };
-
-      const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
-      setRecording(newRecording);
-      setIsRecording(true);
-      console.log('✅ [Voice] Recording started (will be sent as .opus)');
-    } catch (err: any) {
-      console.error('❌ [Voice] Failed to start recording:', err);
-      Alert.alert('录音失败', err.message || '无法启动录音，请重试');
-      setRecording(null);
-      setIsRecording(false);
-    }
-  };
-
-  const stopRecording = async () => {
-    if (!recording) {
-      console.log('⚠️ [Voice] No recording to stop');
-      return;
-    }
-
-    setIsRecording(false);
-    setIsUploading(true);
-
-    try {
-      console.log('⏹️ [Voice] Stopping recording...');
-
-      // ✅ Get URI BEFORE stopAndUnloadAsync
-      const uri = recording.getURI();
-
-      // ✅ Then stop and unload
-      await recording.stopAndUnloadAsync();
-
-      // ✅ Reset audio mode after recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: false,
-        playThroughEarpieceAndroid: false,
-      });
-
-      if (uri) {
-        console.log('🎤 [Voice] Recording stopped, URI:', uri);
-
-        const receiver = chatMembers.filter(id => id !== currentUserId);
-
-        // ✅ Force Opus filename and MIME type for backend
-        const originalFilename = uri.split('/').pop() || 'voice.opus';
-        const filename = originalFilename.replace(/\.(m4a|caf|mp4|aac)$/i, '.opus');
-
-        // ✅ Always use audio/opus MIME type
-        const mimeType = 'audio/opus';
-
-        console.log(`🎤 [Voice] File: ${filename} → MIME: ${mimeType}`);
-        console.log('🎤 [Voice] Receiver:', receiver);
-        console.log('🎤 [Voice] Calling sendChatMessage...');
-
-        const result = await sendChatMessage({
-          sender: currentUserId,
-          isreceive: receiver,
-          chat_id: chatId,
-          voice: {
-            uri: uri,
-            name: filename,
-            type: mimeType,
-          },
-        });
-
-        console.log('🎤 [Voice] API Result:', result);
-
-        if (result.success && result.data) {
-          console.log('✅ [Voice] Success! Data:', result.data);
-
-          const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
-            ? result.data.isreceive
-            : receiver;
-
-          if (actualReceivers.length > 0) {
-            console.log('📨 [Voice] Sending WebSocket forward...');
-            WebSocketManager.sendForwardMessage({
-              type: result.data.type,
-              message: result.data.message,
-              message_id: result.data.message_id,
-              sender: currentUserId,
-              receiver: actualReceivers,
-              chat_id: chatId
-            });
-          }
-
-          await loadMessages(false, false);
-          Alert.alert('成功', '语音消息已发送');
-        } else {
-          console.error("❌ [Voice] Failed to send voice message:", result.message);
-          Alert.alert('发送失败', result.message || '语音消息发送失败，请重试');
-        }
-      } else {
-        console.error('❌ [Voice] No URI from recording');
-        Alert.alert('错误', '录音文件无效');
-      }
-    } catch (error: any) {
-      console.error('❌ [Voice] Failed to send voice message', error);
-      Alert.alert('发送失败', error.message || '网络错误，请重试');
-    } finally {
-      // ✅ Always clean up recording object
-      setIsUploading(false);
-      setRecording(null);
-      console.log('🧹 [Voice] Recording cleaned up');
-    }
-  };
-
-  // ✅ Voice playback functions (simplified version)
-
-  // Playback status update callback
-  const onPlaybackStatusUpdate = useCallback((status: any) => {
-    if (status.isLoaded) {
-      // Update playback position
-      setPlaybackPosition(status.positionMillis || 0);
-
-      // Get duration
-      if (status.durationMillis) {
-        const durationSeconds = Math.round(status.durationMillis / 1000);
-        // Update duration for the current playing voice
-        if (playingVoice) {
-          setVoiceDurations(prev => ({
-            ...prev,
-            [playingVoice]: durationSeconds
-          }));
-        }
-      }
-
-      // Playback finished
-      if (status.didJustFinish) {
-        setPlayingVoice(null);
-        setPlaybackPosition(0);
-        console.log('🎵 [Voice] Playback finished');
-      }
-    }
-  }, [playingVoice]);
-
-  // Play audio
-  const playAudio = useCallback(async (voiceUrl: string, messageId: string) => {
-    try {
-      console.log('🎵 [Voice] Playing audio:', voiceUrl);
-
-      // Stop current playback if any
-      if (sound) {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-        setPlayingVoice(null);
-      }
-
-      // Reset playback position
-      setPlaybackPosition(0);
-
-      // Set audio mode for playback
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      // Create and play new sound
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: voiceUrl },
-        { shouldPlay: true },
-        onPlaybackStatusUpdate
-      );
-
-      setSound(newSound);
-      setPlayingVoice(messageId);
-      console.log('▶️ [Voice] Playing:', messageId);
-
-    } catch (error: any) {
-      console.error('❌ [Voice] Failed to play:', error);
-      Alert.alert('播放失败', '无法播放语音消息，请重试');
-      setPlayingVoice(null);
-    }
-  }, [sound, onPlaybackStatusUpdate]);
-
-  // Stop audio
-  const stopAudio = useCallback(async () => {
-    if (sound) {
-      try {
-        await sound.stopAsync();
-        await sound.unloadAsync();
-        setSound(null);
-        setPlayingVoice(null);
-        setPlaybackPosition(0);
-        console.log('⏹️ [Voice] Stopped playback');
-      } catch (error) {
-        console.error('❌ [Voice] Failed to stop:', error);
-      }
-    }
-  }, [sound]);
-
-  // Helper function: Format time from milliseconds to MM:SS
-  const formatTime = useCallback((millis: number) => {
-    const totalSeconds = Math.floor(millis / 1000);
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, []);
-
-  // Cleanup sound on unmount
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        console.log('🧹 [Voice] Cleaning up sound on unmount');
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
 
   // ✅ Calculate search matches separately in useEffect
   useEffect(() => {
@@ -899,7 +641,7 @@ export default function ChatRoomScreen() {
       });
 
       if (!result.canceled && result.assets.length > 0) {
-        setIsUploading(true);
+        setIsUploadingImage(true);
         try {
             // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
 
@@ -966,7 +708,7 @@ export default function ChatRoomScreen() {
             console.error('Failed to send image', error);
             Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
-            setIsUploading(false);
+            setIsUploadingImage(false);
         }
       }
     } catch (error) {
@@ -989,135 +731,40 @@ export default function ChatRoomScreen() {
     setInputText((prev) => prev + emoji.emoji);
   };
 
-  const renderItem = ({ item, index }: { item: DisplayMessage; index: number }) => {
-    // 🔍 Safety check: ensure text is a string
-    const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
-
-    // ✅ Check if message matches search query (for orange highlight)
-    const isSearchMatched = searchMode && searchQuery.trim() &&
-                            messageText.toLowerCase().includes(searchQuery.toLowerCase());
-
-    // ✅ Check if this is the currently focused match (by message ID)
-    const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
-
-    return (
-      <View style={[
-        roomStyles.messageRow,
-        item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
-      ]}>
-        {item.sender === 'other' && (
-                                              <View style={roomStyles.avatar}>
-                                                <Image
-                                                  source={
-                                                    !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
-                                                      ? require('../../assets/images/personal.png')
-                                                      : { uri: item.avatar }
-                                                  }
-                                                  style={roomStyles.avatarImage}
-                                                />
-                                              </View>        )}
-        <View style={[
-          roomStyles.bubble,
-          item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
-          isSearchMatched && { backgroundColor: '#FFA500' },  // ✅ Orange highlight for any match
-          isCurrentMatch && {
-            backgroundColor: '#FF8C00',  // ✅ Darker orange for current match
-            borderWidth: 2,
-            borderColor: '#FF6347',
-          },
-        ]}>
-          {/* Type 1: Text Message */}
-          {item.type === 1 && messageText && (
-            <Text style={roomStyles.messageText}>{messageText}</Text>
-          )}
-
-          {/* Type 2: Voice Message */}
-          {item.type === 2 && item.voiceUrl && (
-            <View style={roomStyles.voiceMessageContainer}>
-              <TouchableOpacity
-                onPress={() => {
-                  if (playingVoice === item.id) {
-                    stopAudio();
-                  } else {
-                    playAudio(item.voiceUrl!, item.id);
-                  }
-                }}
-                style={roomStyles.voicePlayButton}
-              >
-                <Ionicons
-                  name={playingVoice === item.id ? "pause-circle" : "play-circle"}
-                  size={scaleWidth(25)}
-                  color="#1c275bff"
-                />
-              </TouchableOpacity>
-              <View style={roomStyles.voiceInfo}>
-                <Text style={roomStyles.voiceMessageText}>
-                  {playingVoice === item.id ? '播放中...' : '语音消息'}
-                </Text>
-                {voiceDurations[item.id] && (
-                  <Text style={roomStyles.voiceDuration}>
-                    {playingVoice === item.id
-                      ? `${formatTime(playbackPosition)} / ${formatTime(voiceDurations[item.id] * 1000)}`
-                      : formatTime(voiceDurations[item.id] * 1000)
-                    }
-                  </Text>
-                )}
-              </View>
-            </View>
-          )}
-
-          {/* Type 2: Failed Voice Message (no voiceUrl) */}
-          {item.type === 2 && !item.voiceUrl && (
-            <Text style={roomStyles.messageText}>{messageText || '[语音上传失败]'}</Text>
-          )}
-
-          {/* Type 3: Image Message */}
-          {item.type === 3 && item.imageUrls && item.imageUrls.length > 0 && (
-            <View style={roomStyles.imageGridContainer}>
-              {item.imageUrls.map((url, index) => (
-                <TouchableOpacity key={index} activeOpacity={0.8}>
-                  <Image
-                    source={{ uri: url }}
-                    style={roomStyles.messageImage}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          <Text style={roomStyles.timestamp}>
-            {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
-              hour: '2-digit',
-              minute: '2-digit'
-            })}
-          </Text>
-        </View>
-
-        {item.sender === 'me' && (
-          <View style={roomStyles.avatar}>
-            <Image
-              source={
-                !currentUserAvatar || currentUserAvatar.trim() === '' || currentUserAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
-                  ? require('../../assets/images/personal.png')
-                  : { uri: currentUserAvatar }
-              }
-              style={roomStyles.avatarImage}
-            />
-          </View>
-        )}
-      </View>
-    );
-  };
-
-  const ToolbarButton = ({ icon, label, onPress }: any) => (
-    <TouchableOpacity style={roomStyles.toolbarButton} onPress={onPress}>
-      <View style={roomStyles.toolbarIconContainer}>
-        <Ionicons name={icon} size={scaleWidth(24)} color="#333" />
-      </View>
-      <Text style={roomStyles.toolbarLabel}>{label}</Text>
-    </TouchableOpacity>
+  const renderItem = ({ item, index }: { item: DisplayMessage; index: number }) => (
+    <MessageBubble
+      item={item}
+      index={index}
+      playingVoice={playingVoice}
+      voiceDurations={voiceDurations}
+      playbackPosition={playbackPosition}
+      playAudio={playAudio}
+      stopAudio={stopAudio}
+      formatTime={formatTime}
+      searchMode={searchMode}
+      searchQuery={searchQuery}
+      currentMatchId={currentMatchId}
+      currentUserAvatar={currentUserAvatar}
+      roomStyles={roomStyles}
+      showSenderName={false} // Private chat, no sender names
+    />
   );
+
+  // Toolbar buttons configuration
+  const toolbarButtons = {
+    row1: [
+      { icon: 'image-outline', label: '图片', onPress: pickImage },
+      { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
+      { icon: 'call-outline', label: '通话' },
+      { icon: 'videocam-outline', label: '视频通话' },
+    ],
+    row2: [
+      { icon: 'document-outline', label: '文件' },
+      { icon: 'card-outline', label: '个人名片' },
+      { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
+      { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
+    ],
+  };
 
   if (isLoading && messages.length === 0) {
     return (
@@ -1144,56 +791,21 @@ export default function ChatRoomScreen() {
   return (
     <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
-        {/* ✅ Dynamic Header: Search mode vs Normal mode */}
-        {searchMode ? (
-          // Search mode header
-          <View style={roomStyles.header}>
-            <TextInput
-              style={roomStyles.searchInput}
-              placeholder="搜索消息..."
-              placeholderTextColor="#999"
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoFocus
-            />
-            {/* ✅ Navigation controls */}
-            {totalMatches > 0 && (
-              <View style={roomStyles.searchNavigation}>
-                <TouchableOpacity
-                  style={roomStyles.navButton}
-                  onPress={handlePrevMatch}
-                  disabled={totalMatches === 0}
-                >
-                  <Ionicons name="chevron-up" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
-                </TouchableOpacity>
-                <Text style={roomStyles.matchCounter}>
-                  {currentMatchNumber}/{totalMatches}
-                </Text>
-                <TouchableOpacity
-                  style={roomStyles.navButton}
-                  onPress={handleNextMatch}
-                  disabled={totalMatches === 0}
-                >
-                  <Ionicons name="chevron-down" size={20} color={totalMatches > 0 ? "#333" : "#999"} />
-                </TouchableOpacity>
-              </View>
-            )}
-            <TouchableOpacity style={roomStyles.iconButton} onPress={disableSearch}>
-              <Ionicons name="close" size={24} color="#333" />
-            </TouchableOpacity>
-          </View>
-        ) : (
-          // Normal mode header
-          <View style={roomStyles.header}>
-            <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
-              <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
-            </TouchableOpacity>
-            <Text style={roomStyles.headerTitle}>{chatName}</Text>
-            <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
-              <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
-            </TouchableOpacity>
-          </View>
-        )}
+        {/* Dynamic Header: Search mode vs Normal mode */}
+        <SearchHeader
+          searchMode={searchMode}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          disableSearch={disableSearch}
+          totalMatches={totalMatches}
+          currentMatchNumber={currentMatchNumber}
+          handlePrevMatch={handlePrevMatch}
+          handleNextMatch={handleNextMatch}
+          chatName={chatName}
+          onBack={() => navigation.goBack()}
+          onOpenSettings={handleOpenSettings}
+          roomStyles={roomStyles}
+        />
 
         <KeyboardAvoidingView
           style={roomStyles.keyboardAvoidingView}
@@ -1235,66 +847,21 @@ export default function ChatRoomScreen() {
             }
           />
 
-          <View style={roomStyles.inputSection}>
-            <View style={roomStyles.inputContainer}>
-              <TouchableOpacity
-                style={roomStyles.iconButton}
-                onPressIn={startRecording}
-                onPressOut={stopRecording}
-                disabled={isUploading}
-              >
-                {isUploading ? (
-                  <ActivityIndicator color="#333" size={scaleWidth(20)} />
-                ) : (
-                  <Ionicons name="mic" size={scaleWidth(22)} color={isRecording ? 'red' : '#333'} />
-                )}
-              </TouchableOpacity>
-              <TextInput
-                style={roomStyles.input}
-                placeholder="输入消息..."
-                value={inputText}
-                onChangeText={setInputText}
-                multiline
-              />
-              <TouchableOpacity style={roomStyles.iconButton} onPress={toggleEmojiPicker}>
-                <Ionicons
-                  name={isEmojiPickerOpen ? "close-circle" : "happy-outline"}
-                  size={scaleWidth(22)}
-                  color="#333"
-                />
-              </TouchableOpacity>
-              {inputText.trim() ? (
-                <TouchableOpacity style={roomStyles.iconButton} onPress={handleSend}>
-                  <Ionicons name="send" size={scaleWidth(22)} color="#333" />
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={roomStyles.iconButton} onPress={toggleToolbar}>
-                  <Ionicons
-                    name={showToolbar ? 'close-circle-outline' : 'add-circle-outline'}
-                    size={scaleWidth(22)}
-                    color="#333"
-                  />
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {showToolbar && (
-              <View style={roomStyles.toolbar}>
-                <View style={roomStyles.toolbarRow}>
-                  <ToolbarButton icon="image-outline" label="图片" onPress={pickImage} />
-                  <ToolbarButton icon="play-circle-outline" label="视频" onPress={pickImage} />
-                  <ToolbarButton icon="call-outline" label="通话" />
-                  <ToolbarButton icon="videocam-outline" label="视频通话" />
-                </View>
-                <View style={roomStyles.toolbarRow}>
-                  <ToolbarButton icon="document-outline" label="文件" />
-                  <ToolbarButton icon="card-outline" label="个人名片" />
-                  <ToolbarButton icon="trash-outline" label="清除记录" onPress={handleClearChat} />
-                  <ToolbarButton icon="settings-outline" label="设置" onPress={handleOpenSettings} />
-                </View>
-              </View>
-            )}
-          </View>
+          <ChatInputBar
+            inputText={inputText}
+            setInputText={setInputText}
+            isRecording={isRecording}
+            isUploading={isUploading}
+            startRecording={startRecording}
+            stopRecording={stopRecording}
+            isEmojiPickerOpen={isEmojiPickerOpen}
+            toggleEmojiPicker={toggleEmojiPicker}
+            showToolbar={showToolbar}
+            toggleToolbar={toggleToolbar}
+            handleSend={handleSend}
+            toolbarButtons={toolbarButtons}
+            roomStyles={roomStyles}
+          />
         </KeyboardAvoidingView>
 
         <EmojiPicker
