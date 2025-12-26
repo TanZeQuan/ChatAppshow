@@ -9,15 +9,12 @@ import {
   Alert,
   Dimensions,
   FlatList,
-  Image,
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
-  StyleSheet as RNStyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
@@ -31,8 +28,7 @@ import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
-import { borders, colors, typography } from "../../styles";
-import { baseRoomStyles, chatRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
+import { chatRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
 
 const { width, height } = Dimensions.get("window");
 

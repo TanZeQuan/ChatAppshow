@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { createFriendRequest, searchUser } from "../../api/Friend";
+import { ensureFullImageUrl } from "../../api/service";
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
 import { useUserStore } from "../../store/userStore";
@@ -43,6 +44,8 @@ export default function AddFriendScreen() {
 
   const { addRequest } = useFriendRequestStore();
   const currentUser = useUserStore((state) => state.user);
+
+  const invalidAvatarUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
 
   // Prevent memory leaks
   const isMounted = useRef(true);
@@ -290,10 +293,17 @@ export default function AddFriendScreen() {
           {hasSearched && searchResult && (
             <View style={styles.resultCard}>
               {/* Left: Avatar */}
-              <Image
-                source={{ uri: searchResult.image }}
-                style={styles.resultAvatar}
-              />
+              {searchResult.image && searchResult.image !== invalidAvatarUrl && searchResult.image !== `${invalidAvatarUrl}/` ? (
+                <Image
+                  source={{ uri: ensureFullImageUrl(searchResult.image) }}
+                  style={styles.resultAvatar}
+                />
+              ) : (
+                <Image
+                  source={require('../../assets/images/personal.png')}
+                  style={styles.resultAvatar}
+                />
+              )}
 
               {/* Middle: User Info */}
               <View style={styles.resultInfo}>

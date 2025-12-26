@@ -4,7 +4,12 @@
       "Bash(npm install:*)",
       "Bash(cat:*)",
       "Bash(curl:*)",
-      "Bash(powershell -Command \"Get-ChildItem -Path src -Recurse -Filter *.tsx | ForEach-Object { \\(Get-Content $_FullName\\) -replace ''anonymous\\\\.png'', ''personal.png'' | Set-Content $_FullName }\")"
+      "Bash(powershell -Command \"Get-ChildItem -Path src -Recurse -Filter *.tsx | ForEach-Object { \\(Get-Content $_FullName\\) -replace ''anonymous\\\\.png'', ''personal.png'' | Set-Content $_FullName }\")",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx expo:*)",
+      "Bash(.gradlew.bat clean:*)",
+      "Bash(powershell -Command \"cd android; .\\\\gradlew.bat clean\")",
+      "Bash(npm uninstall:*)"
     ],
     "deny": [],
     "ask": []

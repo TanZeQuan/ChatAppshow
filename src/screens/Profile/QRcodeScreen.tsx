@@ -19,6 +19,7 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
 import { useUserStore } from '../../store/userStore';
+import { ensureFullImageUrl } from '../../api/service';
 
 const { width } = Dimensions.get('window');
 
@@ -261,7 +262,7 @@ END:VCARD`;
                             >
                                 {userAvatar ? (
                                     <Image
-                                        source={{ uri: userAvatar }}
+                                        source={{ uri: ensureFullImageUrl(userAvatar) }}
                                         style={styles.avatarImage}
                                     />
                                 ) : (

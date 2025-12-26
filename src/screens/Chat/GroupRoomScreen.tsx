@@ -9,12 +9,10 @@ import {
     Alert,
     Dimensions,
     FlatList,
-    Image,
     KeyboardAvoidingView,
     Platform,
     RefreshControl,
     Text,
-    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
