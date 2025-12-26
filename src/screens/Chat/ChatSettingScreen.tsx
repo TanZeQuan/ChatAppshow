@@ -26,18 +26,19 @@ interface RouteParams {
   chatId: string;
   chatName: string;
   avatar?: string;
+  otherUserId?: string; // Correctly receive the other user's ID
 }
 
 export default function ChatSettingScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const params = route.params as RouteParams;
-  const { chatId, chatName, avatar } = params;
+  // Use otherUserId for logic, fallback to chatId for safety (though it's incorrect)
+  const { chatId, chatName, avatar, otherUserId } = params;
 
   const { clearChat, getChatById, addChat } = useChatStore();
   const { getContactById, removeContact } = useContactStore();
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { user } = useUserStore();
+  const { user: currentUser } = useUserStore(); // Get current user
 
   const [pushNotification, setPushNotification] = useState(false);
   const [topNotification, setTopNotification] = useState(false);
@@ -49,7 +50,7 @@ export default function ChatSettingScreen() {
   useEffect(() => {
     loadChatSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatId]);
+  }, [chatId, otherUserId]);
 
   const loadChatSettings = async () => {
     try {
@@ -66,7 +67,7 @@ export default function ChatSettingScreen() {
 
       // Get contact info if it's a personal chat
       if (!chat?.isGroup) {
-        const contact = getContactById(chatId);
+        const contact = getContactById(otherUserId || chatId); // Prefer using otherUserId
         setContactInfo(contact);
 
         // Get friend list_id for block/delete operations
@@ -82,9 +83,13 @@ export default function ChatSettingScreen() {
 
   // 获取好友关系的 list_id
   const loadFriendListId = async () => {
+    if (!otherUserId || !currentUser) {
+      console.log("Cannot load friend list ID: otherUserId or current user is missing.");
+      return;
+    }
     try {
-      // Get friends list with status 2 (Accepted friends)
-      const result = await readFriends(2);
+      // Use status 1 as per previous correction
+      const result = await readFriends(1);
 
       if (result.success && result.data) {
         // Search in both request and approve arrays
@@ -93,17 +98,18 @@ export default function ChatSettingScreen() {
           ...(result.data.approve || [])
         ];
 
-        // Find the friend relationship for this chatId
+        // Find the friend relationship using the correct otherUserId
         const friendRelation = allFriends.find((friend: any) => {
-          // Check if this friend matches the chatId
-          return friend.request_id === chatId || friend.approve_id === chatId;
+          // A friendship must involve both the current user and the other user.
+          const participants = [friend.request_id, friend.approve_id];
+          return participants.includes(currentUser.id) && participants.includes(otherUserId);
         });
 
         if (friendRelation) {
           setFriendListId(friendRelation.list_id);
           console.log("Found friend list_id:", friendRelation.list_id);
         } else {
-          console.log("No friend relationship found for chatId:", chatId);
+          console.log(`No friend relationship found for user: ${otherUserId}`);
         }
       }
     } catch (error) {

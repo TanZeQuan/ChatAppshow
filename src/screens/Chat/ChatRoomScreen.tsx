@@ -617,10 +617,13 @@ export default function ChatRoomScreen() {
         memberIds: chat.memberIds || [],
       });
     } else {
+      // For private chats, find the other user's ID
+      const otherUserId = chatMembers.find(id => id !== currentUserId);
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
-        avatar: chat?.avatar || ''
+        avatar: chat?.avatar || '',
+        otherUserId: otherUserId, // Pass the other user's ID
       });
     }
   };

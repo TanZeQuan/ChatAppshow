@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { createPrivateChat, readUserChats } from "../../api/Chat";
+import { createPrivateChat, readChatMessages, readUserChats } from "../../api/Chat";
 import { readFriends } from "../../api/Friend";
 import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
@@ -196,45 +196,73 @@ export default function ContactsScreen() {
       return;
     }
 
-    // 从Zustand store获取整个chatList
-    const { chatList } = useChatStore.getState();
-
-    // 查找是否已存在与该联系人的1对1聊天
-    // 对于私聊，后端返回的 name 就是对方的名字，所以直接通过名字匹配即可
-    const existingChat = chatList.find(
-      (chat) =>
-        !chat.isGroup && // 私聊（istype: 1）
-        chat.name === contact.name // 名字匹配
-    );
-
-    if (existingChat) {
-      // 如果找到了，直接导航到聊天室
-      parentNavigation.navigate("ChatStack", {
-        screen: "ChatRoom",
-        params: {
-          chatId: existingChat.id,
-          chatName: existingChat.name,
-          isGroup: false,
-        },
-      });
-      return; // 结束函数
-    }
-
-    // 如果没找到，执行创建新聊天的逻辑
     try {
-      // console.log('Creating private chat with contact:', contact.id);
+      console.log('🔍 Searching for existing chat with contact:', contact.name);
 
-      // 先创建私聊，获取真正的 chatId
+      // ✅ 直接调用 API 获取所有聊天记录
+      const chatsResult = await readUserChats(currentUserId);
+
+      if (chatsResult.success && chatsResult.data) {
+        const allChats = chatsResult.data;
+
+        // ✅ 查找与该联系人的私聊：type=1 且 name 匹配
+        const existingChat = allChats.find((c: any) => {
+          const chatType = c.type || c.istype;
+          const isPrivateChat = chatType === 1 || chatType === '1';
+
+          if (!isPrivateChat) return false;
+
+          const chatName = c.name || c.chat_name || '';
+          return chatName === contact.name;
+        });
+
+        if (existingChat) {
+          // ✅ 找到了已存在的聊天，直接跳转
+          const chatId = existingChat.chat_id;
+          const chatName = existingChat.name || existingChat.chat_name || contact.name;
+
+          console.log('✅ Found existing private chat:', chatId, 'with name:', chatName);
+
+          // 同时更新 store（保持数据同步）
+          addChat({
+            id: chatId,
+            name: chatName,
+            avatar: existingChat.image || existingChat.avatar || contact.avatar,
+            isGroup: false,
+            members: existingChat.members || [],
+            memberIds: existingChat.member_ids || existingChat.memberIds || existingChat.user_ids || [],
+            lastMessage: existingChat.last_message || '',
+            timestamp: existingChat.last_message_time || existingChat.timestamp || new Date().toISOString(),
+            unreadCount: existingChat.unread_count || existingChat.unread || 0,
+          });
+
+          parentNavigation.navigate("ChatStack", {
+            screen: "ChatRoom",
+            params: {
+              chatId: chatId,
+              chatName: chatName,
+              isGroup: false,
+            },
+          });
+          return;
+        }
+      }
+
+      // ✅ API 中没找到，创建新聊天
+      console.log('📝 No existing chat found, creating new chat with:', contact.name);
+
       const result = await createPrivateChat({
         name: contact.name,
         user_id: currentUserId,
-        chat_with: contact.id, // 联系人ID
+        chat_with: contact.id,
       });
 
       if (result.success && result.data?.response) {
-        const newChatId = result.data.response; // 真正的 chatID（IM75356175）
+        const newChatId = result.data.response;
 
-        // 💾 保存 chat 信息到 store，包括 memberIds
+        console.log('✅ Chat created successfully:', newChatId);
+
+        // 保存到 store
         addChat({
           id: newChatId,
           name: contact.name,
@@ -248,72 +276,122 @@ export default function ContactsScreen() {
               avatar: user?.avatar || "",
             },
           ],
-          memberIds: [contact.id, currentUserId], // ✅ 包括双方的 ID
+          memberIds: [contact.id, currentUserId],
           lastMessage: "开始聊天",
           timestamp: new Date().toISOString(),
           unreadCount: 0,
           online: contact.online || false,
         });
 
-        // console.log('✅ Chat saved to store with memberIds:', [contact.id, currentUserId]);
-
-        // 使用返回的真正的 chat_id 导航
+        // 跳转到聊天室
         parentNavigation.navigate("ChatStack", {
           screen: "ChatRoom",
           params: {
-            chatId: newChatId, // ✅ 真正的 chatID（IM75356175）
+            chatId: newChatId,
             chatName: contact.name,
             isGroup: false,
           },
         });
       } else if (result.success && result.message === "Chat existed.") {
-        // WORKAROUND 2.0: Find the new chat by diffing the chat list before and after refreshing.
-        const oldChatIds = new Set(useChatStore.getState().chatList.map(c => c.id));
+        // ✅ 后端说聊天已存在，但没返回 chat_id
+        console.log('📋 Backend says chat existed, searching all private chats...');
 
-        // This is a simplified refresh function that only updates chat list
-        const refreshChatList = async (userId: string) => {
-            const chatsResult = await readUserChats(userId);
-            if (chatsResult.success && chatsResult.data) {
-                const { setChats } = useChatStore.getState();
-                const formattedChats = chatsResult.data.map((chat: any) => ({
-                    id: chat.chat_id,
-                    name: chat.name || chat.chat_name || '未命名聊天',
-                    avatar: chat.image || chat.avatar || null,
-                    isGroup: chat.type === 2 || chat.isGroup || false,
-                    members: chat.members || [],
-                    memberIds: chat.member_ids || chat.memberIds || chat.user_ids || [],
-                    lastMessage: chat.last_message || '',
-                    timestamp: chat.last_message_time || chat.timestamp || new Date().toISOString(),
-                    unreadCount: chat.unread_count || 0,
-                }));
-                setChats(formattedChats);
-            }
-        };
+        const retryResult = await readUserChats(currentUserId);
+        if (retryResult.success && retryResult.data) {
+          const allChats = retryResult.data;
 
-        await refreshChatList(currentUserId);
-        
-        const updatedChatList = useChatStore.getState().chatList;
-        const newlyFoundChat = updatedChatList.find(c => !oldChatIds.has(c.id));
-
-        if (newlyFoundChat) {
-          parentNavigation.navigate("ChatStack", {
-            screen: "ChatRoom",
-            params: {
-              chatId: newlyFoundChat.id,
-              chatName: contact.name, // Use the name from the contact that was clicked
-              isGroup: false,
-            },
+          // 获取所有私聊
+          const privateChats = allChats.filter((c: any) => {
+            const chatType = c.type || c.istype;
+            return chatType === 1 || chatType === '1';
           });
-        } else {
-          console.error('❌ Failed to find a new chat after refresh. The backend might not be listing it in time.');
-          Alert.alert("无法进入聊天", "请下拉刷新聊天列表后重试。");
+
+          console.log(`🔍 Found ${privateChats.length} private chats, checking each for members...`);
+
+          // 遍历所有私聊，逐个获取成员信息
+          let foundChat = null;
+
+          for (const chat of privateChats) {
+            try {
+              // 调用 readChatMessages 获取成员信息（通过 group 字段）
+              const messagesResult = await readChatMessages({
+                chat_id: chat.chat_id,
+                user_id: currentUserId,
+                offset: 0,
+              });
+
+              if (messagesResult.success && messagesResult.data) {
+                const groupMembers = messagesResult.data.group || [];
+                const memberIds = groupMembers.map((m: any) => m.user_id);
+
+                console.log(`📝 Chat ${chat.chat_id} (${chat.name}) has members:`, memberIds);
+
+                // 检查是否包含目标联系人
+                if (memberIds.includes(contact.id)) {
+                  console.log(`✅ Found matching chat: ${chat.chat_id}`);
+                  foundChat = chat;
+                  break; // 找到了，停止循环
+                }
+              }
+            } catch (error) {
+              console.error(`Error checking chat ${chat.chat_id}:`, error);
+            }
+          }
+
+          if (foundChat) {
+            const chatId = foundChat.chat_id;
+            const chatName = foundChat.name || foundChat.chat_name || contact.name;
+
+            console.log('✅ Found chat by checking members:', chatId);
+
+            // 更新 store
+            addChat({
+              id: chatId,
+              name: chatName,
+              avatar: foundChat.image || foundChat.avatar || contact.avatar,
+              isGroup: false,
+              members: foundChat.members || [],
+              memberIds: [],
+              lastMessage: foundChat.last_message || '',
+              timestamp: foundChat.last_message_time || foundChat.timestamp || new Date().toISOString(),
+              unreadCount: foundChat.unread_count || foundChat.unread || 0,
+            });
+
+            parentNavigation.navigate("ChatStack", {
+              screen: "ChatRoom",
+              params: {
+                chatId: chatId,
+                chatName: chatName,
+                isGroup: false,
+              },
+            });
+          } else {
+            console.error('❌ Still cannot find chat after checking all private chats');
+            console.log('🔍 Looking for contact with:');
+            console.log('  - contact.name:', contact.name);
+            console.log('  - contact.id:', contact.id);
+            console.log('  - currentUserId:', currentUserId);
+
+            console.log('📊 ALL private chats from backend (type=1):');
+            const privateChats = allChats.filter((c: any) => {
+              const chatType = c.type || c.istype;
+              return chatType === 1 || chatType === '1';
+            });
+
+            privateChats.forEach((c: any, index: number) => {
+              console.log(`\n--- Private Chat ${index + 1} ---`);
+              console.log('Full JSON:', JSON.stringify(c, null, 2));
+            });
+
+            Alert.alert("无法进入聊天", `后端说聊天已存在，但遍历所有私聊后仍找不到与 "${contact.name}" 的聊天。\n\n建议：让后端在 "Chat existed" 时直接返回 chat_id。`);
+          }
         }
       } else {
         Alert.alert("提示", `无法创建聊天: ${result.message || '请重试'}`);
       }
     } catch (error) {
-      // console.error('Error creating private chat:', error);
-      Alert.alert("错误", "创建聊天时出错");
+      console.error('Error in handleContactPress:', error);
+      Alert.alert("错误", "处理联系人点击时出错");
     }
   };
 
