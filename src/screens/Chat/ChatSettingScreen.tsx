@@ -1,27 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  Switch,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRoute, useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, borders, typography } from "../../styles";
-import { useChatStore } from '../../store/chatStore';
-import { useContactStore } from '../../store/contactStore';
-import { useUserStore } from '../../store/userStore';
-import { 
+import { useNavigation, useRoute } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {
   blockUser,
   deleteFriend,
   readFriends
 } from '../../api/Friend';
+import { useChatStore } from '../../store/chatStore';
+import { useContactStore } from '../../store/contactStore';
+import { useUserStore } from '../../store/userStore';
+import { borders, colors, typography } from "../../styles";
 
 interface RouteParams {
   chatId: string;
@@ -376,7 +375,7 @@ export default function ChatSettingScreen() {
         </View>
 
         {/* Chat Settings Section */}
-        <Text style={styles.sectionHeader}>聊天设置</Text>
+        {/* <Text style={styles.sectionHeader}>聊天设置</Text>
         <View style={styles.section}>
           <View style={styles.card}>
             <View style={[styles.settingItem, styles.borderBottom]}>
@@ -427,10 +426,10 @@ export default function ChatSettingScreen() {
               />
             </View>
           </View>
-        </View>
+        </View> */}
 
         {/* Privacy Section */}
-        <Text style={styles.sectionHeader}>隐私设置</Text>
+        {/* <Text style={styles.sectionHeader}>隐私设置</Text>
         <View style={styles.section}>
           <View style={styles.card}>
             <TouchableOpacity
@@ -452,7 +451,7 @@ export default function ChatSettingScreen() {
               <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
             </TouchableOpacity>
           </View>
-        </View>
+        </View> */}
 
         {/* Danger Zone Section */}
         <Text style={styles.sectionHeader}>危险操作</Text>
