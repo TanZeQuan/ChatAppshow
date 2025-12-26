@@ -89,6 +89,7 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
+  const [isNearBottom, setIsNearBottom] = useState(true); // ✅ Track if user is near bottom
 
   // ✅ Search functionality
   const {
@@ -98,8 +99,8 @@ export default function ChatRoomScreen() {
     disableSearch,
     setSearchQuery,
     filterMessages,
-    matchedIndices,
-    currentMatchIndex,
+    matchedMessageIds,
+    currentMatchId,
     currentMatchNumber,
     totalMatches,
     goToNextMatch,
@@ -108,6 +109,19 @@ export default function ChatRoomScreen() {
 
   // ✅ FlatList ref for scrolling to matched messages
   const flatListRef = useRef<FlatList>(null);
+
+  // ✅ Transform messages - must be declared before using in callbacks
+  const messages: DisplayMessage[] = useMemo(() => {
+    return storedMessages.map(msg => ({
+      ...msg,
+      sender: msg.senderId === currentUserId ? 'me' : 'other',
+      senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
+      // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
+      voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
+        ? String((msg.voiceUrl as any).message)
+        : msg.voiceUrl,
+    }));
+  }, [storedMessages, currentUserId, currentUserName, chatName]);
 
   // 🔧 Initialize chatMembers from store if available
   useEffect(() => {
@@ -142,6 +156,8 @@ export default function ChatRoomScreen() {
         setIsLoading(true);
       }
 
+      // ✅ Load more old messages: use current offset
+      // ✅ Refresh/Polling: always use offset 0 to get latest messages
       const currentOffset = loadMore ? offsetRef.current : 0;
 
       const result = await readChatMessages({
@@ -295,28 +311,44 @@ export default function ChatRoomScreen() {
 
           // Store messages in chatStore with deduplication
           const { setMessages } = useChatStore.getState();
+          const existingMessages = useChatStore.getState().chats[chatId] || [];
 
           if (loadMore) {
-            // Loading more messages - append and deduplicate
-            const existingMessages = useChatStore.getState().chats[chatId] || [];
+            // ✅ Loading more OLD messages - append to END of array (visual TOP)
             const allMessages = [...existingMessages, ...transformedMessages];
             const uniqueMessages = Array.from(
-              new Map(allMessages.map(m => [m.id, m])).values()
-            );
+              new Map(allMessages.map((m: any) => [m.id, m])).values()
+            ) as any[];
             setMessages(chatId, uniqueMessages);
+            offsetRef.current += apiMessages.length; // Increase offset
           } else {
-            // ✅ Refresh - deduplicate to prevent concurrent polling/websocket calls from creating duplicates
-            const uniqueMessages = Array.from(
-              new Map(transformedMessages.map(m => [m.id, m])).values()
-            );
-            setMessages(chatId, uniqueMessages);
-          }
-        }
+            // ✅ Polling/Refresh - only keep NEW messages (newer than current newest)
+            if (existingMessages.length === 0) {
+              // First load - use all messages
+              const uniqueMessages = Array.from(
+                new Map(transformedMessages.map((m: any) => [m.id, m])).values()
+              ) as any[];
+              setMessages(chatId, uniqueMessages);
+              offsetRef.current = uniqueMessages.length;
+            } else {
+              // Filter out messages that are truly new (not already in store)
+              const existingIds = new Set(existingMessages.map(m => m.id));
+              const newMessages = transformedMessages.filter(
+                (msg: any) => !existingIds.has(msg.id)
+              );
 
-        if (loadMore) {
-          offsetRef.current = currentOffset + apiMessages.length;
-        } else {
-          offsetRef.current = apiMessages.length;
+              if (newMessages.length > 0) {
+                // Insert new messages at START of array (visual BOTTOM)
+                const allMessages = [...newMessages, ...existingMessages];
+                const uniqueMessages = Array.from(
+                  new Map(allMessages.map((m: any) => [m.id, m])).values()
+                ) as any[];
+                setMessages(chatId, uniqueMessages);
+                // Don't change offsetRef for polling - keep history
+              }
+              // If no new messages, don't update anything - keep existing messages
+            }
+          }
         }
       }
 
@@ -362,9 +394,13 @@ export default function ChatRoomScreen() {
     }
   }, [params.searchMode, enableSearch]);
 
-  // ✅ Scroll to matched message
-  const scrollToMatch = useCallback((messageIndex: number) => {
-    if (messageIndex >= 0 && flatListRef.current) {
+  // ✅ Scroll to matched message by ID
+  const scrollToMatch = useCallback((messageId: string) => {
+    if (!messageId || !flatListRef.current) return;
+
+    // Find the index of the message with this ID
+    const messageIndex = messages.findIndex(msg => msg.id === messageId);
+    if (messageIndex >= 0) {
       try {
         flatListRef.current.scrollToIndex({
           index: messageIndex,
@@ -375,21 +411,21 @@ export default function ChatRoomScreen() {
         console.log('Failed to scroll to match:', error);
       }
     }
-  }, []);
+  }, [messages]);
 
   // ✅ Handle next match navigation
   const handleNextMatch = useCallback(() => {
-    const nextMessageIndex = goToNextMatch(messages);
-    if (nextMessageIndex >= 0) {
-      scrollToMatch(nextMessageIndex);
+    const nextMessageId = goToNextMatch(messages);
+    if (nextMessageId) {
+      scrollToMatch(nextMessageId);
     }
   }, [goToNextMatch, scrollToMatch, messages]);
 
   // ✅ Handle previous match navigation
   const handlePrevMatch = useCallback(() => {
-    const prevMessageIndex = goToPrevMatch(messages);
-    if (prevMessageIndex >= 0) {
-      scrollToMatch(prevMessageIndex);
+    const prevMessageId = goToPrevMatch(messages);
+    if (prevMessageId) {
+      scrollToMatch(prevMessageId);
     }
   }, [goToPrevMatch, scrollToMatch, messages]);
 
@@ -398,15 +434,41 @@ export default function ChatRoomScreen() {
   useEffect(() => {
     if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
       // Search query changed - scroll to first match
-      if (matchedIndices.length > 0) {
-        scrollToMatch(matchedIndices[0]);
+      if (matchedMessageIds.length > 0) {
+        scrollToMatch(matchedMessageIds[0]);
       }
       prevSearchQueryRef.current = searchQuery;
     } else if (!searchMode || !searchQuery.trim()) {
       // Reset when exiting search mode
       prevSearchQueryRef.current = '';
     }
-  }, [searchMode, searchQuery, matchedIndices, scrollToMatch]);
+  }, [searchMode, searchQuery, matchedMessageIds, scrollToMatch]);
+
+  // ✅ Handle scroll to detect if user is near bottom
+  const handleScroll = useCallback((event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    // FlatList is inverted, so contentOffset.y near 0 means at bottom (newest messages)
+    const distanceFromTop = contentOffset.y;
+    const nearBottom = distanceFromTop < 100; // Within 100 pixels of bottom
+    setIsNearBottom(nearBottom);
+  }, []);
+
+  // ✅ Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+  const prevMessageCountRef = useRef(messages.length);
+  useEffect(() => {
+    // Only scroll if messages increased (new message arrived)
+    if (messages.length > prevMessageCountRef.current && isNearBottom && messages.length > 0) {
+      // Small delay to ensure FlatList has rendered the new message
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({
+          index: 0,
+          animated: true,
+          viewPosition: 0
+        });
+      }, 100);
+    }
+    prevMessageCountRef.current = messages.length;
+  }, [messages.length, isNearBottom]);
 
   // Use refs to store stable references for WebSocket callback
   const chatIdRef = useRef(chatId);
@@ -440,6 +502,13 @@ export default function ChatRoomScreen() {
     setRefreshing(true);
     await loadMessages(false, false); // No loading spinner, just refresh control
     setRefreshing(false);
+  };
+
+  // ✅ Handle loading more old messages when scrolling to top
+  const handleLoadMore = () => {
+    if (!isLoading) {
+      loadMessages(true, true); // loadMore=true, showLoading=true
+    }
   };
 
   const startRecording = async () => {
@@ -715,20 +784,12 @@ export default function ChatRoomScreen() {
     };
   }, [sound]);
 
-  const messages: DisplayMessage[] = useMemo(() => {
-    const transformedMessages = storedMessages.map(msg => ({
-      ...msg,
-      sender: msg.senderId === currentUserId ? 'me' : 'other',
-      senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
-      // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
-      voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
-        ? String((msg.voiceUrl as any).message)
-        : msg.voiceUrl,
-    }));
-
-    // ✅ Apply search filter if in search mode
-    return searchMode ? filterMessages(transformedMessages) : transformedMessages;
-  }, [storedMessages, currentUserId, currentUserName, chatName, searchMode, filterMessages]);
+  // ✅ Calculate search matches separately in useEffect
+  useEffect(() => {
+    if (searchMode && searchQuery.trim()) {
+      filterMessages(messages);
+    }
+  }, [messages, searchMode, searchQuery, filterMessages]);
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
@@ -936,9 +997,8 @@ export default function ChatRoomScreen() {
     const isSearchMatched = searchMode && searchQuery.trim() &&
                             messageText.toLowerCase().includes(searchQuery.toLowerCase());
 
-    // ✅ Check if this is the currently focused match
-    const isCurrentMatch = searchMode && matchedIndices.length > 0 &&
-                           index === matchedIndices[currentMatchIndex];
+    // ✅ Check if this is the currently focused match (by message ID)
+    const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
 
     return (
       <View style={[
@@ -946,13 +1006,16 @@ export default function ChatRoomScreen() {
         item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
       ]}>
         {item.sender === 'other' && (
-          <View style={roomStyles.avatar}>
-            <Image
-              source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
-              style={roomStyles.avatarImage}
-            />
-          </View>
-        )}
+                                              <View style={roomStyles.avatar}>
+                                                <Image
+                                                  source={
+                                                    !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                                                      ? require('../../assets/images/personal.png')
+                                                      : { uri: item.avatar }
+                                                  }
+                                                  style={roomStyles.avatarImage}
+                                                />
+                                              </View>        )}
         <View style={[
           roomStyles.bubble,
           item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
@@ -1034,7 +1097,11 @@ export default function ChatRoomScreen() {
         {item.sender === 'me' && (
           <View style={roomStyles.avatar}>
             <Image
-              source={currentUserAvatar ? { uri: currentUserAvatar } : require('../../assets/images/anonymous.png')}
+              source={
+                !currentUserAvatar || currentUserAvatar.trim() === '' || currentUserAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                  ? require('../../assets/images/personal.png')
+                  : { uri: currentUserAvatar }
+              }
               style={roomStyles.avatarImage}
             />
           </View>
@@ -1139,6 +1206,13 @@ export default function ChatRoomScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
             inverted
+            maintainVisibleContentPosition={{
+              minIndexForVisible: 0,
+            }}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            onScroll={handleScroll} // ✅ Track scroll position
+            scrollEventThrottle={16} // ✅ Smooth scroll tracking
             onScrollToIndexFailed={(info) => {
               // Handle scroll failure by waiting and retrying
               setTimeout(() => {

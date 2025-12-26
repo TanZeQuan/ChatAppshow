@@ -167,8 +167,8 @@ export default function ChatSettingScreen() {
   };
 
   const handleSearchHistory = () => {
-    // ✅ Navigate back and update params - will merge with existing screen
-    navigation.navigate('ChatRoom', {
+    // ✅ Replace instead of navigate to avoid navigation stack buildup
+    navigation.replace('ChatRoom', {
       chatId,
       chatName,
       searchMode: true,
@@ -341,8 +341,12 @@ export default function ChatSettingScreen() {
         {/* Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.avatarContainer}>
-            <Image
-              source={displayAvatar ? { uri: displayAvatar } : require('../../assets/images/anonymous.png')}
+                        <Image
+              source={
+                !displayAvatar || displayAvatar.trim() === '' || displayAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                  ? require('../../assets/images/personal.png')
+                  : { uri: displayAvatar }
+              }
               style={styles.avatarImage}
             />
           </View>

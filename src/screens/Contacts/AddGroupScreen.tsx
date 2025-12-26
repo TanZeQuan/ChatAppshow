@@ -178,7 +178,7 @@ export default function AddGroupScreen() {
       setIsLoading(false);
 
       // ✅ Check for success - handle different response formats
-      const chatId = result?.chat_id || result?.chatId || result?.id;
+      const chatId = result?.chat_id || result?.chatId || result?.id || result?.response;
       const hasError = result?.error === true;
 
       console.log('📩 [Group Create] Extracted chatId:', chatId);
@@ -242,10 +242,14 @@ export default function AddGroupScreen() {
               {
                 text: "确定",
                 onPress: () => {
-                  // Navigate to the newly created group chat room
-                  navigation.navigate("ChatRoomScreen", {
-                    chatId: chatId, // ✅ Use extracted chatId
-                    chatName: groupName.trim(),
+                  // Navigate to the newly created group chat room (cross-stack navigation)
+                  navigation.navigate("ChatStack" as any, {
+                    screen: "GroupRoom",
+                    params: {
+                      chatId: chatId, // ✅ Use extracted chatId
+                      chatName: groupName.trim(),
+                      isGroup: true,
+                    }
                   });
                 },
               },
@@ -283,7 +287,11 @@ export default function AddGroupScreen() {
       >
         <View style={styles.contactLeft}>
           <Image
-            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
+            source={
+              !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                ? require('../../assets/images/personal.png')
+                : { uri: item.avatar }
+            }
             style={styles.contactAvatar}
           />
           <View style={styles.contactInfo}>

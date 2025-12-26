@@ -14,7 +14,6 @@ import {
     KeyboardAvoidingView,
     Platform,
     RefreshControl,
-    StyleSheet as RNStyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
@@ -29,8 +28,7 @@ import { useSearchChatHistory } from '../../components/ChatHistory';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
-import { borders, colors, typography } from "../../styles";
-import { baseRoomStyles, groupRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
+import { createRoomStyles, groupRoomSpecificStyles } from "../../styles/chatRoomStyles";
 
 const { width, height } = Dimensions.get("window");
 
@@ -92,6 +90,7 @@ export default function GroupRoomScreen() {
     const [refreshing, setRefreshing] = useState(false); // ✅ For RefreshControl
     const [hasMoreMessages, setHasMoreMessages] = useState(true);
     const [chatMembers, setChatMembers] = useState<string[]>([]);  // Store chat member IDs
+    const [isNearBottom, setIsNearBottom] = useState(true); // ✅ Track if user is near bottom
 
     // ✅ Search functionality
     const {
@@ -101,8 +100,8 @@ export default function GroupRoomScreen() {
         disableSearch,
         setSearchQuery,
         filterMessages,
-        matchedIndices,
-        currentMatchIndex,
+        matchedMessageIds,
+        currentMatchId,
         currentMatchNumber,
         totalMatches,
         goToNextMatch,
@@ -397,7 +396,7 @@ export default function GroupRoomScreen() {
 
     // ✅ Transform messages - directly use name/avatar from stored messages
     const messages: DisplayMessage[] = useMemo(() => {
-        const transformedMessages = storedMessages.map(msg => {
+        return storedMessages.map(msg => {
             const finalName = msg.senderId === currentUserId
                 ? `${currentUser?.name || '我'} (我)`
                 : (msg.name || '未知成员');
@@ -411,16 +410,22 @@ export default function GroupRoomScreen() {
                     : msg.avatar,
             };
         });
+    }, [storedMessages, currentUserId, currentUser]);
 
-        // ✅ Apply search filter if in search mode
-        return searchMode ? filterMessages(transformedMessages) : transformedMessages;
-    }, [storedMessages, currentUserId, currentUser, searchMode, filterMessages]);
+    // ✅ Calculate search matches separately in useEffect
+    useEffect(() => {
+        if (searchMode && searchQuery.trim()) {
+            filterMessages(messages);
+        }
+    }, [messages, searchMode, searchQuery, filterMessages]);
 
     // Load initial messages
     const loadMessages = useCallback(async (isRefresh = false, showLoading = true) => {
         if (!currentUserId || !chatId) return;
 
-        const currentOffset = isRefresh ? 0 : offsetRef.current; // ✅ Use offsetRef
+        // ✅ Load more old messages: use current offset
+        // ✅ Refresh/Polling: always use offset 0 to get latest messages
+        const currentOffset = isRefresh ? 0 : offsetRef.current;
 
         if (showLoading) {
             if (isRefresh) {
@@ -591,26 +596,43 @@ export default function GroupRoomScreen() {
                         };
                     });
 
-                    if (isRefresh) {
-                        // ✅ Always deduplicate, even on refresh (to prevent concurrent calls from creating duplicates)
-                        const existingMessages = useChatStore.getState().chats[chatId] || [];
-                        const allMessages = [...transformedMessages];
+                    const existingMessages = useChatStore.getState().chats[chatId] || [];
 
-                        // If we have existing messages and new messages, prefer new messages but deduplicate by ID
-                        const uniqueMessages = Array.from(
-                            new Map(allMessages.map(m => [m.id, m])).values()
-                        );
-
-                        setMessages(chatId, uniqueMessages);
-                        offsetRef.current = uniqueMessages.length;
-                    } else {
-                        const existingMessages = useChatStore.getState().chats[chatId] || [];
+                    if (!isRefresh) {
+                        // ✅ Loading more OLD messages - append to END of array (visual TOP)
                         const allMessages = [...existingMessages, ...transformedMessages];
                         const uniqueMessages = Array.from(
-                            new Map(allMessages.map(m => [m.id, m])).values()
-                        );
+                            new Map(allMessages.map((m: any) => [m.id, m])).values()
+                        ) as any[];
                         setMessages(chatId, uniqueMessages);
-                        offsetRef.current = uniqueMessages.length;
+                        offsetRef.current += apiMessages.length; // Increase offset
+                    } else {
+                        // ✅ Polling/Refresh - only keep NEW messages (newer than current newest)
+                        if (existingMessages.length === 0) {
+                            // First load - use all messages
+                            const uniqueMessages = Array.from(
+                                new Map(transformedMessages.map((m: any) => [m.id, m])).values()
+                            ) as any[];
+                            setMessages(chatId, uniqueMessages);
+                            offsetRef.current = uniqueMessages.length;
+                        } else {
+                            // Filter out messages that are truly new (not already in store)
+                            const existingIds = new Set(existingMessages.map(m => m.id));
+                            const newMessages = transformedMessages.filter(
+                                (msg: any) => !existingIds.has(msg.id)
+                            );
+
+                            if (newMessages.length > 0) {
+                                // Insert new messages at START of array (visual BOTTOM)
+                                const allMessages = [...newMessages, ...existingMessages];
+                                const uniqueMessages = Array.from(
+                                    new Map(allMessages.map((m: any) => [m.id, m])).values()
+                                ) as any[];
+                                setMessages(chatId, uniqueMessages);
+                                // Don't change offsetRef for polling - keep history
+                            }
+                            // If no new messages, don't update anything - keep existing messages
+                        }
                     }
                 }
             } else {
@@ -635,8 +657,7 @@ export default function GroupRoomScreen() {
     // Handle pull-to-refresh
     const handleRefresh = async () => {
         setRefreshing(true);
-        offsetRef.current = 0; // Reset offset
-        await loadMessages(true, false); // isRefresh=true to reload all messages
+        await loadMessages(true, false); // isRefresh=true to get new messages only
         setRefreshing(false);
     };
 
@@ -657,9 +678,13 @@ export default function GroupRoomScreen() {
         }
     }, [params.searchMode, enableSearch]);
 
-    // ✅ Scroll to matched message
-    const scrollToMatch = useCallback((messageIndex: number) => {
-        if (messageIndex >= 0 && flatListRef.current) {
+    // ✅ Scroll to matched message by ID
+    const scrollToMatch = useCallback((messageId: string) => {
+        if (!messageId || !flatListRef.current) return;
+
+        // Find the index of the message with this ID
+        const messageIndex = messages.findIndex(msg => msg.id === messageId);
+        if (messageIndex >= 0) {
             try {
                 flatListRef.current.scrollToIndex({
                     index: messageIndex,
@@ -670,21 +695,21 @@ export default function GroupRoomScreen() {
                 console.log('Failed to scroll to match:', error);
             }
         }
-    }, []);
+    }, [messages]);
 
     // ✅ Handle next match navigation
     const handleNextMatch = useCallback(() => {
-        const nextMessageIndex = goToNextMatch(messages);
-        if (nextMessageIndex >= 0) {
-            scrollToMatch(nextMessageIndex);
+        const nextMessageId = goToNextMatch(messages);
+        if (nextMessageId) {
+            scrollToMatch(nextMessageId);
         }
     }, [goToNextMatch, scrollToMatch, messages]);
 
     // ✅ Handle previous match navigation
     const handlePrevMatch = useCallback(() => {
-        const prevMessageIndex = goToPrevMatch(messages);
-        if (prevMessageIndex >= 0) {
-            scrollToMatch(prevMessageIndex);
+        const prevMessageId = goToPrevMatch(messages);
+        if (prevMessageId) {
+            scrollToMatch(prevMessageId);
         }
     }, [goToPrevMatch, scrollToMatch, messages]);
 
@@ -693,15 +718,41 @@ export default function GroupRoomScreen() {
     useEffect(() => {
         if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
             // Search query changed - scroll to first match
-            if (matchedIndices.length > 0) {
-                scrollToMatch(matchedIndices[0]);
+            if (matchedMessageIds.length > 0) {
+                scrollToMatch(matchedMessageIds[0]);
             }
             prevSearchQueryRef.current = searchQuery;
         } else if (!searchMode || !searchQuery.trim()) {
             // Reset when exiting search mode
             prevSearchQueryRef.current = '';
         }
-    }, [searchMode, searchQuery, matchedIndices, scrollToMatch]);
+    }, [searchMode, searchQuery, matchedMessageIds, scrollToMatch]);
+
+    // ✅ Handle scroll to detect if user is near bottom
+    const handleScroll = useCallback((event: any) => {
+        const { contentOffset } = event.nativeEvent;
+        // FlatList is inverted, so contentOffset.y near 0 means at bottom (newest messages)
+        const distanceFromTop = contentOffset.y;
+        const nearBottom = distanceFromTop < 100; // Within 100 pixels of bottom
+        setIsNearBottom(nearBottom);
+    }, []);
+
+    // ✅ Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+    const prevMessageCountRef = useRef(messages.length);
+    useEffect(() => {
+        // Only scroll if messages increased (new message arrived)
+        if (messages.length > prevMessageCountRef.current && isNearBottom && messages.length > 0) {
+            // Small delay to ensure FlatList has rendered the new message
+            setTimeout(() => {
+                flatListRef.current?.scrollToIndex({
+                    index: 0,
+                    animated: true,
+                    viewPosition: 0
+                });
+            }, 100);
+        }
+        prevMessageCountRef.current = messages.length;
+    }, [messages.length, isNearBottom]);
 
     // Use refs to store stable references for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -952,7 +1003,7 @@ export default function GroupRoomScreen() {
 
     const handleLoadMore = () => {
         if (!isLoading && hasMoreMessages) {
-            loadMessages(false);
+            loadMessages(false, true); // isRefresh=false for loading more old messages
         }
     };
 
@@ -964,9 +1015,8 @@ export default function GroupRoomScreen() {
         const isSearchMatched = searchMode && searchQuery.trim() &&
                                 messageText.toLowerCase().includes(searchQuery.toLowerCase());
 
-        // ✅ Check if this is the currently focused match
-        const isCurrentMatch = searchMode && matchedIndices.length > 0 &&
-                               index === matchedIndices[currentMatchIndex];
+        // ✅ Check if this is the currently focused match (by message ID)
+        const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
 
         return (
             <View style={[
@@ -976,7 +1026,11 @@ export default function GroupRoomScreen() {
                 {item.sender === 'other' && (
                     <View style={roomStyles.avatar}>
                         <Image
-                            source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
+                            source={
+                                !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                                    ? require('../../assets/images/personal.png')
+                                    : { uri: item.avatar }
+                            }
                             style={roomStyles.avatarImage}
                         />
                     </View>
@@ -1065,7 +1119,11 @@ export default function GroupRoomScreen() {
                 {item.sender === 'me' && (
                     <View style={roomStyles.avatar}>
                         <Image
-                            source={currentUser?.avatar ? { uri: currentUser.avatar } : require('../../assets/images/anonymous.png')}
+                            source={
+                                !currentUser?.avatar || currentUser.avatar.trim() === '' || currentUser.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                                    ? require('../../assets/images/personal.png')
+                                    : { uri: currentUser.avatar }
+                            }
                             style={roomStyles.avatarImage}
                         />
                     </View>
@@ -1159,9 +1217,9 @@ export default function GroupRoomScreen() {
                         </TouchableOpacity>
                         <View style={roomStyles.headerCenter}>
                             <Text style={roomStyles.headerTitle}>{chatName}</Text>
-                            <Text style={roomStyles.headerSubtitle}>
+                            {/* <Text style={roomStyles.headerSubtitle}>
                                 {groupChat?.members?.length || memberIds.length || 0} 位成员
-                            </Text>
+                            </Text> */}
                         </View>
                         <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
                             <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
@@ -1180,8 +1238,13 @@ export default function GroupRoomScreen() {
                         keyExtractor={(item) => item.id}
                         contentContainerStyle={roomStyles.chatList}
                         inverted
+                        maintainVisibleContentPosition={{
+                            minIndexForVisible: 0,
+                        }}
                         onEndReached={handleLoadMore}
                         onEndReachedThreshold={0.5}
+                        onScroll={handleScroll} // ✅ Track scroll position
+                        scrollEventThrottle={16} // ✅ Smooth scroll tracking
                         ListFooterComponent={renderFooter}
                         onScrollToIndexFailed={(info) => {
                             // Handle scroll failure by waiting and retrying

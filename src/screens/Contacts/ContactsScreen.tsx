@@ -454,7 +454,11 @@ export default function ContactsScreen() {
             >
               <View style={styles.avatarContainer}>
                 <Image
-                  source={item.avatar ? { uri: item.avatar } : require('../../assets/images/anonymous.png')}
+                  source={
+                    !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                      ? require('../../assets/images/personal.png')
+                      : { uri: item.avatar }
+                  }
                   style={styles.avatarImage}
                 />
                 {item.online && <View style={styles.onlineDot} />}

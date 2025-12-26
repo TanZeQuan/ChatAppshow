@@ -98,7 +98,7 @@ export default function EditProfileScreen() {
         {/* <View style={styles.row}>
           <Text style={styles.rowLabel}>头像</Text>
           <View style={styles.rightContent}>
-            <Image source={avatar ? { uri: avatar } : require('../../../assets/images/anonymous.png')} style={styles.avatar} />
+            <Image source={avatar ? { uri: avatar } : require('../../../assets/images/personal.png')} style={styles.avatar} />
           </View>
         </View> */}
 

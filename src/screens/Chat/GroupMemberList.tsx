@@ -175,7 +175,11 @@ export default function GroupMemberList() {
                 }}
             >
                 <Image
-                    source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
+                    source={
+                        !member.avatar || member.avatar.trim() === '' || member.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                            ? require('../../assets/images/personal.png')
+                            : { uri: member.avatar }
+                    }
                     style={styles.memberAvatar}
                 />
                 <View style={styles.memberInfo}>

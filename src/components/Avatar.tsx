@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Image, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AnonymousAvatar from '../assets/images/personal.png';
 
 interface AvatarProps {
   uri?: string | null;
@@ -20,7 +21,8 @@ export const Avatar: React.FC<AvatarProps> = ({
   const [imageError, setImageError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const shouldShowPlaceholder = !uri || imageError || uri.trim() === '';
+  const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+  const shouldShowPlaceholder = !uri || imageError || uri.trim() === '' || uri.trim() === placeholderUrl;
 
   const avatarStyle = {
     width: size,
@@ -31,9 +33,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   return (
     <View style={[styles.container, { width: size, height: size }]}>
       {shouldShowPlaceholder ? (
-        <View style={[styles.placeholder, avatarStyle]}>
-          <Ionicons name="person" size={size * 0.45} color="#fff" />
-        </View>
+        <Image source={AnonymousAvatar} style={avatarStyle} />
       ) : (
         <>
           {isLoading && (

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useState } from 'react';
 import {
@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readChatMessages, readUserChats } from '../../api/Chat';
+import { ensureFullImageUrl } from '../../api/service';
 import WebSocketManager from '../../services/WebSocketManager';
 import { ChatListItem, useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -54,9 +55,16 @@ export default function ChatListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUserId]);
 
-  // ✅ REMOVED: Don't auto-refresh on focus to preserve local timestamp updates
-  // Only refresh when WebSocket receives new messages
-  // This allows the "recently clicked chat" to stay at the top
+  // ✅ Refresh when screen regains focus (user returns from chat room)
+  // This syncs unread counts after backend clears them
+  useFocusEffect(
+    React.useCallback(() => {
+      if (currentUserId) {
+        console.log('👁️ [ChatList] Screen focused, syncing unread counts...');
+        silentRefresh();
+      }
+    }, [currentUserId])
+  );
 
   // Listen for WebSocket messages (GLOBAL - works even when not in chat room)
   useEffect(() => {
@@ -82,18 +90,24 @@ export default function ChatListScreen() {
   );
 
   const handleChatPress = (chat: any) => {
-    // ✅ Update timestamp when user clicks into chat
-    // This ensures the chat moves to the top of the list
+    // ✅ Get the latest chat data from store to avoid overwriting with stale data
+    const latestChat = getChatById(chat.id);
+
+    // ✅ Update only necessary fields (timestamp and unreadCount)
+    // Preserve other fields from store (including latest avatar)
     const newTimestamp = new Date().toISOString();
     const updatedChat = {
-      ...chat,
-      timestamp: newTimestamp, // Update to current time
+      ...(latestChat || chat), // Use latest data from store, fallback to item data
+      timestamp: newTimestamp,
+      unreadCount: 0, // ✅ Optimistically clear unread count
     };
 
-    console.log(`🔄 [ChatList] Updating chat "${chat.name}" timestamp:`, {
+    console.log(`🔄 [ChatList] Updating chat "${chat.name}":`, {
       old: chat.timestamp,
       new: newTimestamp,
       isGroup: chat.isGroup,
+      clearedUnread: chat.unreadCount,
+      usingStoreData: !!latestChat,
     });
 
     addChat(updatedChat); // Update in store
@@ -149,6 +163,17 @@ export default function ChatListScreen() {
           const backendMemberIds = chat.member_ids || chat.memberIds || chat.user_ids || [];
           const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : existingMemberIds;
 
+          // 🎯 Get avatar from API only
+          const isGroup = chat.istype === 2 || chat.type === 2 || chat.isGroup || false;
+          let finalAvatar = null;
+
+          // Use API image if available
+          const apiImage = chat.image || chat.avatar;
+          if (apiImage && apiImage.trim() !== '') {
+            // Convert relative path to full URL
+            finalAvatar = ensureFullImageUrl(apiImage);
+          }
+
           // Extract last message from message array or use existing data
           const lastMessageText = chat.message && chat.message.length > 0
             ? chat.message[chat.message.length - 1]?.message || ''
@@ -181,8 +206,8 @@ export default function ChatListScreen() {
           return {
             id: chat.chat_id,
             name: chat.name || chat.chat_name || '未命名聊天',
-            avatar: chat.image || chat.avatar || null,
-            isGroup: chat.istype === 2 || chat.type === 2 || chat.isGroup || false,
+            avatar: finalAvatar, // ✅ Use the corrected avatar
+            isGroup: isGroup,
             members: chat.members || [],
             memberIds: finalMemberIds,
             lastMessage: formatLastMessagePreview(lastMessageText, lastMessageType),
@@ -311,42 +336,56 @@ export default function ChatListScreen() {
   };
 
   const renderGroupAvatar = () => {
-    // ✅ 统一显示群组默认图标
+    // ✅ Display group default image
     return (
-      <View style={styles.groupAvatarPlaceholder}>
-        <Ionicons name="people" size={24} color="#999" />
-      </View>
+      <Image
+        source={require('../../assets/images/group.png')}
+        style={styles.avatar}
+      />
     );
   };
 
-  const renderChatItem = ({ item }: any) => (
-    <TouchableOpacity
-      style={styles.chatItem}
-      onPress={() => handleChatPress(item)}
-      activeOpacity={0.7}
-    >
-      <View style={styles.avatarContainer}>
-        {item.isGroup ? (
-          renderGroupAvatar()
-        ) : item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={styles.avatar} />
-        ) : (
-          <View style={styles.avatarPlaceholder}>
-            <Ionicons name="person" size={24} color="#999" />
-          </View>
-        )}
+  const renderChatItem = ({ item }: any) => {
+    // ✅ Helper function to check if avatar is valid
+    const isValidAvatar = (avatar: string | null | undefined): boolean => {
+      if (!avatar) return false;
+      const trimmed = avatar.trim();
+      if (trimmed === '') return false;
+      if (trimmed === 'https://balkingly-hemitropic-lelah.ngrok-free.dev') return false;
+      return true;
+    };
 
-        {/* Online indicator for individual chats */}
-        {!item.isGroup && item.online && (
-          <View style={styles.onlineIndicator} />
-        )}
-      </View>
+    return (
+      <TouchableOpacity
+        style={styles.chatItem}
+        onPress={() => handleChatPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.avatarContainer}>
+          {item.isGroup ? (
+            renderGroupAvatar()
+          ) : (
+            <Image
+              source={
+                isValidAvatar(item.avatar)
+                  ? { uri: item.avatar }
+                  : require('../../assets/images/personal.png')
+              }
+              style={styles.avatar}
+            />
+          )}
 
-      <View style={styles.chatContent}>
-        <View style={styles.chatHeader}>
-          <View style={styles.nameContainer}>
-            <Text style={styles.name}>{item.name}</Text>
-            {/* {item.isGroup && (
+          {/* Online indicator for individual chats */}
+          {!item.isGroup && item.online && (
+            <View style={styles.onlineIndicator} />
+          )}
+        </View>
+
+        <View style={styles.chatContent}>
+          <View style={styles.chatHeader}>
+            <View style={styles.nameContainer}>
+              <Text style={styles.name}>{item.name}</Text>
+              {/* {item.isGroup && (
               <View style={styles.groupBadge}>
                 <Ionicons name="people" size={12} color="#666" />
                 <Text style={styles.groupBadgeText}>
@@ -354,31 +393,32 @@ export default function ChatListScreen() {
                 </Text>
               </View>
             )} */}
+            </View>
+
+            <View style={styles.rightSection}>
+              {item.timestamp && (
+                <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
+              )}
+            </View>
           </View>
 
-          <View style={styles.rightSection}>
-            {item.timestamp && (
-              <Text style={styles.time}>{formatTime(item.timestamp)}</Text>
+          <View style={styles.messageRow}>
+            <Text style={styles.message} numberOfLines={1}>
+              {item.lastMessage}
+            </Text>
+
+            {item.unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>
+                  {item.unreadCount > 99 ? '99+' : item.unreadCount}
+                </Text>
+              </View>
             )}
           </View>
         </View>
-
-        <View style={styles.messageRow}>
-          <Text style={styles.message} numberOfLines={1}>
-            {item.lastMessage}
-          </Text>
-
-          {item.unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>
-                {item.unreadCount > 99 ? '99+' : item.unreadCount}
-              </Text>
-            </View>
-          )}
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>

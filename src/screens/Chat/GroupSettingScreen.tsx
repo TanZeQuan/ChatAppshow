@@ -10,11 +10,10 @@ import {
     RefreshControl,
     ScrollView,
     StyleSheet,
-    Switch,
     Text,
     TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readChatMessages } from '../../api/Chat';
@@ -298,7 +297,8 @@ export default function GroupSettingScreen() {
 
     // Navigation handlers
     const handleSearchHistory = useCallback(() => {
-        navigation.navigate('GroupRoom', {
+        // ✅ Replace instead of navigate to avoid navigation stack buildup
+        navigation.replace('GroupRoom', {
             chatId,
             chatName,
             isGroup: true,
@@ -642,10 +642,17 @@ export default function GroupSettingScreen() {
                 disabled={isKicking}
             >
                 <View style={styles.memberAvatarContainer}>
-                    <Image
-                        source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
-                        style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
-                    />
+                    {(() => {
+                        const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+                        const avatarUri = member.avatar;
+                        const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
+                        return (
+                            <Image
+                                source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
+                                style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
+                            />
+                        );
+                    })()}
                     {isFriend && !isCurrentUser && (
                         <View style={styles.friendBadge}>
                             <Ionicons name="heart" size={10} color="#FF3B30" />
@@ -730,13 +737,18 @@ export default function GroupSettingScreen() {
                     <View style={styles.profileCard}>
                         <View style={[styles.groupInfoContainer, { borderBottomWidth: 0 }]}>
                             <View style={styles.groupAvatarGridContainer}>
-                                {allMembers.slice(0, 4).map((member, index) => (
-                                    <Image
-                                        key={index}
-                                        source={member.avatar ? { uri: member.avatar } : require('../../assets/images/anonymous.png')}
-                                        style={styles.groupAvatarImage}
-                                    />
-                                ))}
+                                    {allMembers.slice(0, 4).map((member, index) => {
+                                        const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+                                        const avatarUri = member.avatar;
+                                        const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
+                                        return (
+                                            <Image
+                                                key={index}
+                                                source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
+                                                style={styles.groupAvatarImage}
+                                            />
+                                        );
+                                    })}
                             </View>
                             <View style={styles.groupInfo}>
                                 <Text style={styles.groupName}>{chatName}</Text>
@@ -774,10 +786,10 @@ export default function GroupSettingScreen() {
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>通知设置</Text>
+                    {/* <Text style={styles.sectionTitle}>通知设置</Text> */}
                     <View style={styles.card}>
                         {/* 消息免打扰 */}
-                        <View style={[styles.settingItem, styles.borderBottom]}>
+                        {/* <View style={[styles.settingItem, styles.borderBottom]}>
                             <View style={styles.iconContainer}>
                                 <Ionicons name="notifications-off-outline" size={20} color={colors.text.white} />
                             </View>
@@ -790,10 +802,10 @@ export default function GroupSettingScreen() {
                                 trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
                                 thumbColor={colors.background.white}
                             />
-                        </View>
+                        </View> */}
 
                         {/* 置顶聊天 */}
-                        <View style={[styles.settingItem, styles.borderBottom]}>
+                        {/* <View style={[styles.settingItem, styles.borderBottom]}>
                             <View style={styles.iconContainer}>
                                 <Ionicons name="pin-outline" size={20} color={colors.text.white} />
                             </View>
@@ -806,7 +818,7 @@ export default function GroupSettingScreen() {
                                 trackColor={{ false: colors.border.gray, true: colors.functional.greenBright }}
                                 thumbColor={colors.background.white}
                             />
-                        </View>
+                        </View> */}
 
                         {/* 显示群成员昵称 */}
                         {/* <View style={styles.settingItem}>
@@ -840,7 +852,7 @@ export default function GroupSettingScreen() {
                             <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
                         </TouchableOpacity>
 
-                        <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
+                        {/* <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
                             <View style={styles.iconContainer}>
                                 <Ionicons name="trash-outline" size={20} color={colors.text.white} />
                             </View>
@@ -848,7 +860,7 @@ export default function GroupSettingScreen() {
                                 <Text style={styles.settingTitle}>清空聊天记录</Text>
                             </View>
                             <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
                     </View>
                 </View>
 

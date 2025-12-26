@@ -81,13 +81,9 @@ export function useClearChatHistory(chatId: string, chatName: string) {
 export function useSearchChatHistory() {
   const [searchMode, setSearchMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [matchedIndices, setMatchedIndices] = useState<number[]>([]);
-  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-
-  // ✅ Track previous search query to detect changes
-  const prevSearchQueryRef = useRef('');
-  // ✅ Track current message ID to maintain position across polling refreshes
-  const currentMessageIdRef = useRef<string>('');
+  // ✅ 改用消息 ID 数组而不是索引数组
+  const [matchedMessageIds, setMatchedMessageIds] = useState<string[]>([]);
+  const [currentMatchId, setCurrentMatchId] = useState<string>('');
 
   const enableSearch = useCallback(() => {
     setSearchMode(true);
@@ -96,139 +92,96 @@ export function useSearchChatHistory() {
   const disableSearch = useCallback(() => {
     setSearchMode(false);
     setSearchQuery('');
-    setMatchedIndices([]);
-    setCurrentMatchIndex(0);
-    prevSearchQueryRef.current = '';
-    currentMessageIdRef.current = '';
+    setMatchedMessageIds([]);
+    setCurrentMatchId('');
   }, []);
 
   /**
    * Filter messages based on search query
-   * ✅ Returns ALL messages (no filtering), but calculates matched indices
+   * ✅ Returns ALL messages (no filtering), but calculates matched message IDs
    * @param messages - Array of messages to search
    * @returns All messages (no filtering applied)
    */
   const filterMessages = useCallback((messages: any[]) => {
     // Reset matches when query is empty
     if (!searchQuery.trim()) {
-      setMatchedIndices([]);
-      setCurrentMatchIndex(0);
-      prevSearchQueryRef.current = '';
-      currentMessageIdRef.current = '';
+      setMatchedMessageIds([]);
+      setCurrentMatchId('');
       return messages;
     }
 
-    // Find all matched message indices
-    const matches: number[] = [];
+    // ✅ Find all matched message IDs (not indices)
+    const matchedIds: string[] = [];
     const query = searchQuery.toLowerCase();
 
-    messages.forEach((msg, index) => {
+    messages.forEach((msg) => {
       const messageText = typeof msg.text === 'string' ? msg.text : String(msg.text || '');
       if (messageText.toLowerCase().includes(query)) {
-        matches.push(index);
+        matchedIds.push(msg.id);
       }
     });
 
-    setMatchedIndices(matches);
+    setMatchedMessageIds(matchedIds);
 
-    // ✅ Only reset to first match if search query changed
-    const isSearchQueryChanged = prevSearchQueryRef.current !== searchQuery;
-
-    if (isSearchQueryChanged) {
-      // Search query changed - reset to first match
-      if (matches.length > 0) {
-        setCurrentMatchIndex(0);
-        currentMessageIdRef.current = messages[matches[0]]?.id || '';
+    // ✅ Set current match ID
+    if (matchedIds.length > 0) {
+      // If current match ID is still in the new matches, keep it
+      if (currentMatchId && matchedIds.includes(currentMatchId)) {
+        // Keep current position - do nothing
       } else {
-        setCurrentMatchIndex(0);
-        currentMessageIdRef.current = '';
+        // Reset to first match
+        setCurrentMatchId(matchedIds[0]);
       }
-      prevSearchQueryRef.current = searchQuery;
     } else {
-      // Search query same (polling refresh) - try to keep same message ID
-      setCurrentMatchIndex(prev => {
-        if (matches.length === 0) {
-          currentMessageIdRef.current = '';
-          return 0;
-        }
-
-        // ✅ Try to find the same message ID in the new matches
-        if (currentMessageIdRef.current) {
-          const newIndex = matches.findIndex(matchIndex =>
-            messages[matchIndex]?.id === currentMessageIdRef.current
-          );
-
-          if (newIndex !== -1) {
-            // Found the same message - stay on it
-            return newIndex;
-          }
-        }
-
-        // If current message ID not found or not set, keep the index if valid
-        if (prev >= matches.length) {
-          // Out of range - go to last match
-          const newMatchIndex = matches.length - 1;
-          currentMessageIdRef.current = messages[matches[newMatchIndex]]?.id || '';
-          return newMatchIndex;
-        }
-
-        // Keep current index and update the message ID
-        currentMessageIdRef.current = messages[matches[prev]]?.id || '';
-        return prev;
-      });
+      setCurrentMatchId('');
     }
 
-    // ✅ Always return all messages, highlighting is handled by UI
     return messages;
-  }, [searchQuery]);
+  }, [searchQuery, currentMatchId]);
 
   /**
    * Navigate to next matched message
+   * @returns The message ID of the next match, or empty string if no matches
    */
   const goToNextMatch = useCallback((messages: any[]) => {
-    if (matchedIndices.length === 0) return -1;
+    if (matchedMessageIds.length === 0) return '';
 
-    const nextIndex = (currentMatchIndex + 1) % matchedIndices.length;
-    setCurrentMatchIndex(nextIndex);
+    const currentIndex = matchedMessageIds.indexOf(currentMatchId);
+    const nextIndex = (currentIndex + 1) % matchedMessageIds.length;
+    const nextMatchId = matchedMessageIds[nextIndex];
 
-    // ✅ Update current message ID to maintain position
-    const messageIndex = matchedIndices[nextIndex];
-    if (messages && messages[messageIndex]) {
-      currentMessageIdRef.current = messages[messageIndex].id;
-    }
-
-    return messageIndex;
-  }, [matchedIndices, currentMatchIndex]);
+    setCurrentMatchId(nextMatchId);
+    return nextMatchId;
+  }, [matchedMessageIds, currentMatchId]);
 
   /**
    * Navigate to previous matched message
+   * @returns The message ID of the previous match, or empty string if no matches
    */
   const goToPrevMatch = useCallback((messages: any[]) => {
-    if (matchedIndices.length === 0) return -1;
+    if (matchedMessageIds.length === 0) return '';
 
-    const prevIndex = currentMatchIndex === 0
-      ? matchedIndices.length - 1
-      : currentMatchIndex - 1;
-    setCurrentMatchIndex(prevIndex);
+    const currentIndex = matchedMessageIds.indexOf(currentMatchId);
+    const prevIndex = currentIndex <= 0
+      ? matchedMessageIds.length - 1
+      : currentIndex - 1;
+    const prevMatchId = matchedMessageIds[prevIndex];
 
-    // ✅ Update current message ID to maintain position
-    const messageIndex = matchedIndices[prevIndex];
-    if (messages && messages[messageIndex]) {
-      currentMessageIdRef.current = messages[messageIndex].id;
-    }
-
-    return messageIndex;
-  }, [matchedIndices, currentMatchIndex]);
+    setCurrentMatchId(prevMatchId);
+    return prevMatchId;
+  }, [matchedMessageIds, currentMatchId]);
 
   /**
    * Get total number of matches
    */
-  const totalMatches = matchedIndices.length;
+  const totalMatches = matchedMessageIds.length;
 
   /**
    * Get current match number (1-indexed for display)
    */
-  const currentMatchNumber = matchedIndices.length > 0 ? currentMatchIndex + 1 : 0;
+  const currentMatchNumber = matchedMessageIds.length > 0 && currentMatchId
+    ? matchedMessageIds.indexOf(currentMatchId) + 1
+    : 0;
 
   /**
    * Highlight matched text in message
@@ -247,8 +200,8 @@ export function useSearchChatHistory() {
     setSearchQuery,
     filterMessages,
     highlightMatch,
-    matchedIndices,
-    currentMatchIndex,
+    matchedMessageIds,  // ✅ 返回消息 ID 数组
+    currentMatchId,     // ✅ 返回当前匹配的消息 ID
     currentMatchNumber,
     totalMatches,
     goToNextMatch,

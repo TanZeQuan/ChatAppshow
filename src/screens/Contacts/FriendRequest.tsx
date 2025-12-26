@@ -175,7 +175,7 @@ export default function FriendRequestScreen() {
                     },
                     {
                       text: "查看通讯录",
-                      onPress: () => navigation.goBack()
+                      onPress: () => navigation.navigate('Contacts')
                     },
                   ]
                 );
@@ -236,7 +236,11 @@ export default function FriendRequestScreen() {
     <View key={item.list_id} style={styles.requestItem}>
       <View style={styles.requestLeft}>
         <Image
-          source={{ uri: item.image }}
+          source={
+            !item.image || item.image.trim() === '' || item.image.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+              ? require('../../assets/images/personal.png')
+              : { uri: item.image }
+          }
           style={styles.avatar}
         />
         <View style={styles.userInfo}>
@@ -276,7 +280,11 @@ export default function FriendRequestScreen() {
     <View key={item.list_id} style={styles.requestItem}>
       <View style={styles.requestLeft}>
         <Image
-          source={{ uri: item.image }}
+          source={
+            !item.image || item.image.trim() === '' || item.image.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+              ? require('../../assets/images/personal.png')
+              : { uri: item.image }
+          }
           style={styles.avatar}
         />
         <View style={styles.userInfo}>
