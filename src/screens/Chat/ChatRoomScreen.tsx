@@ -804,6 +804,15 @@ export default function ChatRoomScreen() {
           onBack={() => navigation.goBack()}
           onOpenSettings={handleOpenSettings}
           roomStyles={roomStyles}
+          showCallButton={!chat?.isGroup}
+          onStartCall={() => {
+            const otherUserId = chatMembers.find(id => id !== currentUserId);
+            if (otherUserId) {
+              WebSocketManager.startCall(otherUserId);
+            } else {
+              Alert.alert("Error", "Could not find user to call.");
+            }
+          }}
         />
 
         <KeyboardAvoidingView

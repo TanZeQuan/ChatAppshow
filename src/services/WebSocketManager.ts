@@ -1,16 +1,19 @@
 import config from "../config/api";
+import { WebRTCCallService } from "./CallService";
+import { Emitter } from "./EventEmitter";
+
 
 // ✅ 新的 WebSocket URL（根据文档）
 const WS_URL = "wss://ws.ngrok-free.dev";
 
 type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
-type CallSignalCallback = (data: any) => void;
 
 class WebSocketManager {
   private static instance: WebSocketManager;
 
-  private ws: WebSocket | null = null;
+  public ws: WebSocket | null = null;
+  public callService: WebRTCCallService | null = null;
   private userId: string | null = null;
   private isConnected = false;
 
@@ -20,7 +23,6 @@ class WebSocketManager {
 
   private messageCallbacks: MessageCallback[] = [];
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
-  private callSignalCallbacks: CallSignalCallback[] = [];
 
   // Login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
@@ -29,7 +31,7 @@ class WebSocketManager {
 
   private constructor() {}
 
-  static getInstance(): WebSocketManager {
+  public static getInstance(): WebSocketManager {
     if (!WebSocketManager.instance) {
       WebSocketManager.instance = new WebSocketManager();
     }
@@ -39,7 +41,7 @@ class WebSocketManager {
   /* ===============================
      Connect + Login
   =============================== */
-  connect(userId: string): Promise<boolean> {
+  public connect(userId: string): Promise<boolean> {
     console.log('🔌 [WebSocket] connect() called');
     console.log('  - New userId:', userId);
     console.log('  - Current userId:', this.userId);
@@ -84,6 +86,7 @@ class WebSocketManager {
             console.log("✅ Login success (silent - no response from server)");
             this.isConnected = true;
             this.reconnectAttempts = 0;
+            this.initializeCallService();
             this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
@@ -113,6 +116,23 @@ class WebSocketManager {
     });
   }
 
+  private initializeCallService() {
+    if (this.ws && this.userId) {
+      this.callService = new WebRTCCallService(this.ws, this.userId);
+      console.log('✅ [CallService] Initialized');
+    } else {
+      console.error('❌ [CallService] Failed to initialize: WebSocket or UserId is not available.');
+    }
+  }
+
+  public startCall(targetUserId: string) {
+    if (this.callService) {
+      this.callService.startCall(targetUserId);
+    } else {
+      console.error("Cannot start call, CallService is not initialized.");
+    }
+  }
+
   /* ===============================
      Login
   =============================== */
@@ -136,12 +156,21 @@ class WebSocketManager {
       const data = JSON.parse(event.data);
       console.log("📨 [WebSocket] Received:", data);
 
+      if (data.msg === "call_signal") {
+        console.log(`📞 Call signal received:`, data.type);
+        if (this.callService) {
+          this.callService.handleSignal(data);
+        }
+        return;
+      }
+
       /* ---------- RECONNECTION SUCCESS ---------- */
       if (data.status === 0 && data.message === "Reconnected") {
         console.log("✅ Reconnected to WebSocket");
         if (!this.isConnected) {
           this.isConnected = true;
           this.reconnectAttempts = 0;
+          this.initializeCallService();
           this.loginResolver?.(true);
           this.cleanupLoginPromise();
         }
@@ -180,14 +209,6 @@ class WebSocketManager {
         return;
       }
 
-      /* ---------- CALL SIGNAL (WebRTC) ---------- */
-      // Format: {msg: "call_signal", type: "offer/answer/candidate/reject/end", ...}
-      if (data.msg === "call_signal" || data.type === "offer" || data.type === "answer" || data.type === "candidate") {
-        console.log(`📞 Call signal received:`, data.type);
-        this.callSignalCallbacks.forEach((cb) => cb(data));
-        return;
-      }
-
       /* ---------- FALLBACK ---------- */
       console.log("⚠️ Unhandled message:", data);
       this.messageCallbacks.forEach((cb) => cb(data));
@@ -208,7 +229,7 @@ class WebSocketManager {
   /* ===============================
      Send Forward Message (根据新文档)
   =============================== */
-  sendForwardMessage(payload: {
+  public sendForwardMessage(payload: {
     type: number; // ✅ 改为 number: 1=text, 2=voice, 3=files
     message: string;
     message_id: string; // ✅ Required for delivery tracking
@@ -240,7 +261,7 @@ class WebSocketManager {
   /* ===============================
      Send Read Signal (新增)
   =============================== */
-  sendReadSignal(payload: {
+  public sendReadSignal(payload: {
     receiver: string[];
     chat_id: string;
   }): boolean {
@@ -264,7 +285,7 @@ class WebSocketManager {
   /* ===============================
      Send Call Signal (新增 - WebRTC)
   =============================== */
-  sendCallSignal(payload: {
+  public sendCallSignal(payload: {
     type: "offer" | "answer" | "candidate" | "reject" | "end";
     receiver: string[];
     call_type?: 0 | 1; // 0=Voice, 1=Video
@@ -294,12 +315,17 @@ class WebSocketManager {
   /* ===============================
      Logout / Disconnect
   =============================== */
-  disconnect() {
+  public disconnect() {
     console.log('🔌 [WebSocket] disconnect() called');
 
     if (this.ws) {
       this.ws.close(1000, "Client disconnect");
       this.ws = null;
+    }
+
+    if (this.callService) {
+      this.callService.cleanup();
+      this.callService = null;
     }
 
     this.isConnected = false;
@@ -335,41 +361,33 @@ class WebSocketManager {
   /* ===============================
      Callbacks
   =============================== */
-  addMessageCallback(cb: MessageCallback) {
+  public addMessageCallback(cb: MessageCallback) {
     this.messageCallbacks.push(cb);
   }
 
-  removeMessageCallback(cb: MessageCallback) {
+  public removeMessageCallback(cb: MessageCallback) {
     this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb);
   }
 
-  addReadReceiptCallback(cb: ReadReceiptCallback) {
+  public addReadReceiptCallback(cb: ReadReceiptCallback) {
     this.readReceiptCallbacks.push(cb);
   }
 
-  removeReadReceiptCallback(cb: ReadReceiptCallback) {
+  public removeReadReceiptCallback(cb: ReadReceiptCallback) {
     this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb);
   }
 
-  addCallSignalCallback(cb: CallSignalCallback) {
-    this.callSignalCallbacks.push(cb);
-  }
-
-  removeCallSignalCallback(cb: CallSignalCallback) {
-    this.callSignalCallbacks = this.callSignalCallbacks.filter((x) => x !== cb);
-  }
-
-  isWebSocketConnected() {
+  public isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
   }
 
-  getCallbackCount() {
+  public getCallbackCount() {
     return {
       message: this.messageCallbacks.length,
       readReceipt: this.readReceiptCallbacks.length,
-      callSignal: this.callSignalCallbacks.length,
     };
   }
 }
 
 export default WebSocketManager.getInstance();
+export { Emitter };

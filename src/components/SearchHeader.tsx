@@ -22,6 +22,10 @@ interface SearchHeaderProps {
 
   // Styles
   roomStyles: any;
+
+  // Optional call button
+  showCallButton?: boolean;
+  onStartCall?: () => void;
 }
 
 export const SearchHeader: React.FC<SearchHeaderProps> = ({
@@ -37,6 +41,8 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
   onBack,
   onOpenSettings,
   roomStyles,
+  showCallButton,
+  onStartCall,
 }) => {
   if (searchMode) {
     // Search mode header
@@ -86,9 +92,16 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
         <Ionicons name="chevron-back" size={24} color="#333" />
       </TouchableOpacity>
       <Text style={roomStyles.headerTitle}>{chatName}</Text>
-      <TouchableOpacity style={roomStyles.moreButton} onPress={onOpenSettings}>
-        <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
-      </TouchableOpacity>
+      <View style={{flexDirection: 'row'}}>
+        {showCallButton && (
+            <TouchableOpacity style={roomStyles.moreButton} onPress={onStartCall}>
+                <Ionicons name="call-outline" size={24} color="#333" />
+            </TouchableOpacity>
+        )}
+        <TouchableOpacity style={roomStyles.moreButton} onPress={onOpenSettings}>
+            <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
