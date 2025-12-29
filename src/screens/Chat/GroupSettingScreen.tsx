@@ -881,7 +881,7 @@ export default function GroupSettingScreen() {
                 </View> */}
 
                 {/* Danger Zone */}
-                <View style={styles.section}>
+                <View style={styles.dangersection}>
                     <View style={styles.card}>
                         <TouchableOpacity style={[styles.dangerButton, styles.borderBottom]} onPress={handleLeaveGroup}>
                             <Ionicons name="exit-outline" size={20} color={colors.text.white} />
@@ -1138,6 +1138,10 @@ const styles = StyleSheet.create({
     // --- Section ---
     section: {
         marginTop: 16,
+        marginHorizontal: 16,
+    },
+    dangersection: {
+        marginTop: 60,
         marginHorizontal: 16,
     },
     sectionTitle: {

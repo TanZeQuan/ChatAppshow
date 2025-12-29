@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
 import { useUserStore } from '../../store/userStore';
 import { ensureFullImageUrl } from '../../api/service';
+import { colors, typography } from '../../styles';
 
 const { width } = Dimensions.get('window');
 
@@ -335,9 +336,9 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     title: {
-        color: 'white',
-        fontSize: 18,
-        fontWeight: '500',
+        color: colors.text.black,
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
     },
     placeholder: {
         width: 40,

@@ -1,21 +1,22 @@
 import { Ionicons } from "@expo/vector-icons";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import React, { useState, useEffect } from "react";
-import { 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  View, 
-  Dimensions,
+import { LinearGradient } from "expo-linear-gradient";
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
   Alert,
-  ActivityIndicator
+  Dimensions,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ProfileStackParamList } from "../../../navigation/types";
-import { colors, borders, typography } from "../../../styles";
-import { useUserStore } from '../../../store/userStore';
 import { changeUserEmail, readUsers } from '../../../api/User';
+import { ProfileStackParamList } from "../../../navigation/types";
+import { useUserStore } from '../../../store/userStore';
+import { borders, colors, typography } from "../../../styles";
 
 type Props = NativeStackScreenProps<ProfileStackParamList, "EditEmail">;
 
@@ -132,19 +133,25 @@ export default function EditEmailScreen({ navigation }: Props) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          disabled={isLoading}
-        >
-          <Ionicons name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>邮箱</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <View style={styles.container}>
+      {/* Header with Gradient */}
+      <LinearGradient
+        colors={['#FFD860', '#FFD860']}
+      >
+        <SafeAreaView edges={['top']}>
+          <View style={styles.header}>
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+              disabled={isLoading}
+            >
+              <Ionicons name="arrow-back" size={24} color="#000" />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>邮箱</Text>
+            <View style={styles.placeholder} />
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       {/* Content */}
       <View style={styles.content}>
@@ -200,7 +207,7 @@ export default function EditEmailScreen({ navigation }: Props) {
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -216,10 +223,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: scaleWidth(16),
-    paddingVertical: scaleHeight(12),
-    backgroundColor: colors.functional.yellow, // 原 #F5C842
-    borderBottomWidth: borders.width1,
-    borderBottomColor: colors.functional.yellowBright, // 原 #E5B830
+    paddingTop: scaleHeight(5),
+    paddingBottom: scaleHeight(5),
   },
   backButton: {
     padding: scaleWidth(8),
@@ -227,7 +232,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium, // 原 #333
+    textAlign: 'center',
+    color: colors.text.black,
+    flex: 1,
   },
   placeholder: {
     width: scaleWidth(40),
@@ -273,9 +280,9 @@ const styles = StyleSheet.create({
     marginLeft: scaleWidth(4),
   },
   confirmButton: {
-    backgroundColor: colors.functional.yellow, // 原 #F5C842
+    backgroundColor: colors.background.yellowBright, // 原 #F5C842
     borderRadius: borders.radius25,
-    paddingVertical: scaleHeight(14),
+    paddingVertical: scaleHeight(12),
     alignItems: "center",
     borderWidth: borders.width1,
     borderColor: colors.functional.yellowBright, // 原 #E5B830

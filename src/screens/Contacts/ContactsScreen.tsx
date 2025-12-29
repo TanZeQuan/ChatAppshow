@@ -604,10 +604,10 @@ const styles = StyleSheet.create({
     paddingBottom: scaleHeight(12),
   },
   headerTitle: {
-    fontSize: typography.fontSize17,
+    fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
     textAlign: 'center',
-    color: colors.text.blackMedium,
+    color: colors.text.black,
   },
 
   /** SEARCH */

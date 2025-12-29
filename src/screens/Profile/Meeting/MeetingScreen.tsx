@@ -109,9 +109,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: {
-    fontSize: typography.fontSize20,
+    fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
-    color: colors.text.dark,
+    color: colors.text.black,
   },
 
   /** CONTENT */

@@ -474,15 +474,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: scaleWidth(16),
     paddingVertical: scaleHeight(12),
-    backgroundColor: colors.functional.yellow,
+    backgroundColor: '#FFD860',
     borderBottomWidth: borders.width1,
-    borderBottomColor: colors.functional.yellowBright,
+    borderBottomColor: '#FFD860',
   },
   backButton: { padding: scaleWidth(8) },
   headerTitle: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
-    color: colors.text.blackMedium,
+    color: colors.text.black,
   },
   confirmButton: {
     paddingHorizontal: scaleWidth(12),
