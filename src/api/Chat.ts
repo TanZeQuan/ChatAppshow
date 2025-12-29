@@ -567,7 +567,12 @@ export const updateGroupImage = async (
       user_id: userId,
     };
 
-    formData.append("data", JSON.stringify(dataPayload));
+    const dataJson = JSON.stringify(dataPayload);
+    console.log('📤 [UpdateGroupImage] Data JSON:', dataJson);
+    console.log('📤 [UpdateGroupImage] Data payload keys:', Object.keys(dataPayload));
+    console.log('📤 [UpdateGroupImage] Verifying NO action field:', !('action' in dataPayload));
+
+    formData.append("data", dataJson);
 
     // ✅ Append image file
     console.log('🖼️ [UpdateGroupImage] Attaching image file:', {
@@ -582,21 +587,28 @@ export const updateGroupImage = async (
       type: imageFile.type,
     } as any);
 
-    console.log("➡ Sending to backend (updateGroupImage):", dataPayload);
+    console.log("➡ Sending to backend endpoint: /chats/group/update");
+    console.log("➡ Request headers: Content-Type: multipart/form-data");
 
     const response = await api.post("/chats/group/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
 
-    console.log("📩 updateGroupImage response:", response.data);
+    console.log("📩 [UpdateGroupImage] Full response:", JSON.stringify(response.data, null, 2));
+    console.log("📩 [UpdateGroupImage] Response error field:", response.data?.error);
+    console.log("📩 [UpdateGroupImage] Response message:", response.data?.message);
+    console.log("📩 [UpdateGroupImage] Response data:", response.data?.response);
 
     if (response.data?.error === true) {
+      console.error("❌ [UpdateGroupImage] Backend returned error:", response.data.message);
       return {
         success: false,
         message: response.data.message || "Update group image failed",
       };
     }
+
+    console.log("✅ [UpdateGroupImage] Success! New image URL:", response.data?.response?.image || response.data?.image);
 
     return {
       success: true,
@@ -604,7 +616,9 @@ export const updateGroupImage = async (
       message: response.data.message,
     };
   } catch (error: any) {
-    console.error("❌ updateGroupImage error:", error.response?.data || error.message);
+    console.error("❌ updateGroupImage exception:", error);
+    console.error("❌ updateGroupImage error response:", error.response?.data);
+    console.error("❌ updateGroupImage error message:", error.message);
     return {
       success: false,
       message: error.response?.data?.message || error.message,

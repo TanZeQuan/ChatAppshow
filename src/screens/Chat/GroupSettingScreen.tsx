@@ -87,6 +87,7 @@ export default function GroupSettingScreen() {
     const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
     const [friendsList, setFriendsList] = useState<any[]>([]);
     const [loadingFriends, setLoadingFriends] = useState(false);
+    const [groupImage, setGroupImage] = useState(''); // ✅ Group avatar from API
 
     // ✅ Use ref to keep the latest function reference for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -197,10 +198,18 @@ export default function GroupSettingScreen() {
                 // ✅ Get group info (name and image)
                 const groupInfo = result.data.info || {};
                 const groupName = groupInfo.name || chatName;
-                const groupImage = groupInfo.image || '';
+                const groupImageUrl = groupInfo.image || '';
 
                 // ✅ Use ensureFullImageUrl to process group image URL
-                const fullGroupImageUrl = ensureFullImageUrl(groupImage);
+                const fullGroupImageUrl = ensureFullImageUrl(groupImageUrl);
+
+                console.log('📷 [GroupSetting] Group image:', {
+                    raw: groupImageUrl,
+                    full: fullGroupImageUrl,
+                });
+
+                // ✅ Save group image to state
+                setGroupImage(fullGroupImageUrl);
 
                 // ✅ Update chatStore with complete member info and group info
                 const currentChat = getChatById(chatId);
@@ -1031,22 +1040,41 @@ export default function GroupSettingScreen() {
                                 style={styles.groupAvatarGridContainer}
                                 onPress={handleUpdateGroupAvatar}
                             >
-                                    {allMembers.slice(0, 4).map((member, index) => {
-                                        const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
-                                        const avatarUri = member.avatar;
-                                        const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
+                                {(() => {
+                                    const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+                                    const shouldShowPlaceholder = !groupImage || groupImage.trim() === '' || groupImage.trim() === placeholderUrl;
+
+                                    console.log('🖼️ [GroupSetting] Rendering group avatar:', {
+                                        groupImage,
+                                        shouldShowPlaceholder,
+                                    });
+
+                                    if (shouldShowPlaceholder) {
+                                        // Show grid of member avatars as placeholder
+                                        return allMembers.slice(0, 4).map((member, index) => {
+                                            const memberPlaceholder = !member.avatar || member.avatar.trim() === '' || member.avatar.trim() === placeholderUrl;
+                                            return (
+                                                <Image
+                                                    key={index}
+                                                    source={memberPlaceholder ? require('../../assets/images/personal.png') : { uri: member.avatar }}
+                                                    style={styles.groupAvatarImage}
+                                                />
+                                            );
+                                        });
+                                    } else {
+                                        // Show actual group avatar (full size)
                                         return (
                                             <Image
-                                                key={index}
-                                                source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
-                                                style={styles.groupAvatarImage}
+                                                source={{ uri: groupImage }}
+                                                style={styles.groupAvatarFull}
                                             />
                                         );
-                                    })}
-                                    {/* Camera icon overlay */}
-                                    <View style={styles.avatarEditOverlay}>
-                                        <Ionicons name="camera" size={16} color="#FFF" />
-                                    </View>
+                                    }
+                                })()}
+                                {/* Camera icon overlay */}
+                                <View style={styles.avatarEditOverlay}>
+                                    <Ionicons name="camera" size={16} color="#FFF" />
+                                </View>
                             </TouchableOpacity>
                             <View style={styles.groupInfo}>
                                 <Text style={styles.groupName}>{chatName}</Text>
@@ -1494,6 +1522,10 @@ const styles = StyleSheet.create({
     groupAvatarImage: {
         width: '50%',
         height: '50%',
+    },
+    groupAvatarFull: {
+        width: '100%',
+        height: '100%',
     },
     avatarEditOverlay: {
         position: 'absolute',
