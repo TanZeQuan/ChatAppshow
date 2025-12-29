@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: typography.fontSize16,
+    fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
     color: colors.text.black,
   },

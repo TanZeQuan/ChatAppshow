@@ -234,6 +234,7 @@ export default function ContactsScreen() {
             lastMessage: existingChat.last_message || '',
             timestamp: existingChat.last_message_time || existingChat.timestamp || new Date().toISOString(),
             unreadCount: existingChat.unread_count || existingChat.unread || 0,
+            online: false
           });
 
           parentNavigation.navigate("ChatStack", {
@@ -355,6 +356,7 @@ export default function ContactsScreen() {
               lastMessage: foundChat.last_message || '',
               timestamp: foundChat.last_message_time || foundChat.timestamp || new Date().toISOString(),
               unreadCount: foundChat.unread_count || foundChat.unread || 0,
+              online: false
             });
 
             parentNavigation.navigate("ChatStack", {

@@ -1,6 +1,6 @@
 import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +19,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
-import { readUsers } from '../../api/User';
 import { ensureFullImageUrl } from '../../api/service';
 import { useSearchChatHistory } from '../../components/ChatHistory';
 import { ChatInputBar } from '../../components/ChatInputBar';
@@ -187,63 +186,37 @@ export default function GroupRoomScreen() {
             if (result.success && result.data) {
                 const apiMessages = result.data.chat || [];
 
+                // ✅ Build member info map from group array
+                const memberInfoMap: Record<string, { name: string, avatar: string }> = {};
+
                 // Extract member IDs from group array
                 if (result.data.group && Array.isArray(result.data.group)) {
                     const memberIds = result.data.group.map((member: any) => member.user_id);
                     setChatMembers(memberIds);
+
+                    // Build member info map from group array
+                    result.data.group.forEach((member: any) => {
+                        const memberAvatar = member.image || '';
+                        const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
+
+                        memberInfoMap[member.user_id] = {
+                            name: member.name || '未知',
+                            avatar: fullAvatarUrl,
+                        };
+                    });
                 }
+
+                // Add current user to memberInfoMap
+                memberInfoMap[currentUserId] = {
+                    name: currentUser?.name || '我',
+                    avatar: currentUser?.avatar || '',
+                };
 
                 // Check if there are more messages to load
                 if (!Array.isArray(apiMessages) || apiMessages.length === 0) {
                     setHasMoreMessages(false);
                 } else {
-                    // Step 1: Extract unique sender IDs
-                    const senderIds = [...new Set(apiMessages.map((msg: any) => msg.sender))];
-
-                    // Step 2: Fetch user info for each sender
-                    const senderInfoMap: Record<string, { name: string, avatar: string }> = {};
-
-                    await Promise.all(
-                        senderIds.map(async (senderId) => {
-                            // Skip if is current user
-                            if (senderId === currentUserId) {
-                                senderInfoMap[senderId] = {
-                                    name: currentUser?.name || '我',
-                                    avatar: currentUser?.avatar || '',
-                                };
-                                return;
-                            }
-
-                            try {
-                                const userResult = await readUsers(senderId);
-
-                                if (userResult.success && userResult.data?.response) {
-                                    const userData = userResult.data.response;
-
-                                    // Validate avatar URL
-                                    let userAvatar = userData.image || '';
-                                    const isInvalidAvatar = !userAvatar ||
-                                        userAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
-                                        userAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
-                                        (userAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
-                                            !(userAvatar.includes('/content/') || userAvatar.includes('/coontent/') ||
-                                                userAvatar.includes('/uploads/') || userAvatar.includes('/uploadds/')));
-
-                                    senderInfoMap[senderId] = {
-                                        name: userData.name || userData.username || userData.full_name || '未知',
-                                        avatar: isInvalidAvatar ? '' : userAvatar,
-                                    };
-                                } else {
-                                    senderInfoMap[senderId] = { name: '未知', avatar: '' };
-                                }
-                            } catch (error) {
-                                console.error(`Error fetching user ${senderId}:`, error);
-                                senderInfoMap[senderId] = { name: '未知', avatar: '' };
-                            }
-                        })
-                    );
-
-                    // Step 3: Transform API messages to app format
+                    // Transform API messages to app format
                     const transformedMessages = apiMessages.map((msg: any) => {
                         let messageText = '';
                         let messageType = 1; // Default to text
@@ -320,21 +293,21 @@ export default function GroupRoomScreen() {
                                 : JSON.stringify(msg.message);
                         }
 
-                        // Attach sender info from senderInfoMap
+                        // ✅ Attach sender info from memberInfoMap
                         const senderId = msg.sender_id || msg.sender || msg.senderId;
-                        const senderInfo = senderInfoMap[senderId];
+                        const senderInfo = memberInfoMap[senderId] || { name: '未知', avatar: '' };
 
                         return {
                             id: msg.message_id || msg.id || String(Date.now() + Math.random()),
                             senderId: senderId,
-                            senderName: senderInfo?.name || '未知',
+                            senderName: senderInfo.name,
                             text: messageText,
                             type: messageType,
                             imageUrls: imageUrls,
                             voiceUrl: voiceUrl,
                             createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
-                            name: senderInfo?.name || '未知',
-                            avatar: senderInfo?.avatar || '',
+                            name: senderInfo.name,
+                            avatar: senderInfo.avatar,
                         };
                     });
 
@@ -412,6 +385,14 @@ export default function GroupRoomScreen() {
             // Cleanup intervals on unmount
         };
     }, [loadMessages]);
+
+    // ✅ Reload data when screen gains focus
+    useFocusEffect(
+        useCallback(() => {
+            console.log('🔄 [GroupRoom] Screen focused, reloading messages...');
+            loadMessages(false, false); // Silent reload
+        }, [loadMessages])
+    );
 
     // ✅ Auto-enable search mode if navigated from settings
     useEffect(() => {

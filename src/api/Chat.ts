@@ -427,3 +427,198 @@ export const addGroup = async (params: AddGroupParams) => {
     throw error;
   }
 };
+
+// Update group (add/remove members, leave)
+export interface UpdateGroupParams {
+  chat_id: string;
+  user_id: string;
+  action: "add" | "remove" | "leave";
+  target_id?: string; // Required for add/remove, leave also needs it
+}
+
+export const updateGroup = async (params: UpdateGroupParams) => {
+  console.log("📞 updateGroup called:", params);
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload: any = {
+      chat_id: params.chat_id,
+      user_id: params.user_id,
+      action: params.action,
+    };
+
+    // Add target_id for add/remove/leave actions
+    if (params.target_id) {
+      dataPayload.target_id = params.target_id;
+    }
+
+    console.log("➡ Sending to backend (updateGroup):", {
+      endpoint: "/chats/group/update",
+      payload: dataPayload,
+      action: params.action,
+    });
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    const response = await api.post("/chats/group/update", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("📩 updateGroup full response:", {
+      status: response.status,
+      data: response.data,
+      error: response.data?.error,
+      message: response.data?.message,
+      responseData: response.data?.response,
+    });
+
+    if (response.data?.error === true) {
+      console.error("❌ updateGroup backend error:", response.data.message);
+      return {
+        success: false,
+        message: response.data.message || "Group update failed",
+      };
+    }
+
+    console.log("✅ updateGroup success");
+    return {
+      success: true,
+      data: response.data.response,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error("❌ updateGroup exception:", error);
+    console.error("❌ updateGroup error details:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+    });
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
+// ✅ Update group name only (no action field)
+export const updateGroupName = async (chatId: string, userId: string, newName: string) => {
+  console.log("📞 updateGroupName called:", { chatId, userId, newName });
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload = {
+      chat_id: chatId,
+      user_id: userId,
+      name: newName,
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("➡ Sending to backend (updateGroupName):", dataPayload);
+
+    const response = await api.post("/chats/group/update", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("📩 updateGroupName response:", response.data);
+
+    if (response.data?.error === true) {
+      return {
+        success: false,
+        message: response.data.message || "Update group name failed",
+      };
+    }
+
+    return {
+      success: true,
+      data: response.data.response,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error("❌ updateGroupName error:", error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
+// ✅ Update group image only (no action field)
+export const updateGroupImage = async (
+  chatId: string,
+  userId: string,
+  imageFile: { uri: string; name: string; type: string }
+) => {
+  console.log("📞 updateGroupImage called:", { chatId, userId, imageFile });
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload = {
+      chat_id: chatId,
+      user_id: userId,
+    };
+
+    const dataJson = JSON.stringify(dataPayload);
+    console.log('📤 [UpdateGroupImage] Data JSON:', dataJson);
+    console.log('📤 [UpdateGroupImage] Data payload keys:', Object.keys(dataPayload));
+    console.log('📤 [UpdateGroupImage] Verifying NO action field:', !('action' in dataPayload));
+
+    formData.append("data", dataJson);
+
+    // ✅ Append image file
+    console.log('🖼️ [UpdateGroupImage] Attaching image file:', {
+      uri: imageFile.uri,
+      name: imageFile.name,
+      type: imageFile.type,
+    });
+
+    formData.append("image", {
+      uri: imageFile.uri,
+      name: imageFile.name,
+      type: imageFile.type,
+    } as any);
+
+    console.log("➡ Sending to backend endpoint: /chats/group/update");
+    console.log("➡ Request headers: Content-Type: multipart/form-data");
+
+    const response = await api.post("/chats/group/update", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("📩 [UpdateGroupImage] Full response:", JSON.stringify(response.data, null, 2));
+    console.log("📩 [UpdateGroupImage] Response error field:", response.data?.error);
+    console.log("📩 [UpdateGroupImage] Response message:", response.data?.message);
+    console.log("📩 [UpdateGroupImage] Response data:", response.data?.response);
+
+    if (response.data?.error === true) {
+      console.error("❌ [UpdateGroupImage] Backend returned error:", response.data.message);
+      return {
+        success: false,
+        message: response.data.message || "Update group image failed",
+      };
+    }
+
+    console.log("✅ [UpdateGroupImage] Success! New image URL:", response.data?.response?.image || response.data?.image);
+
+    return {
+      success: true,
+      data: response.data.response,
+      message: response.data.message,
+    };
+  } catch (error: any) {
+    console.error("❌ updateGroupImage exception:", error);
+    console.error("❌ updateGroupImage error response:", error.response?.data);
+    console.error("❌ updateGroupImage error message:", error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+

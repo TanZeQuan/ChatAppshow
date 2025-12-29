@@ -9,7 +9,8 @@
       "Bash(npx expo:*)",
       "Bash(.gradlew.bat clean:*)",
       "Bash(powershell -Command \"cd android; .\\\\gradlew.bat clean\")",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(adb devices:*)"
     ],
     "deny": [],
     "ask": []

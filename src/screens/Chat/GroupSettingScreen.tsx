@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -16,9 +17,9 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readChatMessages } from '../../api/Chat';
+import { readChatMessages, updateGroup, updateGroupImage, updateGroupName } from '../../api/Chat';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
-import { readUsers } from '../../api/User';
+import { ensureFullImageUrl } from '../../api/service';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -39,6 +40,7 @@ interface Member {
     name: string;
     avatar?: string;
     phone?: string;
+    isAdmin?: boolean; // true if isadmin === 2
 }
 
 export default function GroupSettingScreen() {
@@ -85,6 +87,7 @@ export default function GroupSettingScreen() {
     const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
     const [friendsList, setFriendsList] = useState<any[]>([]);
     const [loadingFriends, setLoadingFriends] = useState(false);
+    const [groupImage, setGroupImage] = useState(''); // ✅ Group avatar from API
 
     // ✅ Use ref to keep the latest function reference for WebSocket callback
     const chatIdRef = useRef(chatId);
@@ -141,14 +144,14 @@ export default function GroupSettingScreen() {
         }
     }, [currentUserId]);
 
-    // ✅ Load group members from API using readUsers for each member
+    // ✅ Load group members from API - now includes name, image, and isadmin directly!
     const loadGroupMembers = useCallback(async () => {
         if (!currentUserId || !chatId) return;
 
         try {
             console.log('📥 [GroupSetting] Loading group members...');
 
-            // First, get member IDs from readChatMessages API
+            // Get group members with all info from readChatMessages API
             const result = await readChatMessages({
                 chat_id: chatId,
                 user_id: currentUserId,
@@ -156,71 +159,71 @@ export default function GroupSettingScreen() {
             });
 
             if (result.success && result.data?.group && Array.isArray(result.data.group)) {
-                const memberIds = result.data.group.map((member: any) => member.user_id);
-                console.log('📥 [GroupSetting] Got member IDs:', memberIds);
+                const groupMembers = result.data.group; // Array with user_id, name, image, isadmin
+                console.log('📥 [GroupSetting] Got group members:', groupMembers);
 
-                // ✅ Fetch each member's info using readUsers API
-                const membersInfo: Member[] = [];
+                // ✅ Build members array directly from API response - no additional API calls needed!
+                const membersInfo: Member[] = groupMembers.map((member: any) => {
+                    const isAdmin = member.isadmin === 2; // isadmin: 2 means owner/admin, 1 means normal member
 
-                for (const userId of memberIds) {
-                    try {
-                        console.log(`📥 [GroupSetting] Fetching info for user: ${userId}`);
+                    // ✅ Use ensureFullImageUrl to process avatar URL
+                    const memberAvatar = member.image || '';
+                    const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
 
-                        const userResult = await readUsers(userId);
+                    return {
+                        id: member.user_id,
+                        name: member.name || '未知',
+                        avatar: fullAvatarUrl,
+                        isAdmin: isAdmin,
+                    };
+                });
 
-                        if (userResult.success && userResult.data?.response) {
-                            const userData = userResult.data.response;
+                // ✅ Extract owner ID (isadmin === 2)
+                const ownerMember = groupMembers.find((m: any) => m.isadmin === 2);
+                const ownerId = ownerMember?.user_id || '';
 
-                            // Validate avatar URL (same logic as EditName.tsx)
-                            let memberAvatar = userData.image || '';
-                            const isInvalidAvatar = !memberAvatar ||
-                                memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
-                                memberAvatar === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/' ||
-                                (memberAvatar.startsWith('https://balkingly-hemitropic-lelah.ngrok-free.dev') &&
-                                    !(memberAvatar.includes('/content/') || memberAvatar.includes('/coontent/') ||
-                                        memberAvatar.includes('/uploads/') || memberAvatar.includes('/uploadds/')));
+                // ✅ Extract all admins (for now, only owner is admin, but could have multiple in future)
+                const adminIds = groupMembers
+                    .filter((m: any) => m.isadmin === 2)
+                    .map((m: any) => m.user_id);
 
-                            membersInfo.push({
-                                id: userId,
-                                name: userData.name || userData.username || userData.full_name || '未知',
-                                avatar: isInvalidAvatar ? '' : memberAvatar,
-                            });
+                console.log('✅ [GroupSetting] Processed member info:', {
+                    total: membersInfo.length,
+                    admins: membersInfo.filter(m => m.isAdmin).length,
+                    members: membersInfo.filter(m => !m.isAdmin).length,
+                    ownerId: ownerId,
+                    adminIds: adminIds,
+                });
 
-                            console.log(`✅ [GroupSetting] Got info for ${userId}:`, {
-                                name: userData.name,
-                                hasAvatar: !isInvalidAvatar
-                            });
-                        } else {
-                            // If failed to get user info, add placeholder
-                            console.warn(`⚠️ [GroupSetting] Failed to get info for ${userId}`);
-                            membersInfo.push({
-                                id: userId,
-                                name: '未知',
-                                avatar: '',
-                            });
-                        }
-                    } catch (error) {
-                        console.error(`❌ [GroupSetting] Error fetching user ${userId}:`, error);
-                        // Add placeholder on error
-                        membersInfo.push({
-                            id: userId,
-                            name: '未知',
-                            avatar: '',
-                        });
-                    }
-                }
+                // ✅ Get group info (name and image)
+                const groupInfo = result.data.info || {};
+                const groupName = groupInfo.name || chatName;
+                const groupImageUrl = groupInfo.image || '';
 
-                console.log('✅ [GroupSetting] Fetched all member info:', membersInfo.length);
+                // ✅ Use ensureFullImageUrl to process group image URL
+                const fullGroupImageUrl = ensureFullImageUrl(groupImageUrl);
 
-                // ✅ Update chatStore with complete member info
+                console.log('📷 [GroupSetting] Group image:', {
+                    raw: groupImageUrl,
+                    full: fullGroupImageUrl,
+                });
+
+                // ✅ Save group image to state
+                setGroupImage(fullGroupImageUrl);
+
+                // ✅ Update chatStore with complete member info and group info
                 const currentChat = getChatById(chatId);
                 if (currentChat) {
                     addChat({
                         ...currentChat,
-                        members: membersInfo,  // ✅ Save complete member info
-                        memberIds: memberIds,
+                        name: groupName,
+                        avatar: fullGroupImageUrl,
+                        members: membersInfo,
+                        memberIds: groupMembers.map((m: any) => m.user_id),
+                        ownerId: ownerId,  // ✅ Save owner ID
+                        admins: adminIds,  // ✅ Save admin IDs
                     });
-                    console.log('✅ [GroupSetting] Saved members to chatStore');
+                    console.log('✅ [GroupSetting] Saved members and group info to chatStore with ownerId:', ownerId);
                 }
             } else {
                 console.warn('⚠️ [GroupSetting] No group members in API response');
@@ -228,7 +231,16 @@ export default function GroupSettingScreen() {
         } catch (error) {
             console.error('❌ [GroupSetting] Failed to load group members:', error);
         }
-    }, [currentUserId, chatId, getChatById, addChat]);
+    }, [currentUserId, chatId, chatName, getChatById, addChat]);
+
+    // ✅ Reload data when screen gains focus
+    useFocusEffect(
+        useCallback(() => {
+            console.log('🔄 [GroupSetting] Screen focused, reloading data...');
+            loadGroupMembers();
+            loadFriendsList(false); // Silent reload
+        }, [loadGroupMembers, loadFriendsList])
+    );
 
     // Update ref when function changes
     useEffect(() => {
@@ -332,7 +344,6 @@ export default function GroupSettingScreen() {
         const isAdmin = groupChat?.admins?.includes(currentUserId);
         const isTargetOwner = groupChat?.ownerId === targetMemberId;
         const isTargetAdmin = groupChat?.admins?.includes(targetMemberId);
-
         if (isOwner) {
             if (targetMemberId === currentUserId) {
                 return { hasPermission: false, message: '群主不能踢出自己' };
@@ -373,17 +384,27 @@ export default function GroupSettingScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            // TODO: Call backend API
-                            const updatedMembers = allMembers.filter(m => m.id !== memberId);
-                            const updatedMemberIds = allMemberIds.filter(id => id !== memberId);
-                            updateChatData({
-                                members: updatedMembers,
-                                memberIds: updatedMemberIds,
+
+                            // Call backend API
+                            const result = await updateGroup({
+                                chat_id: chatId,
+                                user_id: currentUserId,
+                                action: 'remove',
+                                target_id: memberId,
                             });
 
-                            Alert.alert('成功', `已成功将 ${memberName} 踢出群聊`);
+                            // console.log('✅ [KickMember] API response:', result);
+
+                            if (result.success) {
+                                // ✅ Reload group members from API to get updated list
+                                await loadGroupMembers();
+                                Alert.alert('成功', `已成功将 ${memberName} 踢出群聊`);
+                            } else {
+                                console.error('❌ [KickMember] Failed:', result.message);
+                                Alert.alert('错误', result.message || '踢出成员失败，请重试');
+                            }
                         } catch (error) {
-                            console.error('Kick member error:', error);
+                            console.error('❌ [KickMember] Exception:', error);
                             Alert.alert('错误', '踢出成员失败，请重试');
                         } finally {
                             setKickingMemberId(null);
@@ -392,7 +413,7 @@ export default function GroupSettingScreen() {
                 }
             ]
         );
-    }, [checkKickPermission, allMembers, allMemberIds, updateChatData]);
+    }, [checkKickPermission, chatId, currentUserId, loadGroupMembers]);
 
     // Delete friend
     const handleDeleteFriend = useCallback(async (memberId: string, memberName: string) => {
@@ -407,12 +428,18 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            const friendToDelete = friendsList.find(f => f.user_id === memberId || f.approve_id === memberId || f.request_id === memberId);
+
+                            // ✅ Find friend by checking approve_id or request_id
+                            const friendToDelete = friendsList.find(f =>
+                                f.approve_id === memberId || f.request_id === memberId
+                            );
+
                             if (!friendToDelete || !friendToDelete.list_id) {
                                 Alert.alert('错误', '无法找到该好友的关系ID，请刷新后重试');
+                                setIsLoading(false);
                                 return;
                             }
-                            
+
                             const result = await deleteFriend(friendToDelete.list_id);
 
                             if (result.success) {
@@ -446,9 +473,15 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            const friendToBlock = friendsList.find(f => f.user_id === memberId || f.approve_id === memberId || f.request_id === memberId);
+
+                            // ✅ Find friend by checking approve_id or request_id
+                            const friendToBlock = friendsList.find(f =>
+                                f.approve_id === memberId || f.request_id === memberId
+                            );
+
                             if (!friendToBlock || !friendToBlock.list_id) {
                                 Alert.alert('错误', '无法找到该好友的关系ID，请刷新后重试');
+                                setIsLoading(false);
                                 return;
                             }
 
@@ -479,7 +512,15 @@ export default function GroupSettingScreen() {
 
         const permission = checkKickPermission(member.id);
         const canKick = permission.hasPermission;
-        const isFriend = friendsList.some(f => f.user_id === member.id || f.approve_id === member.id || f.request_id === member.id);
+
+        // ✅ Correctly check if member is a friend
+        const isFriend = friendsList.some(f => {
+            // If I sent the request, friend is approve_id
+            if (f.approve_id === member.id) return true;
+            // If friend sent the request, friend is request_id
+            if (f.request_id === member.id) return true;
+            return false;
+        });
 
         const options: any[] = [
             { text: '取消', style: 'cancel' },
@@ -527,25 +568,195 @@ export default function GroupSettingScreen() {
 
     // Add members
     const handleAddMembers = useCallback(() => {
+        // ✅ Check if current user is owner
+        const isOwner = groupChat?.ownerId === currentUserId;
+        console.log('🔐 [AddMembers] Permission check:', {
+            currentUserId,
+            ownerId: groupChat?.ownerId,
+            isOwner,
+        });
+
+        if (!isOwner) {
+            Alert.alert('权限不足', '只有群主才能添加成员');
+            return;
+        }
+
         navigation.navigate('AddGroupMembers', {
             chatId,
             chatName,
             currentMembers: allMemberIds,
         });
-    }, [navigation, chatId, chatName, allMemberIds]);
+    }, [navigation, chatId, chatName, allMemberIds, groupChat, currentUserId]);
 
     // Update group name
-    const handleUpdateGroupName = useCallback(() => {
+    const handleUpdateGroupName = useCallback(async () => {
         if (!newGroupName.trim()) {
             Alert.alert('错误', '群聊名称不能为空');
             return;
         }
 
-        // TODO: Call API to update group name
-        updateChatData({ name: newGroupName.trim() });
-        setShowGroupNameModal(false);
-        Alert.alert('成功', '群聊名称已更新');
-    }, [newGroupName, updateChatData]);
+        // ✅ Check if current user is owner
+        const isOwner = groupChat?.ownerId === currentUserId;
+
+        if (!isOwner) {
+            Alert.alert('权限不足', '只有群主才能修改群聊名称');
+            return;
+        }
+
+        try {
+            setIsLoading(true);
+
+            // ✅ Call new API that only sends chat_id, user_id, name (no action field)
+            const result = await updateGroupName(chatId, currentUserId, newGroupName.trim());
+
+            console.log('✅ [UpdateGroupName] API response:', {
+                success: result.success,
+                message: result.message,
+                data: result.data,
+                fullResponse: result,
+            });
+
+            if (result.success) {
+                // ✅ Reload group members to get updated name from backend
+                await loadGroupMembers();
+                setShowGroupNameModal(false);
+                Alert.alert('成功', '群聊名称已更新');
+            } else {
+                console.error('❌ [UpdateGroupName] Failed:', result.message);
+                Alert.alert('错误', result.message || '更新群聊名称失败');
+            }
+        } catch (error) {
+            console.error('❌ [UpdateGroupName] Exception:', error);
+            Alert.alert('错误', '更新群聊名称失败，请重试');
+        } finally {
+            setIsLoading(false);
+        }
+    }, [newGroupName, chatId, currentUserId, groupChat, loadGroupMembers]);
+
+    // Update group avatar
+    const handleUpdateGroupAvatar = useCallback(async () => {
+        // ✅ Check if current user is owner
+        const isOwner = groupChat?.ownerId === currentUserId;
+
+        if (!isOwner) {
+            Alert.alert('权限不足', '只有群主才能修改群头像');
+            return;
+        }
+
+        Alert.alert(
+            '修改群头像',
+            '选择图片来源',
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '从相册选择',
+                    onPress: async () => {
+                        try {
+                            const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+                            if (permissionResult.granted === false) {
+                                Alert.alert('需要权限', '需要访问相册权限才能选择图片');
+                                return;
+                            }
+
+                            const result = await ImagePicker.launchImageLibraryAsync({
+                                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                                allowsEditing: true,
+                                aspect: [1, 1],
+                                quality: 0.8,
+                            });
+
+                            if (!result.canceled && result.assets[0]) {
+                                const asset = result.assets[0];
+                                setIsLoading(true);
+
+
+                                // ✅ Call new API that only sends chat_id, user_id, image (no action field)
+                                const updateResult = await updateGroupImage(
+                                    chatId,
+                                    currentUserId,
+                                    {
+                                        uri: asset.uri,
+                                        name: `group_avatar_${Date.now()}.jpg`,
+                                        type: 'image/jpeg',
+                                    }
+                                );
+
+                                console.log('✅ [UpdateGroupAvatar] API response:', updateResult);
+
+                                if (updateResult.success) {
+                                    // ✅ Reload group members to get updated image from backend
+                                    await loadGroupMembers();
+                                    Alert.alert('成功', '群头像已更新');
+                                } else {
+                                    console.error('❌ [UpdateGroupAvatar] Failed:', updateResult.message);
+                                    Alert.alert('错误', updateResult.message || '更新群头像失败');
+                                }
+
+                                setIsLoading(false);
+                            }
+                        } catch (error) {
+                            console.error('❌ [UpdateGroupAvatar] Exception:', error);
+                            setIsLoading(false);
+                            Alert.alert('错误', '更新群头像失败，请重试');
+                        }
+                    },
+                },
+                {
+                    text: '拍照',
+                    onPress: async () => {
+                        try {
+                            const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+                            if (permissionResult.granted === false) {
+                                Alert.alert('需要权限', '需要访问相机权限才能拍照');
+                                return;
+                            }
+
+                            const result = await ImagePicker.launchCameraAsync({
+                                allowsEditing: true,
+                                aspect: [1, 1],
+                                quality: 0.8,
+                            });
+
+                            if (!result.canceled && result.assets[0]) {
+                                const asset = result.assets[0];
+                                setIsLoading(true);
+
+                                // ✅ Call new API that only sends chat_id, user_id, image (no action field)
+                                const updateResult = await updateGroupImage(
+                                    chatId,
+                                    currentUserId,
+                                    {
+                                        uri: asset.uri,
+                                        name: `group_avatar_${Date.now()}.jpg`,
+                                        type: 'image/jpeg',
+                                    }
+                                );
+
+                                console.log('✅ [UpdateGroupAvatar] API response:', updateResult);
+
+                                if (updateResult.success) {
+                                    // ✅ Reload group members to get updated image from backend
+                                    await loadGroupMembers();
+                                    Alert.alert('成功', '群头像已更新');
+                                } else {
+                                    console.error('❌ [UpdateGroupAvatar] Failed:', updateResult.message);
+                                    Alert.alert('错误', updateResult.message || '更新群头像失败');
+                                }
+
+                                setIsLoading(false);
+                            }
+                        } catch (error) {
+                            console.error('❌ [UpdateGroupAvatar] Exception:', error);
+                            setIsLoading(false);
+                            Alert.alert('错误', '更新群头像失败，请重试');
+                        }
+                    },
+                },
+            ]
+        );
+    }, [chatId, currentUserId, groupChat, loadGroupMembers]);
 
     // Leave group
     const handleLeaveGroup = useCallback(() => {
@@ -560,21 +771,37 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            // TODO: Call API to leave group
-                            removeChat(chatId);
-                            setIsLoading(false);
 
-                            Alert.alert('成功', '已退出群聊', [
-                                {
-                                    text: '确定',
-                                    onPress: () => navigation.reset({
-                                        index: 0,
-                                        routes: [{ name: 'ChatList' }],
-                                    }),
-                                },
-                            ]);
+                            // Call API to leave group
+                            const result = await updateGroup({
+                                chat_id: chatId,
+                                user_id: currentUserId,
+                                action: 'leave',
+                                target_id: currentUserId,
+                            });
+
+                            console.log('✅ [LeaveGroup] API response:', result);
+
+                            if (result.success) {
+                                removeChat(chatId);
+                                setIsLoading(false);
+
+                                Alert.alert('成功', '已退出群聊', [
+                                    {
+                                        text: '确定',
+                                        onPress: () => navigation.reset({
+                                            index: 0,
+                                            routes: [{ name: 'ChatList' }],
+                                        }),
+                                    },
+                                ]);
+                            } else {
+                                setIsLoading(false);
+                                console.error('❌ [LeaveGroup] Failed:', result.message);
+                                Alert.alert('错误', result.message || '退出群聊失败');
+                            }
                         } catch (error) {
-                            console.error('Leave group error:', error);
+                            console.error('❌ [LeaveGroup] Exception:', error);
                             setIsLoading(false);
                             Alert.alert('错误', '退出群聊失败，请重试');
                         }
@@ -582,7 +809,7 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    }, [chatName, chatId, removeChat, navigation]);
+    }, [chatName, chatId, currentUserId, removeChat, navigation]);
 
     // Dismiss group
     const handleDismissGroup = useCallback(() => {
@@ -602,21 +829,76 @@ export default function GroupSettingScreen() {
                     onPress: async () => {
                         try {
                             setIsLoading(true);
-                            // TODO: Call API to dismiss group
-                            removeChat(chatId);
-                            setIsLoading(false);
 
-                            Alert.alert('成功', '群聊已解散', [
-                                {
-                                    text: '确定',
-                                    onPress: () => navigation.reset({
-                                        index: 0,
-                                        routes: [{ name: 'ChatList' }],
-                                    }),
-                                },
-                            ]);
+                            // ✅ Split members: others (remove) and self (leave)
+                            const otherMembers = allMemberIds.filter(id => id !== currentUserId);
+
+                            console.log('🔄 [DismissGroup] Dismissing group:', {
+                                chat_id: chatId,
+                                total_members: allMemberIds.length,
+                                other_members: otherMembers.length,
+                                self: currentUserId,
+                            });
+
+                            // Step 1: Remove all other members
+                            const removeResults = await Promise.all(
+                                otherMembers.map(async (memberId) => {
+                                    const result = await updateGroup({
+                                        chat_id: chatId,
+                                        user_id: currentUserId,
+                                        action: 'remove',
+                                        target_id: memberId,
+                                    });
+                                    return { memberId, success: result.success, message: result.message };
+                                })
+                            );
+
+                            console.log('✅ [DismissGroup] Remove others results:', removeResults);
+
+                            // Check if all removals succeeded
+                            const failedRemovals = removeResults.filter(r => !r.success);
+
+                            if (failedRemovals.length > 0) {
+                                setIsLoading(false);
+                                console.error('❌ [DismissGroup] Some removals failed:', failedRemovals);
+                                Alert.alert(
+                                    '部分失败',
+                                    `移除 ${failedRemovals.length} 位成员失败，无法完全解散群聊`
+                                );
+                                return;
+                            }
+
+                            // Step 2: Leave the group (self)
+                            console.log('🔄 [DismissGroup] Owner leaving group...');
+                            const leaveResult = await updateGroup({
+                                chat_id: chatId,
+                                user_id: currentUserId,
+                                action: 'leave',
+                                target_id: currentUserId,
+                            });
+
+                            console.log('✅ [DismissGroup] Leave result:', leaveResult);
+
+                            if (leaveResult.success) {
+                                removeChat(chatId);
+                                setIsLoading(false);
+
+                                Alert.alert('成功', '群聊已解散', [
+                                    {
+                                        text: '确定',
+                                        onPress: () => navigation.reset({
+                                            index: 0,
+                                            routes: [{ name: 'ChatList' }],
+                                        }),
+                                    },
+                                ]);
+                            } else {
+                                setIsLoading(false);
+                                console.error('❌ [DismissGroup] Failed to leave:', leaveResult.message);
+                                Alert.alert('错误', `无法退出群聊: ${leaveResult.message}`);
+                            }
                         } catch (error) {
-                            console.error('Dismiss group error:', error);
+                            console.error('❌ [DismissGroup] Exception:', error);
                             setIsLoading(false);
                             Alert.alert('错误', '解散群聊失败，请重试');
                         }
@@ -624,7 +906,7 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    }, [groupChat, currentUserId, chatName, chatId, removeChat, navigation]);
+    }, [groupChat, currentUserId, chatName, chatId, allMemberIds, removeChat, navigation]);
 
     // Render member item
     const renderMemberItem = useCallback((member: Member, index: number) => {
@@ -632,62 +914,79 @@ export default function GroupSettingScreen() {
         const isKicking = kickingMemberId === member.id;
         const permission = checkKickPermission(member.id);
         const showKickBadge = permission.hasPermission && !isCurrentUser;
-        const isFriend = friendsList.includes(member.id);
+
+        // ✅ Correctly check if member is a friend
+        const isFriend = friendsList.some(f => {
+            // If I sent the request, friend is approve_id
+            if (f.approve_id === member.id) return true;
+            // If friend sent the request, friend is request_id
+            if (f.request_id === member.id) return true;
+            return false;
+        });
 
         return (
-            <TouchableOpacity
-                key={member.id}
-                style={styles.memberItem}
-                onPress={() => handleViewMemberProfile(member)}
-                disabled={isKicking}
-            >
-                <View style={styles.memberAvatarContainer}>
-                    {(() => {
-                        const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
-                        const avatarUri = member.avatar;
-                        const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
-                        return (
-                            <Image
-                                source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
-                                style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
-                            />
-                        );
-                    })()}
-                    {isFriend && !isCurrentUser && (
-                        <View style={styles.friendBadge}>
-                            <Ionicons name="heart" size={10} color="#FF3B30" />
-                        </View>
-                    )}
-                    {showKickBadge && (
-                        <View style={styles.kickBadge}>
-                            <Ionicons name="close" size={12} color="#FF3B30" />
-                        </View>
-                    )}
-                    {isKicking && (
-                        <View style={styles.kickingOverlay}>
-                            <ActivityIndicator size="small" color="#FF3B30" />
-                        </View>
-                    )}
-                </View>
-                <Text style={[styles.memberName, isCurrentUser && styles.currentUserName]} numberOfLines={1}>
-                    {isCurrentUser ? '我' : member.name}
-                    {member.id === groupChat?.ownerId && <Text style={styles.ownerLabel}> (群主)</Text>}
-                    {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
-                        <Text style={styles.adminLabel}> (管理员)</Text>
-                    )}
-                </Text>
-            </TouchableOpacity>
+            <View key={member.id} style={styles.memberItemWrapper}>
+                <TouchableOpacity
+                    style={styles.memberItem}
+                    onPress={() => handleViewMemberProfile(member)}
+                    disabled={isKicking}
+                >
+                    <View style={styles.memberAvatarContainer}>
+                        {(() => {
+                            const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+                            const avatarUri = member.avatar;
+                            const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
+                            return (
+                                <Image
+                                    source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
+                                    style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
+                                />
+                            );
+                        })()}
+                        {isFriend && !isCurrentUser && (
+                            <View style={styles.friendBadge}>
+                                <Ionicons name="heart" size={10} color="#FF3B30" />
+                            </View>
+                        )}
+                        {isKicking && (
+                            <View style={styles.kickingOverlay}>
+                                <ActivityIndicator size="small" color="#FF3B30" />
+                            </View>
+                        )}
+                    </View>
+                    <Text style={[styles.memberName, isCurrentUser && styles.currentUserName]} numberOfLines={1}>
+                        {isCurrentUser ? '我' : member.name}
+                        {member.id === groupChat?.ownerId && <Text style={styles.ownerLabel}> (群主)</Text>}
+                        {member.isAdmin && member.id !== groupChat?.ownerId && (
+                            <Text style={styles.adminLabel}> (管理员)</Text>
+                        )}
+                    </Text>
+                </TouchableOpacity>
+                {/* ✅ Kick button outside avatar container */}
+                {showKickBadge && (
+                    <TouchableOpacity
+                        style={styles.kickButton}
+                        onPress={() => handleKickMember(member.id, member.name)}
+                        disabled={isKicking}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="close" size={16} color="#FFF" />
+                    </TouchableOpacity>
+                )}
+            </View>
         );
-    }, [currentUserId, kickingMemberId, checkKickPermission, friendsList, groupChat, handleViewMemberProfile]);
+    }, [currentUserId, kickingMemberId, checkKickPermission, friendsList, groupChat, handleViewMemberProfile, handleKickMember]);
 
     // Render add member button
     const renderAddMemberButton = useCallback(() => (
-        <TouchableOpacity style={styles.memberItem} onPress={handleAddMembers}>
-            <View style={styles.addMemberButton}>
-                <Ionicons name="person-add" size={24} color="#666" />
-            </View>
-            <Text style={styles.memberName}>添加</Text>
-        </TouchableOpacity>
+        <View key="add-member-button" style={styles.memberItemWrapper}>
+            <TouchableOpacity style={styles.memberItem} onPress={handleAddMembers}>
+                <View style={styles.addMemberButton}>
+                    <Ionicons name="person-add" size={24} color="#666" />
+                </View>
+                <Text style={styles.memberName}>添加</Text>
+            </TouchableOpacity>
+        </View>
     ), [handleAddMembers]);
 
     // Loading screen
@@ -736,34 +1035,58 @@ export default function GroupSettingScreen() {
                 <View style={styles.section}>
                     <View style={styles.profileCard}>
                         <View style={[styles.groupInfoContainer, { borderBottomWidth: 0 }]}>
-                            <View style={styles.groupAvatarGridContainer}>
-                                    {allMembers.slice(0, 4).map((member, index) => {
-                                        const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
-                                        const avatarUri = member.avatar;
-                                        const shouldShowPlaceholder = !avatarUri || avatarUri.trim() === '' || avatarUri.trim() === placeholderUrl;
+                            <TouchableOpacity
+                                style={styles.groupAvatarGridContainer}
+                                onPress={handleUpdateGroupAvatar}
+                            >
+                                {(() => {
+                                    const placeholderUrl = "https://balkingly-hemitropic-lelah.ngrok-free.dev";
+                                    const shouldShowPlaceholder = !groupImage || groupImage.trim() === '' || groupImage.trim() === placeholderUrl;
+
+
+                                    if (shouldShowPlaceholder) {
+                                        // Show grid of member avatars as placeholder
+                                        return allMembers.slice(0, 4).map((member) => {
+                                            const memberPlaceholder = !member.avatar || member.avatar.trim() === '' || member.avatar.trim() === placeholderUrl;
+                                            return (
+                                                <Image
+                                                    key={member.id}
+                                                    source={memberPlaceholder ? require('../../assets/images/personal.png') : { uri: member.avatar }}
+                                                    style={styles.groupAvatarImage}
+                                                />
+                                            );
+                                        });
+                                    } else {
+                                        // Show actual group avatar (full size)
                                         return (
                                             <Image
-                                                key={index}
-                                                source={shouldShowPlaceholder ? require('../../assets/images/personal.png') : { uri: avatarUri }}
-                                                style={styles.groupAvatarImage}
+                                                source={{ uri: groupImage }}
+                                                style={styles.groupAvatarFull}
                                             />
                                         );
-                                    })}
-                            </View>
+                                    }
+                                })()}
+                                {/* Camera icon overlay */}
+                                <View style={styles.avatarEditOverlay}>
+                                    <Ionicons name="camera" size={16} color="#FFF" />
+                                </View>
+                            </TouchableOpacity>
                             <View style={styles.groupInfo}>
                                 <Text style={styles.groupName}>{chatName}</Text>
                                 <Text style={styles.groupMemberCount}>
                                     {allMembers.length} 位成员
-                                    {groupChat?.ownerId && (
-                                        <Text style={styles.ownerInfo}>
-                                            • 群主: {allMembers.find(m => m.id === groupChat.ownerId)?.name || '未知'}
+                                    {allMembers.filter(m => m.isAdmin).length > 0 && (
+                                        <Text style={styles.adminInfo}>
+                                            {' • '}{allMembers.filter(m => m.isAdmin).length} 位管理员
                                         </Text>
                                     )}
                                 </Text>
                             </View>
-                            <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
-                                <Ionicons name="create-outline" size={20} color={colors.text.gray} />
-                            </TouchableOpacity>
+                            {groupChat?.ownerId === currentUserId && (
+                                <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
+                                    <Ionicons name="create-outline" size={20} color={colors.text.gray} />
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </View>
                 </View>
@@ -772,8 +1095,11 @@ export default function GroupSettingScreen() {
                     <Text style={styles.sectionTitle}>群成员</Text>
                     <View style={styles.card}>
                         <View style={styles.gridContainer}>
-                            {allMembers.map((member, index) => renderMemberItem(member, index))}
-                            {renderAddMemberButton()}
+                            {/* ✅ Show max 11 members (to make room for add button if owner) or 12 members */}
+                            {allMembers.slice(0, groupChat?.ownerId === currentUserId ? 11 : 12).map((member, index) =>
+                                renderMemberItem(member, index)
+                            )}
+                            {groupChat?.ownerId === currentUserId && renderAddMemberButton()}
                         </View>
                         <TouchableOpacity
                             style={styles.viewMoreBtn}
@@ -882,7 +1208,7 @@ export default function GroupSettingScreen() {
 
                 {/* Danger Zone */}
                 <View style={styles.dangersection}>
-                    <View style={styles.card}>
+                    <View style={styles.dangercard}>
                         <TouchableOpacity style={[styles.dangerButton, styles.borderBottom]} onPress={handleLeaveGroup}>
                             <Ionicons name="exit-outline" size={20} color={colors.text.white} />
                             <Text style={styles.dangerButtonText}>退出群聊</Text>
@@ -890,11 +1216,11 @@ export default function GroupSettingScreen() {
 
                         {groupChat?.ownerId === currentUserId && (
                             <TouchableOpacity
-                                style={styles.dangerButton}
+                                style={styles.dangerButton1}
                                 onPress={handleDismissGroup}
                             >
-                                <Ionicons name="trash-outline" size={20} color={colors.text.white} />
-                                <Text style={styles.dangerButtonText}>解散群聊</Text>
+                                {/* <Ionicons name="trash-outline" size={20} color={colors.text.grayLight} /> */}
+                                <Text style={styles.dangerButtonText1}>解散群聊</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -1004,16 +1330,16 @@ const styles = StyleSheet.create({
     gridContainer: {
         flexDirection: "row",
         flexWrap: "wrap",
-        alignItems: "center",
-        justifyContent: "flex-start", // Changed from center to flex-start
-        paddingHorizontal: 20,
+        alignItems: "flex-start",
+        justifyContent: "flex-start",
+        paddingHorizontal: 16,
         paddingVertical: 20,
     },
     gridItem: {
-        width: (width - 10) / 5, // Adjusted width for 5 items per row
+        width: (width - 32) / 4, // ✅ 4 items per row, accounting for paddingHorizontal (16 * 2)
         alignItems: "center",
         marginBottom: 15,
-        justifyContent: 'center', // Added to center content
+        justifyContent: 'center',
     },
     avatarContainer: {
         width: 48,
@@ -1037,10 +1363,16 @@ const styles = StyleSheet.create({
     },
 
     // Specific to GroupSettingScreen member display
-    memberItem: { // Adjusted from GroupDetails gridItem
-        width: (width - 10) / 5, // Keep original
-        alignItems: 'center',
+    memberItemWrapper: {
+        width: (width - 32) / 5, // ✅ 4 items per row, Match gridContainer padding (16 * 2)
         marginBottom: 15,
+        position: 'relative',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    memberItem: { // Adjusted from GroupDetails gridItem
+        width: '100%',
+        alignItems: 'center',
         justifyContent: 'center',
     },
     memberAvatarContainer: { // Adjusted from GroupDetails avatarContainer
@@ -1108,19 +1440,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 1, // Ensure badge is on top
     },
-    kickBadge: {
+    // ✅ New kick button style - beautiful red circle with white X
+    kickButton: {
         position: 'absolute',
-        top: -4,
-        right: -4,
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: colors.background.white,
-        borderWidth: borders.width1,
-        borderColor: colors.functional.red,
+        top: -8,
+        right: -3,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FF3B30', // iOS red
+        borderWidth: 2,
+        borderColor: colors.background.white,
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 1, // Ensure badge is on top
+        zIndex: 10,
+        shadowColor: '#FF3B30',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 8,
     },
     kickingOverlay: {
         position: 'absolute',
@@ -1169,6 +1507,12 @@ const styles = StyleSheet.create({
         borderRadius: borders.radius12,
         overflow: "hidden",
     },
+    dangercard: {
+        backgroundColor: colors.background.chatBg,
+        borderRadius: borders.radius12,
+        overflow: "hidden",
+        gap: 5,
+    },
 
     // --- Group Info Section (adapted from GroupSettingScreen) ---
     groupInfoContainer: { // This will now be inside a card
@@ -1195,6 +1539,21 @@ const styles = StyleSheet.create({
         width: '50%',
         height: '50%',
     },
+    groupAvatarFull: {
+        width: '100%',
+        height: '100%',
+    },
+    avatarEditOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
     groupInfo: { flex: 1 },
     groupName: {
         fontSize: typography.fontSize18,
@@ -1207,6 +1566,7 @@ const styles = StyleSheet.create({
         color: colors.text.gray,
     },
     ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
+    adminInfo: { fontSize: typography.fontSize12, color: colors.functional.green },
     editButton: { padding: 8 },
 
     // --- Setting Item (used for general settings) ---
@@ -1271,6 +1631,21 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize16, // Slightly larger font
         fontWeight: typography.fontWeight600, // Bolder
         color: colors.text.white, // White text for contrast
+        marginLeft: 8,
+    },
+
+    dangerButton1: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 14,
+        marginHorizontal: 0,
+        borderWidth: 0, // No border
+    },
+    dangerButtonText1: {
+        fontSize: typography.fontSize16, // Slightly larger font
+        fontWeight: typography.fontWeight600, // Bolder
+        color: colors.text.grayLight, // White text for contrast
         marginLeft: 8,
     },
 

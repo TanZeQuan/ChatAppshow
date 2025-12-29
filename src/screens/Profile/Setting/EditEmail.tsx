@@ -133,7 +133,7 @@ export default function EditEmailScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['bottom']}>
       {/* Header with Gradient */}
       <LinearGradient
         colors={['#FFD860', '#FFD860']}
@@ -181,7 +181,7 @@ export default function EditEmailScreen({ navigation }: Props) {
             editable={!isLoading}
           />
           {newEmail.length > 0 && !isLoading && (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.clearButton}
               onPress={() => setNewEmail("")}
             >
@@ -192,7 +192,7 @@ export default function EditEmailScreen({ navigation }: Props) {
 
         <Text style={styles.hint}>请输入有效的邮箱地址</Text>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.confirmButton,
             (isLoading || !newEmail.trim()) && styles.confirmButtonDisabled
@@ -207,7 +207,7 @@ export default function EditEmailScreen({ navigation }: Props) {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 

@@ -20,7 +20,7 @@ export default function ChangePasswordScreen({ navigation }: Props) {
   const [confirmPwd, setConfirmPwd] = useState("");
 
   return (
-    <View style={styles.safeArea}>
+    <SafeAreaView style={styles.safeArea} edges={['bottom']}>
       {/* Header with Gradient */}
       <LinearGradient
         colors={['#FFD860', '#FFD860']}
@@ -72,7 +72,7 @@ export default function ChangePasswordScreen({ navigation }: Props) {
           <Text style={styles.saveBtnText}>更新密码</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
