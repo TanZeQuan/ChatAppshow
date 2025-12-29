@@ -335,23 +335,15 @@ export default function ChatListScreen() {
     }
   };
 
-  const renderGroupAvatar = () => {
-    // ✅ Display group default image
-    return (
-      <Image
-        source={require('../../assets/images/group.png')}
-        style={styles.avatar}
-      />
-    );
-  };
-
   const renderChatItem = ({ item }: any) => {
     // ✅ Helper function to check if avatar is valid
     const isValidAvatar = (avatar: string | null | undefined): boolean => {
       if (!avatar) return false;
       const trimmed = avatar.trim();
       if (trimmed === '') return false;
-      if (trimmed === 'https://balkingly-hemitropic-lelah.ngrok-free.dev') return false;
+      // Also check if it's the specific placeholder URL from the API backend
+      if (trimmed === 'https://balkingly-hemitropic-lelah.ngrok-free.dev' ||
+          trimmed === 'https://balkingly-hemitropic-lelah.ngrok-free.dev/') return false;
       return true;
     };
 
@@ -362,18 +354,16 @@ export default function ChatListScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.avatarContainer}>
-          {item.isGroup ? (
-            renderGroupAvatar()
-          ) : (
-            <Image
-              source={
-                isValidAvatar(item.avatar)
-                  ? { uri: item.avatar }
-                  : require('../../assets/images/personal.png')
-              }
-              style={styles.avatar}
-            />
-          )}
+          <Image
+            source={
+              isValidAvatar(item.avatar)
+                ? { uri: item.avatar }
+                : item.isGroup
+                  ? require('../../assets/images/group.png') // Fallback for groups
+                  : require('../../assets/images/personal.png') // Fallback for personal chats
+            }
+            style={styles.avatar}
+          />
 
           {/* Online indicator for individual chats */}
           {!item.isGroup && item.online && (

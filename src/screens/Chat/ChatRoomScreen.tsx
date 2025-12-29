@@ -1,6 +1,6 @@
 import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -415,6 +415,14 @@ export default function ChatRoomScreen() {
       clearInterval(pollingInterval);
     };
   }, [loadMessages]);
+
+  // ✅ Reload data when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      loadMessages(false, false); // Silent reload
+    }, [loadMessages])
+  );
 
   // ✅ Auto-enable search mode if navigated from settings
   useEffect(() => {

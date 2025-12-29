@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
@@ -13,6 +13,8 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { readChatMessages, updateGroup } from '../../api/Chat';
+import { ensureFullImageUrl } from '../../api/service';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
 import { borders, colors, typography } from '../../styles';
@@ -25,6 +27,7 @@ interface Member {
     name: string;
     avatar?: string;
     phone?: string;
+    isAdmin?: boolean; // true if isadmin === 2
 }
 
 export default function GroupMemberList() {
@@ -37,6 +40,7 @@ export default function GroupMemberList() {
 
     const [groupChat, setGroupChat] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
 
     useEffect(() => {
         const chat = getChatById(groupId);
@@ -45,6 +49,88 @@ export default function GroupMemberList() {
         }
         setIsLoading(false);
     }, [groupId, getChatById]);
+
+    // Load group members from API
+    const loadGroupMembers = useCallback(async () => {
+        if (!currentUserId || !groupId) return;
+
+        try {
+            console.log('📥 [GroupMemberList] Loading group members...');
+
+            const result = await readChatMessages({
+                chat_id: groupId,
+                user_id: currentUserId,
+                offset: 0,
+            });
+
+            if (result.success && result.data?.group && Array.isArray(result.data.group)) {
+                const groupMembers = result.data.group;
+                console.log('📥 [GroupMemberList] Got group members:', groupMembers);
+
+                // Build members array from API response
+                const membersInfo: Member[] = groupMembers.map((member: any) => {
+                    const isAdmin = member.isadmin === 2;
+                    const memberAvatar = member.image || '';
+                    const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
+
+                    return {
+                        id: member.user_id,
+                        name: member.name || '未知',
+                        avatar: fullAvatarUrl,
+                        isAdmin: isAdmin,
+                    };
+                });
+
+                // Extract owner ID and admin IDs
+                const ownerMember = groupMembers.find((m: any) => m.isadmin === 2);
+                const ownerId = ownerMember?.user_id || '';
+                const adminIds = groupMembers
+                    .filter((m: any) => m.isadmin === 2)
+                    .map((m: any) => m.user_id);
+
+                // Get group info
+                const groupInfo = result.data.info || {};
+                const groupName = groupInfo.name || groupChat?.name || '未知群聊';
+                const groupImageUrl = groupInfo.image || '';
+                const fullGroupImageUrl = ensureFullImageUrl(groupImageUrl);
+
+                console.log('✅ [GroupMemberList] Processed member info:', {
+                    total: membersInfo.length,
+                    ownerId: ownerId,
+                    adminIds: adminIds,
+                });
+
+                // Update chatStore
+                const currentChat = getChatById(groupId);
+                if (currentChat) {
+                    const updatedChat = {
+                        ...currentChat,
+                        name: groupName,
+                        avatar: fullGroupImageUrl,
+                        members: membersInfo,
+                        memberIds: groupMembers.map((m: any) => m.user_id),
+                        ownerId: ownerId,
+                        admins: adminIds,
+                    };
+                    addChat(updatedChat);
+                    setGroupChat(updatedChat);
+                    console.log('✅ [GroupMemberList] Updated chat store');
+                }
+            } else {
+                console.warn('⚠️ [GroupMemberList] No group members in API response');
+            }
+        } catch (error) {
+            console.error('❌ [GroupMemberList] Failed to load group members:', error);
+        }
+    }, [currentUserId, groupId, groupChat?.name, getChatById, addChat]);
+
+    // ✅ Reload data when screen gains focus
+    useFocusEffect(
+        useCallback(() => {
+            console.log('🔄 [GroupMemberList] Screen focused, reloading members...');
+            loadGroupMembers();
+        }, [loadGroupMembers])
+    );
 
     // Memoized members list
     const allMembers: Member[] = useMemo(() => {
@@ -101,7 +187,7 @@ export default function GroupMemberList() {
     }, [groupChat, currentUserId]);
 
 
-    // Placeholder for kick member functionality (will be fully implemented in Part 2)
+    // Kick member with API call
     const handleKickMember = useCallback(async (memberId: string, memberName: string) => {
         const permission = checkKickPermission(memberId);
         if (!permission.hasPermission) {
@@ -109,32 +195,54 @@ export default function GroupMemberList() {
             return;
         }
 
+        setKickingMemberId(memberId);
+
         Alert.alert(
             '踢出成员',
             `确定要将 ${memberName} 踢出群聊吗？`,
             [
-                { text: '取消', style: 'cancel' },
+                { text: '取消', style: 'cancel', onPress: () => setKickingMemberId(null) },
                 {
                     text: '踢出',
                     style: 'destructive',
-                    onPress: () => {
-                        if (groupChat) {
-                            const updatedMembers = groupChat.members.filter((m: Member) => m.id !== memberId);
-                            const updatedMemberIds = groupChat.memberIds.filter((id: string) => id !== memberId);
-                            const updatedChat = {
-                                ...groupChat,
-                                members: updatedMembers,
-                                memberIds: updatedMemberIds,
-                            };
-                            addChat(updatedChat); // Update store
-                            setGroupChat(updatedChat); // Update local state
-                            Alert.alert('成功', `已成功将 ${memberName} 踢出群聊`);
+                    onPress: async () => {
+                        try {
+                            console.log('🔄 [GroupMemberList KickMember] Calling updateGroup API with:', {
+                                chat_id: groupId,
+                                user_id: currentUserId,
+                                action: 'remove',
+                                target_id: memberId,
+                            });
+
+                            // Call backend API
+                            const result = await updateGroup({
+                                chat_id: groupId,
+                                user_id: currentUserId,
+                                action: 'remove',
+                                target_id: memberId,
+                            });
+
+                            console.log('✅ [GroupMemberList KickMember] API response:', result);
+
+                            if (result.success) {
+                                // Reload group members from API to get updated list
+                                await loadGroupMembers();
+                                Alert.alert('成功', `已成功将 ${memberName} 踢出群聊`);
+                            } else {
+                                console.error('❌ [GroupMemberList KickMember] Failed:', result.message);
+                                Alert.alert('错误', result.message || '踢出成员失败，请重试');
+                            }
+                        } catch (error) {
+                            console.error('❌ [GroupMemberList KickMember] Exception:', error);
+                            Alert.alert('错误', '踢出成员失败，请重试');
+                        } finally {
+                            setKickingMemberId(null);
                         }
                     }
                 }
             ]
         );
-    }, [groupChat, addChat, checkKickPermission]);
+    }, [checkKickPermission, groupId, currentUserId, loadGroupMembers]);
 
     // Placeholder for add member functionality (will be fully implemented in Part 2)
     const handleAddMembers = useCallback(() => {
@@ -148,50 +256,54 @@ export default function GroupMemberList() {
     // Render individual member item
     const renderMemberItem = ({ item: member, index }: { item: Member; index: number }) => {
         const isCurrentUser = member.id === currentUserId;
+        const isKicking = kickingMemberId === member.id;
         const permission = checkKickPermission(member.id);
-        const showKickOption = permission.hasPermission && !isCurrentUser;
+        const showKickBadge = permission.hasPermission && !isCurrentUser;
 
         return (
-            <TouchableOpacity
-                style={[styles.memberItem, index === allMembers.length -1 && !showKickOption && styles.noBorderBottom]} // Add noBorderBottom for last item unless it's the kick option
-                onPress={() => Alert.alert(member.name, `ID: ${member.id}\n${isCurrentUser ? '你' : ''}`)}
-                onLongPress={() => {
-                    if (showKickOption) {
-                        Alert.alert(
-                            '成员操作',
-                            `对 ${member.name} 进行操作`,
-                            [
-                                { text: '取消', style: 'cancel' },
-                                {
-                                    text: '踢出群聊',
-                                    style: 'destructive',
-                                    onPress: () => handleKickMember(member.id, member.name),
-                                },
-                            ]
-                        );
-                    } else {
-                        Alert.alert(member.name, `ID: ${member.id}\n${isCurrentUser ? '你' : ''}`);
-                    }
-                }}
-            >
-                <Image
-                    source={
-                        !member.avatar || member.avatar.trim() === '' || member.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
-                            ? require('../../assets/images/personal.png')
-                            : { uri: member.avatar }
-                    }
-                    style={styles.memberAvatar}
-                />
-                <View style={styles.memberInfo}>
-                    <Text style={styles.memberName}>{member.name}</Text>
-                    <Text style={styles.memberId}>ID: {member.id}</Text>
-                </View>
-                {groupChat?.ownerId === member.id && <Text style={styles.ownerLabel}>群主</Text>}
-                {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
-                    <Text style={styles.adminLabel}>管理员</Text>
+            <View style={styles.memberItemWrapper}>
+                <TouchableOpacity
+                    style={[styles.memberItem, index === allMembers.length -1 && styles.noBorderBottom]}
+                    onPress={() => Alert.alert(member.name, `ID: ${member.id}\n${isCurrentUser ? '你' : ''}`)}
+                    disabled={isKicking}
+                >
+                    <View style={styles.memberAvatarContainer}>
+                        <Image
+                            source={
+                                !member.avatar || member.avatar.trim() === '' || member.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                                    ? require('../../assets/images/personal.png')
+                                    : { uri: member.avatar }
+                            }
+                            style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
+                        />
+                        {isKicking && (
+                            <View style={styles.kickingOverlay}>
+                                <ActivityIndicator size="small" color="#FF3B30" />
+                            </View>
+                        )}
+                    </View>
+                    <View style={styles.memberInfo}>
+                        <Text style={styles.memberName}>{member.name}</Text>
+                        <Text style={styles.memberId}>ID: {member.id}</Text>
+                    </View>
+                    {groupChat?.ownerId === member.id && <Text style={styles.ownerLabel}>群主</Text>}
+                    {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
+                        <Text style={styles.adminLabel}>管理员</Text>
+                    )}
+                    <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+                </TouchableOpacity>
+                {/* Kick button outside member item */}
+                {showKickBadge && (
+                    <TouchableOpacity
+                        style={styles.kickButton}
+                        onPress={() => handleKickMember(member.id, member.name)}
+                        disabled={isKicking}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons name="close" size={16} color="#FFF" />
+                    </TouchableOpacity>
                 )}
-                <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
-            </TouchableOpacity>
+            </View>
         );
     };
 
@@ -289,13 +401,16 @@ const styles = StyleSheet.create({
         color: colors.text.gray,
         fontWeight: typography.fontWeight500,
     },
+    memberItemWrapper: {
+        position: 'relative',
+        marginBottom: 8,
+    },
     memberItem: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: 12,
         backgroundColor: colors.background.white,
         borderRadius: borders.radius12,
-        marginBottom: 8,
         paddingHorizontal: 15,
         borderBottomWidth: borders.width1,
         borderBottomColor: colors.border.light,
@@ -303,12 +418,53 @@ const styles = StyleSheet.create({
     noBorderBottom: {
         borderBottomWidth: 0,
     },
-    memberAvatar: {
+    memberAvatarContainer: {
+        position: 'relative',
+        marginRight: 12,
         width: 48,
         height: 48,
         borderRadius: borders.radius8,
-        marginRight: 12,
+        overflow: 'hidden',
         backgroundColor: colors.background.grayLight,
+    },
+    memberAvatar: {
+        width: '100%',
+        height: '100%',
+        borderRadius: borders.radius8,
+    },
+    memberAvatarKicking: {
+        opacity: 0.5
+    },
+    kickingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(255, 255, 255, 0.5)',
+        borderRadius: borders.radius8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 2,
+    },
+    kickButton: {
+        position: 'absolute',
+        top: -2,
+        right: 6,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#FF3B30', // iOS red
+        borderWidth: 2,
+        borderColor: colors.background.white,
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10,
+        shadowColor: '#FF3B30',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.4,
+        shadowRadius: 4,
+        elevation: 8,
     },
     memberInfo: {
         flex: 1,

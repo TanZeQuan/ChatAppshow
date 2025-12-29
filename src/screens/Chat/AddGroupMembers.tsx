@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -12,10 +12,10 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { updateGroup } from '../../api/Chat';
-import { readFriends } from '../../api/Friend';
+import { updateGroup, readChatMessages } from '../../api/Chat';
 import { ensureFullImageUrl } from '../../api/service';
 import { useUserStore } from '../../store/userStore';
+import { useContactStore } from '../../store/contactStore';
 import { borders, colors, typography } from '../../styles';
 
 interface Friend {
@@ -36,69 +36,88 @@ export default function AddGroupMembers() {
   const { chatId, chatName, currentMembers } = route.params as RouteParams;
 
   const currentUserId = useUserStore((state) => state.user?.id) || '';
+  const allContacts = useContactStore((state) => state.contacts); // ✅ Get contacts from store
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
+  const [latestMemberIds, setLatestMemberIds] = useState<string[]>([]); // ✅ Latest member IDs from API
 
   // Load friends list
-  useEffect(() => {
-    loadFriends();
-  }, []);
-
-  const loadFriends = async () => {
+  const loadFriends = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = await readFriends(2); // Get accepted friends
+      // ✅ Step 1: Get latest group members from API
+      console.log('📥 [AddGroupMembers] Loading latest group members...');
+      const groupResult = await readChatMessages({
+        chat_id: chatId,
+        user_id: currentUserId,
+        offset: 0,
+      });
 
-      if (result.success && result.data) {
-        // ✅ Correctly extract friend IDs from request and approve arrays
-        const friendsList: Friend[] = [];
+      let currentMemberIds: string[] = currentMembers; // Default to route params
 
-        // From request array: I am request_id, friend is approve_id
-        if (result.data.request) {
-          result.data.request.forEach((friend: any) => {
-            const friendId = friend.approve_id; // ✅ Friend is the approve_id
-            if (friendId && !currentMembers.includes(friendId)) {
-              friendsList.push({
-                user_id: friendId,
-                name: friend.name || friend.username || '未知',
-                image: friend.image || '',
-              });
-            }
-          });
-        }
-
-        // From approve array: I am approve_id, friend is request_id
-        if (result.data.approve) {
-          result.data.approve.forEach((friend: any) => {
-            const friendId = friend.request_id; // ✅ Friend is the request_id
-            if (friendId && !currentMembers.includes(friendId)) {
-              friendsList.push({
-                user_id: friendId,
-                name: friend.name || friend.username || '未知',
-                image: friend.image || '',
-              });
-            }
-          });
-        }
-
-        console.log('📥 [AddGroupMembers] Loaded friends:', {
-          total: friendsList.length,
-          filtered: friendsList.filter(f => !currentMembers.includes(f.user_id)).length,
-          currentMembers: currentMembers,
-        });
-
-        setFriends(friendsList);
+      if (groupResult.success && groupResult.data?.group && Array.isArray(groupResult.data.group)) {
+        // Use latest member IDs from API
+        currentMemberIds = groupResult.data.group.map((m: any) => m.user_id);
+        setLatestMemberIds(currentMemberIds);
+        console.log('✅ [AddGroupMembers] Got latest members:', currentMemberIds);
+      } else {
+        console.warn('⚠️ [AddGroupMembers] Failed to load group members, using route params');
       }
+
+      // ✅ Step 2: Get friends from contactStore
+      console.log('📥 [AddGroupMembers] Loading friends from contactStore:', {
+        totalContacts: allContacts.length,
+        contacts: allContacts,
+      });
+
+      // Filter out members already in the group
+      const friendsList: Friend[] = allContacts
+        .filter(contact => {
+          const isInGroup = currentMemberIds.includes(contact.id);
+          console.log('📥 [AddGroupMembers] Checking contact:', {
+            id: contact.id,
+            name: contact.name,
+            isInGroup,
+          });
+          return !isInGroup; // Only include friends NOT in the group
+        })
+        .map(contact => ({
+          user_id: contact.id,
+          name: contact.name,
+          image: contact.avatar || '',
+        }));
+
+      console.log('📥 [AddGroupMembers] Filtered friends:', {
+        total: friendsList.length,
+        currentMembers: currentMemberIds.length,
+        currentMemberIds,
+        friendsList,
+      });
+
+      setFriends(friendsList);
     } catch (error) {
       console.error('Failed to load friends:', error);
       Alert.alert('错误', '加载好友列表失败');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [chatId, currentUserId, currentMembers, allContacts]);
+
+  useEffect(() => {
+    loadFriends();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allContacts]);
+
+  // ✅ Reload data when screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 [AddGroupMembers] Screen focused, reloading friends...');
+      loadFriends();
+    }, [loadFriends])
+  );
 
   const toggleFriendSelection = (friendId: string) => {
     setSelectedFriends((prev) => {
@@ -123,21 +142,50 @@ export default function AddGroupMembers() {
     try {
       // Add members one by one (API only supports one target_id at a time)
       const selectedArray = Array.from(selectedFriends);
+      console.log('➕ [AddMembers] Adding members:', {
+        chatId,
+        currentUserId,
+        selectedFriends: selectedArray,
+        totalCount: selectedArray.length,
+      });
+
       const results = await Promise.all(
         selectedArray.map(async (friendId) => {
+          console.log(`➕ [AddMembers] Adding friend ${friendId}...`);
+          console.log(`➕ [AddMembers] Calling updateGroup with:`, {
+            chat_id: chatId,
+            user_id: currentUserId,
+            action: 'add',
+            target_id: friendId,
+          });
           const result = await updateGroup({
             chat_id: chatId,
             user_id: currentUserId,
             action: 'add',
             target_id: friendId,
           });
-          return { friendId, success: result.success, message: result.message };
+          console.log(`➕ [AddMembers] Result for ${friendId}:`, {
+            success: result.success,
+            message: result.message,
+            data: result.data,
+            fullResult: result,
+          });
+          return { friendId, success: result.success, message: result.message, data: result.data };
         })
       );
+
+      console.log('➕ [AddMembers] All results:', results);
 
       // Check results
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.length - successCount;
+      const failedMembers = results.filter((r) => !r.success);
+
+      console.log('➕ [AddMembers] Summary:', {
+        successCount,
+        failureCount,
+        failedMembers,
+      });
 
       if (successCount > 0) {
         Alert.alert(
@@ -151,10 +199,12 @@ export default function AddGroupMembers() {
           ]
         );
       } else {
-        Alert.alert('添加失败', '所有成员添加失败，请重试');
+        const errorMessages = failedMembers.map(f => `${f.friendId}: ${f.message}`).join('\n');
+        console.error('❌ [AddMembers] All failed:', errorMessages);
+        Alert.alert('添加失败', `所有成员添加失败：\n${errorMessages}`);
       }
     } catch (error) {
-      console.error('Failed to add members:', error);
+      console.error('❌ [AddMembers] Exception:', error);
       Alert.alert('错误', '添加成员失败，请重试');
     } finally {
       setIsAdding(false);
