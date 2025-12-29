@@ -292,7 +292,7 @@ export default function GroupMemberList() {
                     )}
                     <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
                 </TouchableOpacity>
-                {/* Kick button outside member item */}
+                {/* Kick button outside avatar - top left corner */}
                 {showKickBadge && (
                     <TouchableOpacity
                         style={styles.kickButton}
@@ -300,7 +300,7 @@ export default function GroupMemberList() {
                         disabled={isKicking}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="close" size={16} color="#FFF" />
+                        <Ionicons name="close" size={12} color="#999" />
                     </TouchableOpacity>
                 )}
             </View>
@@ -449,22 +449,22 @@ const styles = StyleSheet.create({
     },
     kickButton: {
         position: 'absolute',
-        top: -2,
-        right: 6,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: '#FF3B30', // iOS red
-        borderWidth: 2,
-        borderColor: colors.background.white,
+        top: 6,
+        left: 6,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: colors.background.white,
+        borderWidth: 1.5,
+        borderColor: colors.border.gray,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 10,
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     memberInfo: {
         flex: 1,

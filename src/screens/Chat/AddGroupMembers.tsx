@@ -12,10 +12,10 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { updateGroup, readChatMessages } from '../../api/Chat';
+import { readChatMessages, updateGroup } from '../../api/Chat';
 import { ensureFullImageUrl } from '../../api/service';
-import { useUserStore } from '../../store/userStore';
 import { useContactStore } from '../../store/contactStore';
+import { useUserStore } from '../../store/userStore';
 import { borders, colors, typography } from '../../styles';
 
 interface Friend {
@@ -239,7 +239,7 @@ export default function AddGroupMembers() {
           ]}
         >
           {isSelected && (
-            <Ionicons name="checkmark" size={18} color={colors.text.white} />
+            <Ionicons name="checkmark" size={16} color={colors.text.white} />
           )}
         </View>
       </TouchableOpacity>
@@ -271,7 +271,7 @@ export default function AddGroupMembers() {
           disabled={isAdding || selectedFriends.size === 0}
         >
           {isAdding ? (
-            <ActivityIndicator size="small" color={colors.functional.blue} />
+            <ActivityIndicator size="small" color={colors.functional.green} />
           ) : (
             <Text
               style={[
@@ -322,11 +322,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     backgroundColor: colors.background.yellowLight,
+    borderBottomWidth: borders.width1,
+    borderBottomColor: colors.border.light,
   },
   backButton: {
-    paddingRight: 10,
+    padding: 8,
   },
   headerTitle: {
     flex: 1,
@@ -334,36 +337,38 @@ const styles = StyleSheet.create({
     fontWeight: typography.fontWeight600,
     color: colors.text.black,
     textAlign: 'center',
+    marginHorizontal: 8,
   },
   headerRightButton: {
-    paddingLeft: 10,
-    minWidth: 50,
+    padding: 8,
+    minWidth: 60,
     alignItems: 'flex-end',
   },
   headerRightText: {
     fontSize: typography.fontSize16,
     fontWeight: typography.fontWeight600,
-    color: colors.functional.blue,
+    color: colors.text.black,
   },
   headerRightTextDisabled: {
     color: colors.text.grayLight,
   },
   selectedBar: {
-    backgroundColor: colors.background.white,
-    paddingVertical: 12,
+    backgroundColor: colors.background.yellowPale,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: borders.width1,
-    borderBottomColor: colors.border.light,
+    borderBottomColor: colors.functional.yellowBright,
   },
   selectedText: {
     fontSize: typography.fontSize14,
-    color: colors.functional.blue,
+    color: colors.text.grayDark,
     fontWeight: typography.fontWeight500,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 40,
   },
   loadingText: {
     marginTop: 12,
@@ -371,7 +376,7 @@ const styles = StyleSheet.create({
     color: colors.text.grayDark,
   },
   listContainer: {
-    paddingVertical: 8,
+    paddingTop: 8,
   },
   emptyListContainer: {
     flex: 1,
@@ -381,7 +386,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: colors.background.white,
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     borderBottomWidth: borders.width1,
     borderBottomColor: colors.border.light,
@@ -392,42 +397,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   friendAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: borders.radius24,
+    width: 50,
+    height: 50,
+    borderRadius: borders.radius25,
     backgroundColor: colors.background.grayLight,
-    marginRight: 12,
+    marginRight: 14,
   },
   friendName: {
     fontSize: typography.fontSize16,
     color: colors.text.dark,
     fontWeight: typography.fontWeight500,
+    flex: 1,
   },
   checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: borders.radius12,
+    width: 22,
+    height: 22,
+    borderRadius: borders.radius4,
     borderWidth: borders.width2,
-    borderColor: colors.border.gray,
+    borderColor: colors.border.grayMedium,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background.white,
   },
   checkboxSelected: {
-    backgroundColor: colors.functional.blue,
-    borderColor: colors.functional.blue,
+    backgroundColor: colors.functional.green,
+    borderColor: colors.functional.green,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 40,
+    paddingVertical: 60,
   },
   emptyText: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
     color: colors.text.gray,
     marginTop: 16,
+    textAlign: 'center',
   },
   emptySubtext: {
     fontSize: typography.fontSize14,
