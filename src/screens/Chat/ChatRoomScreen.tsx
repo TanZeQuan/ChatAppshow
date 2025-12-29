@@ -65,7 +65,6 @@ export default function ChatRoomScreen() {
   const { chatId, chatName } = params;
   console.log('🆔 ChatRoomScreen chatId:', chatId);
 
-
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
   const currentUserId = currentUser?.id || 'me';
@@ -156,7 +155,6 @@ export default function ChatRoomScreen() {
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
     if (!currentUserId) return;
 
-    // Get current user info inside the function to avoid dependency issues
     const user = useUserStore.getState().user;
     const userName = user?.name || '我';
     const userAvatar = user?.avatar || '';
@@ -166,8 +164,6 @@ export default function ChatRoomScreen() {
         setIsLoading(true);
       }
 
-      // ✅ Load more old messages: use current offset
-      // ✅ Refresh/Polling: always use offset 0 to get latest messages
       const currentOffset = loadMore ? offsetRef.current : 0;
 
       const result = await readChatMessages({
@@ -180,116 +176,84 @@ export default function ChatRoomScreen() {
         const apiMessages = result.data.chat || [];
         const groupMembers = result.data.group || [];
 
-        // Extract member user IDs and store them (only if not already set from store)
+        // ✅ 创建成员信息映射表（ID -> 头像/名字）
+        const memberMap = new Map<string, { name: string; avatar: string }>();
+
+        // 从 group 数组构建成员信息
+        groupMembers.forEach((member: any) => {
+          memberMap.set(member.user_id, {
+            name: member.name || '用户',
+            avatar: member.image ? ensureFullImageUrl(member.image) : '', // ✅ 使用 image 字段
+          });
+        });
+
+        // 添加当前用户信息
+        memberMap.set(currentUserId, {
+          name: userName,
+          avatar: userAvatar,
+        });
+
+        // Extract member user IDs
         if (groupMembers.length > 0) {
           const memberIds = groupMembers.map((member: any) => member.user_id);
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
         }
 
         if (apiMessages.length > 0) {
-          // Transform API messages to store format
           const transformedMessages = apiMessages.map((msg: any) => {
             let messageText = '';
-            let messageType = 1; // Default to text
+            let messageType = 1;
             let imageUrls: string[] = [];
             let voiceUrl: string = '';
 
+            // ... 你的消息解析逻辑保持不变 ...
             try {
-              // 🔍 Check if msg.message is already an object or a string
               let parsedMessage: any;
-
               if (typeof msg.message === 'string') {
                 try {
                   parsedMessage = JSON.parse(msg.message);
                 } catch {
-                  // If parsing fails, treat as plain text
                   parsedMessage = { message: msg.message };
                 }
               } else if (typeof msg.message === 'object' && msg.message !== null) {
-                parsedMessage = msg.message; // Already an object
+                parsedMessage = msg.message;
               } else {
                 parsedMessage = { message: String(msg.message || '') };
               }
 
-              // console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
-
-              // Extract type: try msg.type first, then parsedMessage.type
               if (msg.type) {
                 messageType = msg.type;
               } else if (parsedMessage.type) {
-                messageType = parsedMessage.type; // ✅ 从 parsedMessage 获取类型
+                messageType = parsedMessage.type;
               }
 
-              // console.log('📦 [Message Parse] Final messageType:', messageType);
-
-              // For type 3 (images/files), extract image URLs
               if (messageType === 3) {
-                // console.log('🖼️ [Image Message] Detected type 3, parsedMessage:', parsedMessage);
-
-                // Check if parsedMessage is an array (direct image URLs)
                 if (Array.isArray(parsedMessage)) {
-                  // console.log('🖼️ [Image Message] parsedMessage is array:', parsedMessage);
-                  imageUrls = parsedMessage.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
-                }
-                // Check if parsedMessage.message is an array
-                else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is array:', parsedMessage.message);
-                  imageUrls = parsedMessage.message.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
-                }
-                // Check if parsedMessage.message is a comma-separated string
-                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is string:', parsedMessage.message);
+                  imageUrls = parsedMessage.map((url: string) => ensureFullImageUrl(url));
+                } else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
+                  imageUrls = parsedMessage.message.map((url: string) => ensureFullImageUrl(url));
+                } else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
                   const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
-                  imageUrls = urls.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = urls.map((url: string) => ensureFullImageUrl(url));
                 }
-
-                // console.log('🖼️ [Image Message] Final imageUrls:', imageUrls);
-                messageText = `[${imageUrls.length}张图片]`; // Display text
-              }
-              // For type 2 (voice), ensure full URL
-              else if (messageType === 2) {
-                // console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
-                // console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
-                // console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
-
+                messageText = `[${imageUrls.length}张图片]`;
+              } else if (messageType === 2) {
                 if (typeof parsedMessage === 'string') {
                   voiceUrl = ensureFullImageUrl(parsedMessage);
                   messageText = '[语音消息]';
                 } else if (parsedMessage.message) {
-                  // ✅ Check if it's an error object from backend
                   if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
-                    // console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
-                    voiceUrl = ''; // Empty URL to skip this message
+                    voiceUrl = '';
                     messageText = '[语音上传失败]';
-                  }
-                  // Check if parsedMessage.message is an object with uri property
-                  else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
+                  } else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
                     messageText = '[语音消息]';
-                  }
-                  // Normal string path
-                  else if (typeof parsedMessage.message === 'string') {
+                  } else if (typeof parsedMessage.message === 'string') {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message);
                     messageText = '[语音消息]';
                   }
                 }
-
-                // console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
-              }
-              // For type 1 (text), extract text content
-              else {
+              } else {
                 if (typeof parsedMessage === 'string') {
                   messageText = parsedMessage;
                 } else if (parsedMessage.message) {
@@ -299,64 +263,61 @@ export default function ChatRoomScreen() {
                 }
               }
             } catch (e) {
-              // console.error('Failed to parse message:', msg.message, 'Error:', e);
-              // Fallback: convert to string safely
               messageText = typeof msg.message === 'string'
                 ? msg.message
                 : JSON.stringify(msg.message);
             }
 
+            // ✅ 从成员映射表获取发送者信息
+            const senderInfo = memberMap.get(msg.sender) || {
+              name: '未知用户',
+              avatar: '',
+            };
+
             return {
               id: msg.message_id,
-              text: messageText, // ✅ Always a string
-              type: messageType, // ✅ Save message type
-              imageUrls: imageUrls, // ✅ Save image URLs with full domain
-              voiceUrl: voiceUrl, // ✅ Save voice URL with full domain
+              text: messageText,
+              type: messageType,
+              imageUrls: imageUrls,
+              voiceUrl: voiceUrl,
               createdAt: msg.created_at,
               senderId: msg.sender,
-              name: msg.sender === currentUserId ? userName : undefined,
-              avatar: msg.sender === currentUserId ? userAvatar : undefined,
+              name: senderInfo.name,      // ✅ 使用映射表中的名字
+              avatar: senderInfo.avatar,  // ✅ 使用映射表中的头像
             };
           });
 
-          // Store messages in chatStore with deduplication
+          // ... 后续的消息存储逻辑保持不变 ...
           const { setMessages } = useChatStore.getState();
           const existingMessages = useChatStore.getState().chats[chatId] || [];
 
           if (loadMore) {
-            // ✅ Loading more OLD messages - append to END of array (visual TOP)
             const allMessages = [...existingMessages, ...transformedMessages];
             const uniqueMessages = Array.from(
               new Map(allMessages.map((m: any) => [m.id, m])).values()
             ) as any[];
             setMessages(chatId, uniqueMessages);
-            offsetRef.current += apiMessages.length; // Increase offset
+            offsetRef.current += apiMessages.length;
           } else {
-            // ✅ Polling/Refresh - only keep NEW messages (newer than current newest)
             if (existingMessages.length === 0) {
-              // First load - use all messages
               const uniqueMessages = Array.from(
                 new Map(transformedMessages.map((m: any) => [m.id, m])).values()
               ) as any[];
               setMessages(chatId, uniqueMessages);
               offsetRef.current = uniqueMessages.length;
             } else {
-              // Filter out messages that are truly new (not already in store)
               const existingIds = new Set(existingMessages.map(m => m.id));
               const newMessages = transformedMessages.filter(
                 (msg: any) => !existingIds.has(msg.id)
               );
 
               if (newMessages.length > 0) {
-                // Insert new messages at START of array (visual BOTTOM)
                 const allMessages = [...newMessages, ...existingMessages];
                 const uniqueMessages = Array.from(
                   new Map(allMessages.map((m: any) => [m.id, m])).values()
                 ) as any[];
                 setMessages(chatId, uniqueMessages);
-                // Don't change offsetRef for polling - keep history
               }
-              // If no new messages, don't update anything - keep existing messages
             }
           }
         }
@@ -602,7 +563,7 @@ export default function ChatRoomScreen() {
     ]);
   };
 
-  const handleVoiceCall = () => { 
+  const handleVoiceCall = () => {
     Alert.alert('语音通话', '语音通话功能暂未实现');
   };
 
@@ -646,72 +607,72 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
         try {
-            // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
+          // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
 
-            const receiver = chatMembers.filter(id => id !== currentUserId);
-            const files = result.assets.map(asset => {
-                // ✅ Get proper MIME type based on file extension
-                const fileName = asset.fileName || 'image.jpg';
-                const extension = fileName.split('.').pop()?.toLowerCase();
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+          const files = result.assets.map(asset => {
+            // ✅ Get proper MIME type based on file extension
+            const fileName = asset.fileName || 'image.jpg';
+            const extension = fileName.split('.').pop()?.toLowerCase();
 
-                let mimeType = 'image/jpeg'; // default
-                if (extension === 'png') mimeType = 'image/png';
-                else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-                else if (extension === 'gif') mimeType = 'image/gif';
-                else if (extension === 'webp') mimeType = 'image/webp';
+            let mimeType = 'image/jpeg'; // default
+            if (extension === 'png') mimeType = 'image/png';
+            else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+            else if (extension === 'gif') mimeType = 'image/gif';
+            else if (extension === 'webp') mimeType = 'image/webp';
 
-                // console.log(`📤 [File Type] ${fileName} → ${mimeType}`);
+            // console.log(`📤 [File Type] ${fileName} → ${mimeType}`);
 
-                return {
-                    uri: asset.uri,
-                    name: fileName,
-                    type: mimeType
-                };
-            });
+            return {
+              uri: asset.uri,
+              name: fileName,
+              type: mimeType
+            };
+          });
 
-            // console.log('📤 [Pick Image] Files to send:', files);
-            // console.log('📤 [Pick Image] Receiver:', receiver);
-            // console.log('📤 [Pick Image] Calling sendChatMessage...');
+          // console.log('📤 [Pick Image] Files to send:', files);
+          // console.log('📤 [Pick Image] Receiver:', receiver);
+          // console.log('📤 [Pick Image] Calling sendChatMessage...');
 
-            const apiResult = await sendChatMessage({
+          const apiResult = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            files: files
+          });
+          // 
+          // console.log('📤 [Pick Image] API Result:', apiResult);
+
+          if (apiResult.success && apiResult.data) {
+            // console.log('✅ [Pick Image] Success! Data:', apiResult.data);
+
+            const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+              ? apiResult.data.isreceive
+              : receiver;
+
+            if (actualReceivers.length > 0) {
+              // console.log('📨 [Pick Image] Sending WebSocket forward...');
+              WebSocketManager.sendForwardMessage({
+                type: apiResult.data.type,
+                message: apiResult.data.message, // This should be the URLs of the images
+                message_id: apiResult.data.message_id,
                 sender: currentUserId,
-                isreceive: receiver,
-                chat_id: chatId,
-                files: files
-            });
-// 
-            // console.log('📤 [Pick Image] API Result:', apiResult);
-
-            if (apiResult.success && apiResult.data) {
-                // console.log('✅ [Pick Image] Success! Data:', apiResult.data);
-
-                const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
-                    ? apiResult.data.isreceive
-                    : receiver;
-
-                if (actualReceivers.length > 0) {
-                    // console.log('📨 [Pick Image] Sending WebSocket forward...');
-                    WebSocketManager.sendForwardMessage({
-                        type: apiResult.data.type,
-                        message: apiResult.data.message, // This should be the URLs of the images
-                        message_id: apiResult.data.message_id,
-                        sender: currentUserId,
-                        receiver: actualReceivers,
-                        chat_id: chatId
-                    });
-                }
-
-                console.log('🔄 [Pick Image] Refreshing messages...');
-                await loadMessages(false, false); // Silent refresh after sending
-            } else {
-                console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
-                Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
             }
-        } catch(error: any) {
-            console.error('Failed to send image', error);
-            Alert.alert('发送失败', error.message || '网络错误，请重试');
+
+            console.log('🔄 [Pick Image] Refreshing messages...');
+            await loadMessages(false, false); // Silent refresh after sending
+          } else {
+            console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
+            Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+          }
+        } catch (error: any) {
+          console.error('Failed to send image', error);
+          Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
-            setIsUploadingImage(false);
+          setIsUploadingImage(false);
         }
       }
     } catch (error) {
