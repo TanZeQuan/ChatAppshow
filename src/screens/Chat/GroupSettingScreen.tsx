@@ -970,7 +970,7 @@ export default function GroupSettingScreen() {
                         disabled={isKicking}
                         activeOpacity={0.7}
                     >
-                        <Ionicons name="close" size={16} color="#FFF" />
+                        <Ionicons name="close" size={12} color="#999" />
                     </TouchableOpacity>
                 )}
             </View>
@@ -1095,8 +1095,8 @@ export default function GroupSettingScreen() {
                     <Text style={styles.sectionTitle}>群成员</Text>
                     <View style={styles.card}>
                         <View style={styles.gridContainer}>
-                            {/* ✅ Show max 11 members (to make room for add button if owner) or 12 members */}
-                            {allMembers.slice(0, groupChat?.ownerId === currentUserId ? 11 : 12).map((member, index) =>
+                            {/* ✅ Show max 7 members (to make room for add button if owner) or 8 members - 2 rows only */}
+                            {allMembers.slice(0, groupChat?.ownerId === currentUserId ? 7 : 8).map((member, index) =>
                                 renderMemberItem(member, index)
                             )}
                             {groupChat?.ownerId === currentUserId && renderAddMemberButton()}
@@ -1330,85 +1330,97 @@ const styles = StyleSheet.create({
     gridContainer: {
         flexDirection: "row",
         flexWrap: "wrap",
-        alignItems: "flex-start",
-        justifyContent: "flex-start",
-        paddingHorizontal: 16,
-        paddingVertical: 20,
+        paddingHorizontal: 30,
+        paddingVertical: 24,
     },
     gridItem: {
-        width: (width - 32) / 4, // ✅ 4 items per row, accounting for paddingHorizontal (16 * 2)
+        width: (width - 48) / 4, // ✅ 4 items per row: (width - padding*2) / 4
         alignItems: "center",
-        marginBottom: 15,
+        marginBottom: 20,
         justifyContent: 'center',
     },
     avatarContainer: {
-        width: 48,
-        height: 48,
-        backgroundColor: colors.functional.avatarBg,
-        borderRadius: borders.radius8,
+        width: 56,
+        height: 56,
+        backgroundColor: colors.background.grayPale,
+        borderRadius: borders.radius16,
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 6,
+        margin: 8,
         overflow: "hidden",
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 3,
     },
     avatarImage: {
-        width: 48,
-        height: 48,
-        borderRadius: borders.radius8, // Added for consistency
+        width: 56,
+        height: 56,
+        margin: 10,
+        borderRadius: borders.radius16,
     },
     memberName: {
-        fontSize: typography.fontSize11,
-        color: colors.text.gray,
+        fontSize: typography.fontSize12,
+        color: colors.text.dark,
         textAlign: "center",
+        marginHorizontal: 10,
+        fontWeight: typography.fontWeight500,
     },
 
     // Specific to GroupSettingScreen member display
     memberItemWrapper: {
-        width: (width - 32) / 5, // ✅ 4 items per row, Match gridContainer padding (16 * 2)
-        marginBottom: 15,
+        width: (width - 48) / 4, // ✅ Match gridContainer padding (24 * 2 = 48)
+        marginBottom: 20,
         position: 'relative',
         justifyContent: 'center',
         alignItems: 'center',
     },
-    memberItem: { // Adjusted from GroupDetails gridItem
+    memberItem: {
         width: '100%',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    memberAvatarContainer: { // Adjusted from GroupDetails avatarContainer
+    memberAvatarContainer: {
         position: 'relative',
-        marginBottom: 6,
-        width: 48, // Fixed size
-        height: 48, // Fixed size
-        borderRadius: borders.radius8,
+        marginBottom: 8,
+        width: 56,
+        height: 56,
+        borderRadius: borders.radius16,
         overflow: 'hidden',
-        backgroundColor: colors.background.grayLight,
+        backgroundColor: colors.background.grayPale,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08,
+        shadowRadius: 4,
+        elevation: 3,
     },
-    memberAvatar: { // Adjusted from GroupDetails avatarImage
+    memberAvatar: {
         width: '100%',
         height: '100%',
-        borderRadius: borders.radius8,
+        borderRadius: borders.radius16,
     },
     memberAvatarKicking: { opacity: 0.5 },
     currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },
     ownerLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
     adminLabel: { fontSize: typography.fontSize11, color: colors.functional.green },
 
-    addMemberButton: { // Adjusted from GroupDetails actionBtn
-        width: 48,
-        height: 48,
-        borderRadius: borders.radius8,
-        backgroundColor: colors.background.grayPale,
+    addMemberButton: {
+        width: 56,
+        height: 56,
+        borderRadius: borders.radius16,
+        backgroundColor: colors.background.white,
         justifyContent: 'center',
         alignItems: 'center',
-        marginBottom: 6,
-        borderWidth: borders.width1,
-        borderColor: colors.border.light,
-        borderStyle: 'solid', // Ensure solid border for consistency
-    },
-    // Original addMemberButton had dashed border, keeping it
-    addMemberButtonDashed: {
+        marginBottom: 8,
+        borderWidth: 2,
+        borderColor: colors.functional.yellowBright,
         borderStyle: 'dashed',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
     },
 
     viewMoreBtn: {
@@ -1440,25 +1452,25 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 1, // Ensure badge is on top
     },
-    // ✅ New kick button style - beautiful red circle with white X
+    // ✅ Kick button style - same as GroupMemberList
     kickButton: {
         position: 'absolute',
-        top: -8,
-        right: -3,
-        width: 24,
-        height: 24,
-        borderRadius: 12,
-        backgroundColor: '#FF3B30', // iOS red
-        borderWidth: 2,
-        borderColor: colors.background.white,
+        top: -4,
+        right: -4,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: colors.background.white,
+        borderWidth: 1.5,
+        borderColor: colors.border.gray,
         justifyContent: 'center',
         alignItems: 'center',
         zIndex: 10,
-        shadowColor: '#FF3B30',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.4,
-        shadowRadius: 4,
-        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
     },
     kickingOverlay: {
         position: 'absolute',
@@ -1528,7 +1540,7 @@ const styles = StyleSheet.create({
         height: 60,
         borderRadius: borders.radius8,
         overflow: 'hidden',
-        marginRight: 15,
+        marginRight: 20,
         backgroundColor: colors.background.grayLight, // Default background
         flexDirection: 'row',
         flexWrap: 'wrap',
