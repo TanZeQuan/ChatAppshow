@@ -180,10 +180,23 @@ export default function ChatRoomScreen() {
         const apiMessages = result.data.chat || [];
         const groupMembers = result.data.group || [];
 
-        // Extract member user IDs and store them (only if not already set from store)
+        // ✅ Build member info map from group array (includes name, avatar)
+        const memberInfoMap: Record<string, { name: string, avatar: string }> = {};
+
         if (groupMembers.length > 0) {
           const memberIds = groupMembers.map((member: any) => member.user_id);
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
+
+          // Build member info map from group array
+          groupMembers.forEach((member: any) => {
+            const memberAvatar = member.image || '';
+            const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
+
+            memberInfoMap[member.user_id] = {
+              name: member.name || '未知',
+              avatar: fullAvatarUrl,
+            };
+          });
         }
 
         if (apiMessages.length > 0) {
@@ -306,6 +319,12 @@ export default function ChatRoomScreen() {
                 : JSON.stringify(msg.message);
             }
 
+            // ✅ Get sender info from memberInfoMap
+            const senderInfo = memberInfoMap[msg.sender] || {
+              name: msg.sender === currentUserId ? userName : undefined,
+              avatar: msg.sender === currentUserId ? userAvatar : undefined,
+            };
+
             return {
               id: msg.message_id,
               text: messageText, // ✅ Always a string
@@ -314,8 +333,8 @@ export default function ChatRoomScreen() {
               voiceUrl: voiceUrl, // ✅ Save voice URL with full domain
               createdAt: msg.created_at,
               senderId: msg.sender,
-              name: msg.sender === currentUserId ? userName : undefined,
-              avatar: msg.sender === currentUserId ? userAvatar : undefined,
+              name: senderInfo.name,
+              avatar: senderInfo.avatar,
             };
           });
 
@@ -749,12 +768,27 @@ export default function ChatRoomScreen() {
     />
   );
 
+  // Handle start call
+  const handleStartCall = useCallback(() => {
+    if (chat?.isGroup) {
+      Alert.alert("提示", "群聊暂不支持通话功能");
+      return;
+    }
+
+    const otherUserId = chatMembers.find(id => id !== currentUserId);
+    if (otherUserId) {
+      WebSocketManager.startCall(otherUserId);
+    } else {
+      Alert.alert("错误", "无法找到通话对象");
+    }
+  }, [chat?.isGroup, chatMembers, currentUserId]);
+
   // Toolbar buttons configuration
   const toolbarButtons = {
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
       { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
-      { icon: 'call-outline', label: '通话' },
+      { icon: 'call-outline', label: '通话', onPress: handleStartCall },
       { icon: 'videocam-outline', label: '视频通话' },
     ],
     row2: [
@@ -804,15 +838,6 @@ export default function ChatRoomScreen() {
           onBack={() => navigation.goBack()}
           onOpenSettings={handleOpenSettings}
           roomStyles={roomStyles}
-          showCallButton={!chat?.isGroup}
-          onStartCall={() => {
-            const otherUserId = chatMembers.find(id => id !== currentUserId);
-            if (otherUserId) {
-              WebSocketManager.startCall(otherUserId);
-            } else {
-              Alert.alert("Error", "Could not find user to call.");
-            }
-          }}
         />
 
         <KeyboardAvoidingView
