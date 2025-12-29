@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     marginTop: scaleHeight(20),
   },
   confirmButtonDisabled: {
-    backgroundColor: colors.background.grayLight, // 原 #E5E5E5
+    backgroundColor: colors.background.yellowBright, // 原 #E5E5E5
     borderColor: colors.border.grayMedium, // 原 #D0D0D0
   },
   confirmButtonText: {

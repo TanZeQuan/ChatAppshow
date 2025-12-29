@@ -716,7 +716,7 @@ export default function GroupRoomScreen() {
                         console.error("Failed to send image:", apiResult.message);
                         Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
                     }
-                } catch(error: any) {
+                } catch (error: any) {
                     console.error('Failed to send image', error);
                     Alert.alert('发送失败', error.message || '网络错误，请重试');
                 } finally {
@@ -773,20 +773,13 @@ export default function GroupRoomScreen() {
     };
 
     // Toolbar buttons configuration
-    const toolbarButtons = {
-        row1: [
-            { icon: 'image-outline', label: '图片', onPress: pickImage },
-            { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
-            { icon: 'call-outline', label: '群通话' },
-            { icon: 'videocam-outline', label: '视频通话' },
-        ],
-        row2: [
-            { icon: 'document-outline', label: '文件' },
-            { icon: 'location-outline', label: '位置' },
-            { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
-            { icon: 'settings-outline', label: '群设置', onPress: handleOpenSettings },
-        ],
-    };
+    const toolbarButtons = [
+        { icon: 'image-outline', label: '图片', onPress: pickImage },
+        { icon: 'videocam-outline', label: '视频', onPress: pickImage },
+        { icon: 'document-outline', label: '文件', onPress: () => { } },
+        { icon: 'person-outline', label: '名片', onPress: () => { } },
+        { icon: 'trash-outline', label: '清空', onPress: handleClearChat },
+    ];
 
     // ✅ Only show loading screen when loading AND messages are empty (like ChatRoomScreen)
     if (isLoading && messages.length === 0) {

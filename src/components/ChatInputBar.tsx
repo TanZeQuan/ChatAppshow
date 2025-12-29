@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { ActivityIndicator, Dimensions, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 const { width } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -33,11 +33,8 @@ interface ChatInputBarProps {
   // Handlers
   handleSend: () => void;
 
-  // Toolbar buttons configuration
-  toolbarButtons: {
-    row1: ToolbarButtonProps[];
-    row2: ToolbarButtonProps[];
-  };
+  // Toolbar buttons configuration - now accepts simple array
+  toolbarButtons: ToolbarButtonProps[];
 
   // Styles
   roomStyles: any;
@@ -49,7 +46,11 @@ const ToolbarButton: React.FC<ToolbarButtonProps & { roomStyles: any }> = ({
   onPress,
   roomStyles
 }) => (
-  <TouchableOpacity style={roomStyles.toolbarButton} onPress={onPress}>
+  <TouchableOpacity 
+    style={roomStyles.toolbarButton} 
+    onPress={onPress}
+    disabled={!onPress}
+  >
     <View style={roomStyles.toolbarIconContainer}>
       <Ionicons name={icon as any} size={scaleWidth(24)} color="#333" />
     </View>
@@ -119,26 +120,22 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         )}
       </View>
 
+      {/* ✅ 横向滚动工具栏 */}
       {showToolbar && (
         <View style={roomStyles.toolbar}>
-          <View style={roomStyles.toolbarRow}>
-            {toolbarButtons.row1.map((button, index) => (
+          <ScrollView 
+            horizontal 
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={roomStyles.toolbarScrollContent}
+          >
+            {toolbarButtons.map((button, index) => (
               <ToolbarButton
                 key={index}
                 {...button}
                 roomStyles={roomStyles}
               />
             ))}
-          </View>
-          <View style={roomStyles.toolbarRow}>
-            {toolbarButtons.row2.map((button, index) => (
-              <ToolbarButton
-                key={index}
-                {...button}
-                roomStyles={roomStyles}
-              />
-            ))}
-          </View>
+          </ScrollView>
         </View>
       )}
     </View>
