@@ -1,5 +1,4 @@
-
-import React from 'react';
+﻿import React from 'react';
 import { View, Text, Button, Modal, StyleSheet } from 'react-native';
 import WebSocketManager from '../../services/WebSocketManager';
 import { Emitter } from '../../services/EventEmitter';
@@ -11,22 +10,22 @@ export default function CallScreen() {
   const [status, setStatus] = React.useState('');
   const [callerId, setCallerId] = React.useState('');
   const [isIncoming, setIsIncoming] = React.useState(false);
-  const [targetUserId, setTargetUserId] = React.useState(null);
+  const [targetUserId, setTargetUserId] = React.useState<string | null>(null);
 
 
   React.useEffect(() => {
-    const handleIncomingCall = (incomingCallerId) => {
+    const handleIncomingCall = (incomingCallerId: string) => {
       setCallerId(incomingCallerId);
       setTargetUserId(incomingCallerId);
       setIsIncoming(true);
       setModalVisible(true);
     };
 
-    const handleCallStatus = (newStatus) => {
+    const handleCallStatus = (newStatus: string) => {
       setStatus(newStatus);
     };
 
-    const handleStartCall = (targetId) => {
+    const handleStartCall = (targetId: string) => {
         setTargetUserId(targetId);
         setIsIncoming(false);
         setModalVisible(true);
@@ -54,17 +53,17 @@ export default function CallScreen() {
   }, []);
 
   const answer = () => {
-      WebSocketManager.callService.answerCall();
-      setIsIncoming(false); // 变成通话中状态
+      WebSocketManager.callService?.answerCall();
+      setIsIncoming(false);
   };
 
   const reject = () => {
-      WebSocketManager.callService.rejectCall();
+      WebSocketManager.callService?.rejectCall();
       setModalVisible(false);
   };
 
   const hangup = () => {
-      WebSocketManager.callService.cleanup();
+      WebSocketManager.callService?.cleanup();
       setModalVisible(false);
   };
 
@@ -72,7 +71,7 @@ export default function CallScreen() {
     <Modal visible={modalVisible} animationType="slide" transparent={false}>
       <View style={styles.container}>
         <Text style={styles.status}>{status}</Text>
-        <Text style={styles.username}>{getContactById(targetUserId)?.name || 'Unknown'}</Text>
+        <Text style={styles.username}>{targetUserId ? getContactById(targetUserId)?.name || 'Unknown' : 'Unknown'}</Text>
 
 
         {isIncoming ? (
