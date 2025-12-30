@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { Dimensions, ViewStyle } from "react-native";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import React, { useEffect, useState } from "react";
+import { Dimensions, Platform, ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MainTabParamList } from "./types";
 
@@ -9,68 +9,108 @@ import ChatStack from "./stacks/ChatStack";
 import ContactsStack from "./stacks/ContactStack";
 import ProfileStack from "./stacks/ProfileStack";
 
-import { useUserStore } from "../store/userStore";
 import WebSocketManager from "../services/WebSocketManager";
+import { useUserStore } from "../store/userStore";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const { width } = Dimensions.get("window");
+// 动态获取设备类型
+const getDeviceType = (width: number) => {
+  if (width >= 768) return "tablet";
+  if (width >= 375) return "medium";
+  return "small";
+};
 
-const isMediumDevice = width >= 375 && width < 768;
-const isTablet = width >= 768;
-
-const getResponsiveSize = () => {
-  if (isTablet) {
-    return {
-      iconSize: 32,
-      tabBarHeight: 70,
-      paddingBottom: 8,
-      paddingTop: 16,
-      fontSize: 14,
-    };
-  } else if (isMediumDevice) {
-    return {
-      iconSize: 30,
-      tabBarHeight: 60,
-      paddingBottom: 4,
-      paddingTop: 8,
-      fontSize: 12,
-    };
-  } else {
-    return {
-      iconSize: 26,
-      tabBarHeight: 55,
-      paddingBottom: 2,
-      paddingTop: 10,
-      fontSize: 11,
-    };
+// 根据设备类型获取响应式尺寸
+const getResponsiveSizes = (deviceType: string) => {
+  switch (deviceType) {
+    case "tablet":
+      return {
+        iconSize: 32,
+        tabBarHeight: 70,
+        paddingBottom: 8,
+        paddingTop: 16,
+        fontSize: 14,
+        borderRadius: 28,
+        paddingHorizontal: 20,
+      };
+    case "medium":
+      return {
+        iconSize: 30,
+        tabBarHeight: 60,
+        paddingBottom: 4,
+        paddingTop: 8,
+        fontSize: 12,
+        borderRadius: 22,
+        paddingHorizontal: 10,
+      };
+    default: // small
+      return {
+        iconSize: 26,
+        tabBarHeight: 55,
+        paddingBottom: 2,
+        paddingTop: 10,
+        fontSize: 11,
+        borderRadius: 20,
+        paddingHorizontal: 0,
+      };
   }
 };
 
-const responsiveSizes = getResponsiveSize();
+// 动态计算响应式配置
+const getResponsiveConfig = () => {
+  const { width } = Dimensions.get("window");
+  const deviceType = getDeviceType(width);
+  return getResponsiveSizes(deviceType);
+};
 
 /** ⭐ 原始 TabBar Style（含顶部左右圆角） */
-export const getOriginalTabBarStyle = (insets: any): ViewStyle => ({
-  backgroundColor: "#FFD860",
-  borderTopWidth: 0,
-  height: responsiveSizes.tabBarHeight + insets.bottom,
-  paddingBottom: Math.max(insets.bottom, responsiveSizes.paddingBottom),
-  paddingTop: responsiveSizes.paddingTop,
-  paddingHorizontal: isTablet ? 20 : 0,
-  elevation: 0,
+export const getOriginalTabBarStyle = (insets: any): ViewStyle => {
+  const config = getResponsiveConfig();
+  
+  return {
+    backgroundColor: "#FFD860",
+    borderTopWidth: 0,
+    height: config.tabBarHeight + insets.bottom,
+    paddingBottom: Math.max(insets.bottom, config.paddingBottom),
+    paddingTop: config.paddingTop,
+    paddingHorizontal: config.paddingHorizontal,
+    elevation: 0,
 
-  // ⭐ 新增：顶部左右圆角 + 悬浮生效
-  borderTopLeftRadius: 22,
-  borderTopRightRadius: 22,
-  overflow: "hidden" as const,         // 必须，不然圆角不显示
-  position: "absolute" as const,       // 必须，不然圆角被父容器裁掉
-  left: 0,
-  right: 0,
-  bottom: 0,
-});
+    // ⭐ 新增：顶部左右圆角 + 悬浮生效
+    borderTopLeftRadius: config.borderRadius,
+    borderTopRightRadius: config.borderRadius,
+    overflow: "hidden" as const,
+    position: "absolute" as const,
+    left: 0,
+    right: 0,
+    bottom: 0,
+
+    // iOS 阴影效果
+    ...(Platform.OS === "ios" && {
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+    }),
+  };
+};
 
 function MainTabsContent() {
   const insets = useSafeAreaInsets();
+  const [dimensions, setDimensions] = useState(Dimensions.get("window"));
+
+  // 监听屏幕尺寸变化（方向变化、折叠屏等）
+  useEffect(() => {
+    const subscription = Dimensions.addEventListener("change", ({ window }) => {
+      setDimensions(window);
+    });
+
+    return () => subscription?.remove();
+  }, []);
+
+  // 动态获取当前配置
+  const config = getResponsiveConfig();
   const originalTabBarStyle = getOriginalTabBarStyle(insets);
 
   return (
@@ -91,7 +131,13 @@ function MainTabsContent() {
             iconName = "help-outline";
           }
 
-          return <Ionicons name={iconName} size={responsiveSizes.iconSize} color={color} />;
+          return (
+            <Ionicons 
+              name={iconName} 
+              size={config.iconSize} 
+              color={color} 
+            />
+          );
         },
 
         tabBarActiveTintColor: "#0c0c0cff",
@@ -101,19 +147,31 @@ function MainTabsContent() {
         tabBarStyle: originalTabBarStyle,
 
         tabBarLabelStyle: {
-          fontSize: responsiveSizes.fontSize,
+          fontSize: config.fontSize,
           fontWeight: "600",
           marginTop: 2,
         },
         tabBarItemStyle: {
           paddingVertical: 2,
-          paddingTop: -4,     // ⭐ 图标 + 文字整体往上移
+          paddingTop: -4, // ⭐ 图标 + 文字整体往上移
         },
       })}
     >
-      <Tab.Screen name="ChatStack" component={ChatStack} options={{ title: "消息" }} />
-      <Tab.Screen name="ContactsStack" component={ContactsStack} options={{ title: "好友" }} />
-      <Tab.Screen name="ProfileStack" component={ProfileStack} options={{ title: "我的" }} />
+      <Tab.Screen 
+        name="ChatStack" 
+        component={ChatStack} 
+        options={{ title: "消息" }} 
+      />
+      <Tab.Screen 
+        name="ContactsStack" 
+        component={ContactsStack} 
+        options={{ title: "好友" }} 
+      />
+      <Tab.Screen 
+        name="ProfileStack" 
+        component={ProfileStack} 
+        options={{ title: "我的" }} 
+      />
     </Tab.Navigator>
   );
 }

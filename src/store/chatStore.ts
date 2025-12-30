@@ -16,6 +16,9 @@ type Message = {
   senderId: string;
   name?: string;  // ⚠️ Deprecated: Use memberCache instead
   avatar?: string; // ⚠️ Deprecated: Use memberCache instead
+
+  // Read status
+  readBy?: string[]; // Array of user IDs who have read this message
 };
 
 // ✅ Member info cache type

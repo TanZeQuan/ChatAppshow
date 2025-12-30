@@ -421,7 +421,19 @@ export default function ChatRoomScreen() {
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
       loadMessages(false, false); // Silent reload
-    }, [loadMessages])
+      
+      // ✅ Send read signal when entering chat room
+      if (chatMembers.length > 0) {
+        const receivers = chatMembers.filter(id => id !== currentUserId);
+        if (receivers.length > 0) {
+          console.log('📨 [ChatRoom] Sending read signal to:', receivers);
+          WebSocketManager.sendReadSignal({
+            receiver: receivers,
+            chat_id: chatId,
+          });
+        }
+      }
+    }, [loadMessages, chatMembers, currentUserId, chatId])
   );
 
   // ✅ Auto-enable search mode if navigated from settings
@@ -528,12 +540,38 @@ export default function ChatRoomScreen() {
       }
     };
 
+    // ✅ Handle read receipt
+    const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
+      console.log('✔️ [ChatRoom] Read receipt received:', data);
+      
+      // Only update if it's for this chat
+      if (data.chatId === chatIdRef.current) {
+        // Mark all messages in this chat as read by this user
+        const currentMessages = useChatStore.getState().chats[chatIdRef.current] || [];
+        const updatedMessages = currentMessages.map(msg => {
+          // Only update messages sent by current user (not received messages)
+          if (msg.senderId === currentUserId) {
+            const readBy = msg.readBy || [];
+            // Add readerId if not already in the list
+            if (!readBy.includes(data.readerId)) {
+              return { ...msg, readBy: [...readBy, data.readerId] };
+            }
+          }
+          return msg;
+        });
+        
+        useChatStore.getState().setMessages(chatIdRef.current, updatedMessages);
+      }
+    };
+
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
+    WebSocketManager.addReadReceiptCallback(handleReadReceipt);
 
     return () => {
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+      WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
     };
-  }, []);
+  }, [currentUserId]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -773,6 +811,7 @@ export default function ChatRoomScreen() {
       currentUserAvatar={currentUserAvatar}
       roomStyles={roomStyles}
       showSenderName={false} // Private chat, no sender names
+      totalMembers={chatMembers.length} // Pass total members for read status calculation
     />
   );
 

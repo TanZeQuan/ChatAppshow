@@ -17,6 +17,7 @@ interface DisplayMessage {
   sender: 'me' | 'other';
   username?: string;
   avatar?: string;
+  readBy?: string[]; // Array of user IDs who have read this message
 }
 
 interface MessageBubbleProps {
@@ -39,6 +40,8 @@ interface MessageBubbleProps {
   roomStyles: any;
   // Group chat specific
   showSenderName?: boolean; // For group chats
+  // Read status
+  totalMembers?: number; // Total members in chat (for group read status)
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -56,6 +59,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   currentUserAvatar,
   roomStyles,
   showSenderName,
+  totalMembers,
 }) => {
   const [imageViewerVisible, setImageViewerVisible] = React.useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string>('');
@@ -79,6 +83,26 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   // Check if this is the currently focused match (by message ID)
   const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
+
+  // ✅ Calculate read status (only for messages sent by me)
+  const getReadStatus = () => {
+    if (item.sender !== 'me') return null; // Don't show ticks for received messages
+
+    const readBy = item.readBy || [];
+    
+    // For private chat: readBy.length > 0 means read
+    // For group chat: readBy.length === totalMembers - 1 means all read (excluding sender)
+    if (totalMembers && totalMembers > 2) {
+      // Group chat: need all members (except sender) to read
+      const isReadByAll = readBy.length >= (totalMembers - 1);
+      return isReadByAll ? 'double' : 'single';
+    } else {
+      // Private chat: any read means double tick
+      return readBy.length > 0 ? 'double' : 'single';
+    }
+  };
+
+  const readStatus = getReadStatus();
   return (
     <>
       {/* Image Viewer Modal */}
@@ -204,12 +228,24 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </View>
         )}
 
-        <Text style={roomStyles.timestamp}>
-          {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+          <Text style={roomStyles.timestamp}>
+            {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
+              hour: '2-digit',
+              minute: '2-digit'
+            })}
+          </Text>
+          {/* ✅ Show read status ticks for sent messages */}
+          {readStatus && (
+            <View style={{ marginLeft: 4 }}>
+              {readStatus === 'double' ? (
+                <Ionicons name="checkmark-done" size={20} color="#4A90E2" />
+              ) : (
+                <Ionicons name="checkmark" size={20} color="#999" />
+              )}
+            </View>
+          )}
+        </View>
       </View>
 
       {item.sender === 'me' && (
