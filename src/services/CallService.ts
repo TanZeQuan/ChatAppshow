@@ -1,4 +1,4 @@
-﻿import {
+import {
   RTCPeerConnection,
   RTCIceCandidate,
   RTCSessionDescription,
@@ -18,6 +18,7 @@ export class WebRTCCallService {
   candidateQueue: RTCIceCandidate[];
   configuration: { iceServers: { urls: string; }[]; };
   pendingOffer: any;
+  currentCallId: string | null;
 
   constructor(ws: WebSocket, currentUserId: string) {
     this.ws = ws;
@@ -28,7 +29,9 @@ export class WebRTCCallService {
     this.peerConnection = null;
     this.localStream = null;
     this.targetUserId = null;
+    this.currentCallId = null;
     this.candidateQueue = [];
+    this.currentCallId = null;
 
     this.configuration = {
       iceServers: [
@@ -139,6 +142,7 @@ export class WebRTCCallService {
     this.onStatusChange('Rejected');
     Emitter.emit('endCall');
     this.targetUserId = null;
+    this.currentCallId = null;
     this.pendingOffer = null;
   }
 
@@ -280,6 +284,7 @@ export class WebRTCCallService {
         this.peerConnection = null;
     }
     this.targetUserId = null;
+    this.currentCallId = null;
     this.pendingOffer = null;
     this.onStatusChange('Ended');
     Emitter.emit('endCall');

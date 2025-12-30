@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { ActivityIndicator, Dimensions, Image, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { readUsers } from '../../api/User';
 import { Emitter } from '../../services/EventEmitter';
@@ -23,59 +23,29 @@ export default function CallScreen() {
   // 获取用户信息
   const fetchUserInfo = React.useCallback(async (userId: string) => {
     console.log('[CallScreen] Fetching user info for:', userId);
-    
-    // 优先尝试从本地联系人获取
-    const localContact = getContactById(userId);
-    if (localContact && localContact.name) {
-      console.log('[CallScreen] ✅ Using local contact data:', localContact.name);
-      setUserName(localContact.name);
-      setUserAvatar(localContact.avatar || '');
-      return;
-    }
-    
-    // 本地没有，从 API 获取
     setLoadingUserInfo(true);
     try {
       const result = await readUsers(userId);
-      console.log('[CallScreen] API result:', JSON.stringify(result, null, 2));
-      
+      console.log('[CallScreen] API result:', result);
       if (result.success && result.data) {
-        // 尝试多种可能的数据结构
-        let userData = result.data;
-        
-        // 如果数据在 response 字段中
-        if (result.data.response) {
-          userData = result.data.response;
-        }
-        
-        console.log('[CallScreen] Parsed user data:', JSON.stringify(userData, null, 2));
-        
-        // 统一处理多种可能的字段名
-        const name = userData.name || userData.username || userData.nickname || '';
-        const avatar = userData.image || userData.avatar || userData.profile_image || userData.photo || '';
-        
-        if (name) {
-          setUserName(name);
-          setUserAvatar(avatar);
-          console.log('[CallScreen] ✅ Set userName:', name, 'avatar:', avatar ? 'YES' : 'NO');
-        } else {
-          console.warn('[CallScreen] ⚠️ API returned no name, using userId');
-          setUserName(userId);
-          setUserAvatar('');
-        }
+        // API 返回格式：{ response: { name, image, ... } }
+        const userData = result.data.response || result.data;
+        console.log('[CallScreen] User data:', userData);
+        setUserName(userData.name || userId);
+        setUserAvatar(userData.image || '');  // 使用 image 而不是 avatar
+        console.log('[CallScreen] Set userName:', userData.name, 'userAvatar:', userData.image);
       } else {
-        console.warn('[CallScreen] ⚠️ API failed, using userId as fallback');
         setUserName(userId);
         setUserAvatar('');
       }
     } catch (error) {
-      console.error('[CallScreen] ❌ Error fetching user info:', error);
+      console.error('[CallScreen] Error fetching user info:', error);
       setUserName(userId);
       setUserAvatar('');
     } finally {
       setLoadingUserInfo(false);
     }
-  }, [getContactById]);
+  }, []);
 
   React.useEffect(() => {
     const handleIncomingCall = (incomingCallerId: string) => {

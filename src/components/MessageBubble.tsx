@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Dimensions, Image, Text, TouchableOpacity, View } from 'react-native';
+import { Dimensions, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
 
 interface DisplayMessage {
@@ -55,8 +55,21 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   currentMatchId,
   currentUserAvatar,
   roomStyles,
-  showSenderName = false,
+  showSenderName,
 }) => {
+  const [imageViewerVisible, setImageViewerVisible] = React.useState(false);
+  const [selectedImageUrl, setSelectedImageUrl] = React.useState<string>('');
+  const [selectedImageIndex, setSelectedImageIndex] = React.useState<number>(0);
+
+  const openImageViewer = (url: string, index: number) => {
+    setSelectedImageUrl(url);
+    setSelectedImageIndex(index);
+    setImageViewerVisible(true);
+  };
+
+  const closeImageViewer = () => {
+    setImageViewerVisible(false);
+  };
   // Safety check: ensure text is a string
   const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
 
@@ -66,9 +79,40 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   // Check if this is the currently focused match (by message ID)
   const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
-
   return (
-    <View style={[
+    <>
+      {/* Image Viewer Modal */}
+      <Modal
+        visible={imageViewerVisible}
+        transparent={true}
+        onRequestClose={closeImageViewer}
+      >
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity 
+            style={styles.closeButton}
+            onPress={closeImageViewer}
+          >
+            <Text style={styles.closeButtonText}>✕</Text>
+          </TouchableOpacity>
+          
+          <ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+          >
+            {item.imageUrls?.map((url, imgIndex) => (
+              <View key={imgIndex} style={styles.imageContainer}>
+                <Image
+                  source={{ uri: url }}
+                  style={styles.fullScreenImage}
+                  resizeMode="contain"
+                />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </Modal>
+      <View style={[
       roomStyles.messageRow,
       item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft,
     ]}>
@@ -149,7 +193,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         {item.type === 3 && item.imageUrls && item.imageUrls.length > 0 && (
           <View style={roomStyles.imageGridContainer}>
             {item.imageUrls.map((url, index) => (
-              <TouchableOpacity key={index} activeOpacity={0.8}>
+              <TouchableOpacity key={index} activeOpacity={0.8} onPress={() => openImageViewer(url, index)}>
                 <Image
                   source={{ uri: url }}
                   style={roomStyles.messageImage}
@@ -181,5 +225,42 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         </View>
       )}
     </View>
+    </>
   );
+};
+
+const styles = {
+  imageViewerContainer: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
+  },
+  closeButton: {
+    position: 'absolute' as 'absolute',
+    top: 40,
+    right: 20,
+    zIndex: 1000,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
+  },
+  closeButtonText: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold' as 'bold',
+  },
+  imageContainer: {
+    width: width,
+    height: height,
+    justifyContent: 'center' as 'center',
+    alignItems: 'center' as 'center',
+  },
+  fullScreenImage: {
+    width: width,
+    height: height * 0.8,
+  },
 };
