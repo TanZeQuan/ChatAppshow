@@ -203,8 +203,10 @@ const styles = StyleSheet.create({
     padding: scaleWidth(8),
   },
   headerTitle: {
+    flex: 1,
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
+    textAlign: 'center',
     color: colors.text.blackMedium, // 原 #333
   },
   placeholder: {

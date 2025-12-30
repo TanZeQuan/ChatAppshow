@@ -1,8 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import { Alert, Dimensions, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { login } from '../../api/Auth';
 import { readUsers } from '../../api/User';
@@ -28,8 +28,10 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isChecked, setIsChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
+    setIsLoading(true);
     try {
       const loginResult = await login({ phone, passcode: password });
 
@@ -55,18 +57,20 @@ export default function LoginScreen() {
           useUserStore.getState().setUser(fullUser, loginResult.token || "FAKE_TOKEN");
 
         } else {
-          Alert.alert('登录后读取信息失败', userResult.message);
+          Alert.alert('获取用户信息失败', userResult.message);
         }
       } else {
         Alert.alert('登录失败', loginResult.message);
       }
     } catch (err: any) {
-      console.error('登录异常:', err);
-      Alert.alert('登录异常', err.message || '未知错误');
+      console.error('登录错误:', err);
+      Alert.alert('登录错误', err.message || '发生未知错误');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const isButtonDisabled = !phone || !password || !isChecked;
+  const isButtonDisabled = !phone || !password || !isChecked || isLoading;
 
   return (
     <LinearGradient colors={['#FFE194', '#FFF9E5', '#FFFFFF']} style={styles.safeArea}>
@@ -92,7 +96,7 @@ export default function LoginScreen() {
 
           <Text style={styles.title}>欢迎回来</Text>
 
-          {/* 手机号输入 */}
+          {/* 手机号输入框 */}
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.inputField}
@@ -102,10 +106,11 @@ export default function LoginScreen() {
               autoCapitalize="none"
               placeholderTextColor="#999"
               keyboardType="phone-pad"
+              editable={!isLoading}
             />
           </View>
 
-          {/* 密码输入 */}
+          {/* 密码输入框 */}
           <View style={styles.inputContainer}>
             <TextInput
               style={styles.inputField}
@@ -114,9 +119,11 @@ export default function LoginScreen() {
               onChangeText={setPassword}
               secureTextEntry={!isPasswordVisible}
               placeholderTextColor="#999"
+              editable={!isLoading}
             />
             <TouchableOpacity
               onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+              disabled={isLoading}
             >
               <Ionicons
                 name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'}
@@ -129,10 +136,16 @@ export default function LoginScreen() {
 
           {/* 链接 */}
           <View style={styles.linksContainer}>
-            <TouchableOpacity onPress={() => navigation.navigate('Register')}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Register')}
+              disabled={isLoading}
+            >
               <Text style={styles.linkText}>注册账号</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => navigation.navigate('Forget')}>
+            <TouchableOpacity 
+              onPress={() => navigation.navigate('Forget')}
+              disabled={isLoading}
+            >
               <Text style={styles.linkText}>忘记密码？</Text>
             </TouchableOpacity>
           </View>
@@ -150,15 +163,23 @@ export default function LoginScreen() {
               colors={["#FFEFB0", "#FFF9E5"]}
               style={styles.loginButtonGradient}
             >
-              <Text style={styles.loginButtonText}>登录</Text>
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.text.dark} />
+                  <Text style={styles.loadingText}>登录中...</Text>
+                </View>
+              ) : (
+                <Text style={styles.loginButtonText}>登录</Text>
+              )}
             </LinearGradient>
           </TouchableOpacity>
 
-          {/* 协议勾选 */}
+          {/* 用户协议 */}
           <View style={styles.agreementContainer}>
             <TouchableOpacity
               onPress={() => setIsChecked(!isChecked)}
               style={styles.checkbox}
+              disabled={isLoading}
             >
               <Ionicons
                 name={isChecked ? 'checkbox' : 'square-outline'}
@@ -168,7 +189,7 @@ export default function LoginScreen() {
             </TouchableOpacity>
             <Text style={styles.agreementText}>
               我已阅读并同意{' '}
-              <Text style={styles.agreementLink}>隐私政策与服务条款</Text>
+              <Text style={styles.agreementLink}>用户协议和隐私政策</Text>
             </Text>
           </View>
         </KeyboardAvoidingView>
@@ -239,7 +260,7 @@ const styles = StyleSheet.create({
     color: colors.text.blackMedium,
   },
 
-  // 输入框
+  // 输入框容器
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -305,7 +326,20 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.6 },
 
-  // 协议勾选
+  // Loading container
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: colors.text.dark,
+    fontSize: typography.fontSize16,
+    fontWeight: typography.fontWeight700,
+    marginLeft: 10,
+  },
+
+  // 用户协议
   agreementContainer: {
     flexDirection: 'row',
     alignItems: 'center',

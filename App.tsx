@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useUserStore } from './src/store/userStore';
 import WebSocketManager from './src/services/WebSocketManager';
 import { View } from 'react-native';
+import CallScreen from './src/screens/Chat/CallScreen'; 
 
 export default function App() {
   const { user, token, isLoggedIn } = useUserStore();
@@ -22,6 +23,7 @@ export default function App() {
     <View style={{ flex: 1 }}>
       <NavigationContainer>
         <RootNavigator />
+        <CallScreen />
       </NavigationContainer>
     </View>
   );

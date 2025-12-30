@@ -375,8 +375,10 @@ const styles = StyleSheet.create({
         paddingRight: 10,
     },
     headerTitle: {
+        flex: 1,
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
+        textAlign: 'center',
         color: colors.text.black,
     },
     headerRightPlaceholder: {

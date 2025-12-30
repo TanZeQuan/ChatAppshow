@@ -176,9 +176,9 @@ export const baseRoomStyles = RNStyleSheet.create({
     borderTopWidth: borders.width1,
     borderTopColor: colors.border.grayLight,
   },
-  iconButton: {
-    padding: scaleWidth(8),
-  },
+  // iconButton: {
+  //   padding: scaleWidth(8),
+  // },
   input: {
     flex: 1,
     minHeight: scaleHeight(36),
@@ -277,8 +277,8 @@ export const baseRoomStyles = RNStyleSheet.create({
  */
 export const chatRoomSpecificStyles = RNStyleSheet.create({
   headerTitle: {
-    fontSize: scaleFont(16),
-    fontWeight: typography.fontWeight500,
+    fontSize: typography.fontSize18,
+    fontWeight: typography.fontWeight600,
     color: colors.text.blackMedium,
     flex: 1,
     textAlign: 'center', // Single chat title is centered
