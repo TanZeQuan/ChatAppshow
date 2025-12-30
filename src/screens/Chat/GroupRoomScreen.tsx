@@ -1,4 +1,4 @@
-import { useUserStore } from '@/src/store/userStore';
+﻿import { useUserStore } from '@/src/store/userStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -637,7 +637,7 @@ export default function GroupRoomScreen() {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
                 allowsEditing: false,
-                quality: 0.8,
+                quality: 1,
                 allowsMultipleSelection: true,
             });
 
@@ -884,4 +884,5 @@ export default function GroupRoomScreen() {
 
 // Use shared room styles with GroupRoom-specific styles
 const roomStyles = createRoomStyles(groupRoomSpecificStyles);
+
 

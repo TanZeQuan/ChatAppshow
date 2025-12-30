@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 
@@ -23,9 +23,6 @@ interface SearchHeaderProps {
   // Styles
   roomStyles: any;
 
-  // Optional call button
-  showCallButton?: boolean;
-  onStartCall?: () => void;
 }
 
 export const SearchHeader: React.FC<SearchHeaderProps> = ({
@@ -41,8 +38,6 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
   onBack,
   onOpenSettings,
   roomStyles,
-  showCallButton,
-  onStartCall,
 }) => {
   if (searchMode) {
     // Search mode header
@@ -93,11 +88,6 @@ export const SearchHeader: React.FC<SearchHeaderProps> = ({
       </TouchableOpacity>
       <Text style={roomStyles.headerTitle}>{chatName}</Text>
       <View style={{flexDirection: 'row'}}>
-        {showCallButton && (
-            <TouchableOpacity style={roomStyles.moreButton} onPress={onStartCall}>
-                <Ionicons name="call-outline" size={24} color="#333" />
-            </TouchableOpacity>
-        )}
         <TouchableOpacity style={roomStyles.moreButton} onPress={onOpenSettings}>
             <Ionicons name="ellipsis-horizontal" size={24} color="#333" />
         </TouchableOpacity>
