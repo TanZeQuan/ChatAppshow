@@ -17,6 +17,7 @@ import {
   deleteFriend,
   readFriends
 } from '../../api/Friend';
+import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
@@ -46,11 +47,34 @@ export default function ChatSettingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [friendListId, setFriendListId] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(false); // ✅ Track online status
 
   useEffect(() => {
     loadChatSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, otherUserId]);
+
+  // ✅ Monitor online status via WebSocket
+  useEffect(() => {
+    if (!otherUserId) return;
+
+    // Check initial online status
+    setIsOnline(WebSocketManager.isUserOnline(otherUserId));
+
+    // Listen for presence changes
+    const handlePresenceChange = ({ userId, isOnline: online }: { userId: string; isOnline: boolean }) => {
+      if (userId === otherUserId) {
+        console.log(`👤 [ChatSetting] User ${userId} is now ${online ? 'online' : 'offline'}`);
+        setIsOnline(online);
+      }
+    };
+
+    WebSocketManager.addPresenceCallback(handlePresenceChange);
+
+    return () => {
+      WebSocketManager.removePresenceCallback(handlePresenceChange);
+    };
+  }, [otherUserId]);
 
   const loadChatSettings = async () => {
     try {
@@ -304,7 +328,7 @@ export default function ChatSettingScreen() {
 
   const displayAvatar = contactInfo?.avatar || avatar || '';
   const displayName = contactInfo?.name?.replace(/^用户/, '') || chatName;
-  const onlineStatus = contactInfo?.online ? '在线' : '离线';
+  const onlineStatus = isOnline ? '在线' : '离线'; // ✅ Use WebSocket online status
 
   if (isLoading) {
     return (
@@ -353,9 +377,15 @@ export default function ChatSettingScreen() {
               }
               style={styles.avatarImage}
             />
+            {/* ✅ Online status indicator */}
+            {isOnline && <View style={styles.onlineIndicator} />}
           </View>
           <Text style={styles.profileName}>{displayName}</Text>
-          <Text style={styles.profileSubtext}>{onlineStatus}</Text>
+          <View style={styles.statusContainer}>
+            {/* ✅ Online dot indicator */}
+            <View style={[styles.statusDot, { backgroundColor: isOnline ? '#4CAF50' : '#999' }]} />
+            <Text style={styles.profileSubtext}>{onlineStatus}</Text>
+          </View>
 
           {contactInfo?.rawData?.about && (
             <Text style={styles.aboutText}>{contactInfo.rawData.about}</Text>
@@ -558,17 +588,41 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
     overflow: "hidden",
+    position: 'relative', // ✅ For absolute positioning of online indicator
   },
   avatarImage: {
     width: 100,
     height: 100,
     borderRadius: borders.radius8, // Consistent
   },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#4CAF50',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
   profileName: {
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
     color: colors.text.black, // Consistent
     marginBottom: 4,
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
   },
   profileSubtext: {
     fontSize: typography.fontSize14,

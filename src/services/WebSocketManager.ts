@@ -8,6 +8,7 @@ const WS_URL = "wss://ws.ngrok-free.dev";
 
 type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
+type PresenceCallback = (data: { userId: string; isOnline: boolean }) => void;
 
 class WebSocketManager {
   private static instance: WebSocketManager;
@@ -23,6 +24,12 @@ class WebSocketManager {
 
   private messageCallbacks: MessageCallback[] = [];
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
+  private presenceCallbacks: PresenceCallback[] = [];
+
+  // ✅ Online users tracking
+  private onlineUsers: Set<string> = new Set();
+  private userActivityTimers: Map<string, NodeJS.Timeout> = new Map();
+  private readonly OFFLINE_TIMEOUT = 60000; // 60 seconds without activity = offline
 
   // Login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
@@ -195,6 +202,8 @@ class WebSocketManager {
       // Format: {status: 1, type: 1, message: "...", chat_id: "...", sender: "..."}
       if (data.status === 1 && data.type && data.message && data.sender) {
         console.log(`📩 New message from ${data.sender} in chat ${data.chat_id}`);
+        // ✅ Mark sender as online (they just sent a message)
+        this.markUserOnline(data.sender);
         this.messageCallbacks.forEach((cb) => cb(data));
         return;
       }
@@ -203,6 +212,8 @@ class WebSocketManager {
       // Format: {status: 1, chat_id: "...", reader_id: "..."}
       if (data.status === 1 && data.chat_id && data.reader_id) {
         console.log(`✔️ User ${data.reader_id} read messages in ${data.chat_id}`);
+        // ✅ Mark reader as online (they just read messages)
+        this.markUserOnline(data.reader_id);
         this.readReceiptCallbacks.forEach((cb) =>
           cb({ chatId: data.chat_id, readerId: data.reader_id })
         );
@@ -331,6 +342,9 @@ class WebSocketManager {
     this.isConnected = false;
     this.userId = null;
     this.reconnectAttempts = 0;
+    
+    // ✅ Clean up presence tracking
+    this.cleanupPresenceTracking();
 
     console.log("✅ [WebSocket] Disconnected successfully");
   }
@@ -385,7 +399,76 @@ class WebSocketManager {
     return {
       message: this.messageCallbacks.length,
       readReceipt: this.readReceiptCallbacks.length,
+      presence: this.presenceCallbacks.length,
     };
+  }
+
+  /* ===============================
+     Online Status Management
+  =============================== */
+  private markUserOnline(userId: string) {
+    if (!userId || userId === this.userId) return; // Don't track self
+
+    const wasOffline = !this.onlineUsers.has(userId);
+    
+    // Add to online users
+    this.onlineUsers.add(userId);
+    
+    // Clear existing timeout
+    const existingTimer = this.userActivityTimers.get(userId);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Set new timeout - mark offline after inactivity
+    const timer = setTimeout(() => {
+      this.markUserOffline(userId);
+    }, this.OFFLINE_TIMEOUT);
+    
+    this.userActivityTimers.set(userId, timer);
+    
+    // Notify if user just came online
+    if (wasOffline) {
+      console.log(`🟢 User ${userId} is now online`);
+      this.notifyPresenceChange(userId, true);
+    }
+  }
+
+  private markUserOffline(userId: string) {
+    if (!this.onlineUsers.has(userId)) return;
+    
+    this.onlineUsers.delete(userId);
+    this.userActivityTimers.delete(userId);
+    
+    console.log(`🔴 User ${userId} is now offline`);
+    this.notifyPresenceChange(userId, false);
+  }
+
+  private notifyPresenceChange(userId: string, isOnline: boolean) {
+    this.presenceCallbacks.forEach((cb) => cb({ userId, isOnline }));
+  }
+
+  public isUserOnline(userId: string): boolean {
+    return this.onlineUsers.has(userId);
+  }
+
+  public getOnlineUsers(): string[] {
+    return Array.from(this.onlineUsers);
+  }
+
+  public addPresenceCallback(cb: PresenceCallback) {
+    this.presenceCallbacks.push(cb);
+  }
+
+  public removePresenceCallback(cb: PresenceCallback) {
+    this.presenceCallbacks = this.presenceCallbacks.filter((x) => x !== cb);
+  }
+
+  private cleanupPresenceTracking() {
+    // Clear all timers
+    this.userActivityTimers.forEach((timer) => clearTimeout(timer));
+    this.userActivityTimers.clear();
+    this.onlineUsers.clear();
   }
 }
 
