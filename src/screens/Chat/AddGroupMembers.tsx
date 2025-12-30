@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+﻿import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -36,20 +36,20 @@ export default function AddGroupMembers() {
   const { chatId, chatName, currentMembers } = route.params as RouteParams;
 
   const currentUserId = useUserStore((state) => state.user?.id) || '';
-  const allContacts = useContactStore((state) => state.contacts); // ✅ Get contacts from store
+  const allContacts = useContactStore((state) => state.contacts); // âœ… Get contacts from store
 
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedFriends, setSelectedFriends] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
-  const [latestMemberIds, setLatestMemberIds] = useState<string[]>([]); // ✅ Latest member IDs from API
+  const [latestMemberIds, setLatestMemberIds] = useState<string[]>([]); // âœ… Latest member IDs from API
 
   // Load friends list
   const loadFriends = useCallback(async () => {
     setIsLoading(true);
     try {
-      // ✅ Step 1: Get latest group members from API
-      console.log('📥 [AddGroupMembers] Loading latest group members...');
+      // âœ… Step 1: Get latest group members from API
+      console.log('ðŸ“¥ [AddGroupMembers] Loading latest group members...');
       const groupResult = await readChatMessages({
         chat_id: chatId,
         user_id: currentUserId,
@@ -62,13 +62,13 @@ export default function AddGroupMembers() {
         // Use latest member IDs from API
         currentMemberIds = groupResult.data.group.map((m: any) => m.user_id);
         setLatestMemberIds(currentMemberIds);
-        console.log('✅ [AddGroupMembers] Got latest members:', currentMemberIds);
+        console.log(' [AddGroupMembers] Got latest members:', currentMemberIds);
       } else {
-        console.warn('⚠️ [AddGroupMembers] Failed to load group members, using route params');
+        console.warn('[AddGroupMembers] Failed to load group members, using route params');
       }
 
-      // ✅ Step 2: Get friends from contactStore
-      console.log('📥 [AddGroupMembers] Loading friends from contactStore:', {
+      // âœ… Step 2: Get friends from contactStore
+      console.log('[AddGroupMembers] Loading friends from contactStore:', {
         totalContacts: allContacts.length,
         contacts: allContacts,
       });
@@ -77,7 +77,7 @@ export default function AddGroupMembers() {
       const friendsList: Friend[] = allContacts
         .filter(contact => {
           const isInGroup = currentMemberIds.includes(contact.id);
-          console.log('📥 [AddGroupMembers] Checking contact:', {
+          console.log('[AddGroupMembers] Checking contact:', {
             id: contact.id,
             name: contact.name,
             isInGroup,
@@ -90,7 +90,7 @@ export default function AddGroupMembers() {
           image: contact.avatar || '',
         }));
 
-      console.log('📥 [AddGroupMembers] Filtered friends:', {
+      console.log(' [AddGroupMembers] Filtered friends:', {
         total: friendsList.length,
         currentMembers: currentMemberIds.length,
         currentMemberIds,
@@ -111,10 +111,10 @@ export default function AddGroupMembers() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allContacts]);
 
-  // ✅ Reload data when screen gains focus
+  // Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 [AddGroupMembers] Screen focused, reloading friends...');
+      console.log('ðŸ”„ [AddGroupMembers] Screen focused, reloading friends...');
       loadFriends();
     }, [loadFriends])
   );
@@ -142,7 +142,7 @@ export default function AddGroupMembers() {
     try {
       // Add members one by one (API only supports one target_id at a time)
       const selectedArray = Array.from(selectedFriends);
-      console.log('➕ [AddMembers] Adding members:', {
+      console.log(' [AddMembers] Adding members:', {
         chatId,
         currentUserId,
         selectedFriends: selectedArray,
@@ -151,8 +151,8 @@ export default function AddGroupMembers() {
 
       const results = await Promise.all(
         selectedArray.map(async (friendId) => {
-          console.log(`➕ [AddMembers] Adding friend ${friendId}...`);
-          console.log(`➕ [AddMembers] Calling updateGroup with:`, {
+          console.log(` [AddMembers] Adding friend ${friendId}...`);
+          console.log(` [AddMembers] Calling updateGroup with:`, {
             chat_id: chatId,
             user_id: currentUserId,
             action: 'add',
@@ -164,7 +164,7 @@ export default function AddGroupMembers() {
             action: 'add',
             target_id: friendId,
           });
-          console.log(`➕ [AddMembers] Result for ${friendId}:`, {
+          console.log(` [AddMembers] Result for ${friendId}:`, {
             success: result.success,
             message: result.message,
             data: result.data,
@@ -174,14 +174,14 @@ export default function AddGroupMembers() {
         })
       );
 
-      console.log('➕ [AddMembers] All results:', results);
+      console.log(' [AddMembers] All results:', results);
 
       // Check results
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.length - successCount;
       const failedMembers = results.filter((r) => !r.success);
 
-      console.log('➕ [AddMembers] Summary:', {
+      console.log('[AddMembers] Summary:', {
         successCount,
         failureCount,
         failedMembers,
@@ -189,8 +189,8 @@ export default function AddGroupMembers() {
 
       if (successCount > 0) {
         Alert.alert(
-          '添加成功',
-          `成功添加 ${successCount} 位成员${failureCount > 0 ? `，${failureCount} 位添加失败` : ''}`,
+           '添加成功',
+      `成功添加 ${successCount} 位成员${failureCount > 0 ? `，${failureCount} 位添加失败`: ''}`,
           [
             {
               text: '确定',
@@ -200,7 +200,7 @@ export default function AddGroupMembers() {
         );
       } else {
         const errorMessages = failedMembers.map(f => `${f.friendId}: ${f.message}`).join('\n');
-        console.error('❌ [AddMembers] All failed:', errorMessages);
+       console.error('❌ [AddMembers] All failed:', errorMessages);
         Alert.alert('添加失败', `所有成员添加失败：\n${errorMessages}`);
       }
     } catch (error) {
@@ -224,7 +224,7 @@ export default function AddGroupMembers() {
         <View style={styles.friendLeft}>
           <Image
             source={
-              avatarUrl
+              avatarUrl && avatarUrl.trim() !== '' && avatarUrl.trim() !== "https://balkingly-hemitropic-lelah.ngrok-free.dev"
                 ? { uri: avatarUrl }
                 : require('../../assets/images/personal.png')
             }
@@ -296,7 +296,7 @@ export default function AddGroupMembers() {
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.functional.yellow} />
-          <Text style={styles.loadingText}>加载好友列表...</Text>
+           <Text style={styles.loadingText}>加载好友列表...</Text>
         </View>
       ) : (
         <FlatList
@@ -444,3 +444,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
