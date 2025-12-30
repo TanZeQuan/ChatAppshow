@@ -481,8 +481,10 @@ const styles = StyleSheet.create({
   },
   backButton: { padding: scaleWidth(8) },
   headerTitle: {
+    flex: 1,
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
+    textAlign: 'center',
     color: colors.text.black,
   },
   confirmButton: {

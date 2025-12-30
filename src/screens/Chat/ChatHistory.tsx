@@ -195,10 +195,11 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   headerTitle: {
+    flex: 1,
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: '600',
+    textAlign: 'center',
     color: '#1F2937',
-    letterSpacing: 0.3,
   },
   // Body Styles
   body: {

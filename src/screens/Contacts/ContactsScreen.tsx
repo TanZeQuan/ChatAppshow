@@ -604,6 +604,7 @@ const styles = StyleSheet.create({
     paddingBottom: scaleHeight(12),
   },
   headerTitle: {
+    flex: 1,
     fontSize: typography.fontSize18,
     fontWeight: typography.fontWeight600,
     textAlign: 'center',

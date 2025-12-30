@@ -1300,11 +1300,13 @@ const styles = StyleSheet.create({
         alignItems: "center",
     },
     backButton: {
-        marginRight: 16,
+        // marginRight: 16,
     },
     headerTitle: {
+        flex: 1,
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
+        textAlign: 'center',
         color: colors.text.black,
     },
 
