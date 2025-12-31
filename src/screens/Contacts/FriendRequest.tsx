@@ -175,7 +175,7 @@ export default function FriendRequestScreen() {
                     },
                     {
                       text: "查看通讯录",
-                      onPress: () => navigation.navigate('Contacts')
+                      onPress: () => navigation.navigate('Contacts' as never),
                     },
                   ]
                 );

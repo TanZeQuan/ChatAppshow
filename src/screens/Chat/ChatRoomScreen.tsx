@@ -54,7 +54,7 @@ interface DisplayMessage {
 interface RouteParams {
   chatId: string;
   chatName: string;
-  searchMode?: boolean;  // ✅ Search mode parameter
+  searchMode?: boolean;
 }
 
 export default function ChatRoomScreen() {
@@ -64,7 +64,6 @@ export default function ChatRoomScreen() {
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
   console.log('🆔 ChatRoomScreen chatId:', chatId);
-
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -88,8 +87,8 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
-  const [isNearBottom, setIsNearBottom] = useState(true); // ✅ Track if user is near bottom
-  const [isUploadingImage, setIsUploadingImage] = useState(false); // ✅ Separate state for image upload
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // ✅ Search functionality
   const {
@@ -116,7 +115,6 @@ export default function ChatRoomScreen() {
       ...msg,
       sender: msg.senderId === currentUserId ? 'me' : 'other',
       senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
-      // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
       voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
         ? String((msg.voiceUrl as any).message)
         : msg.voiceUrl,
@@ -149,14 +147,13 @@ export default function ChatRoomScreen() {
     chatId,
     currentUserId,
     chatMembers,
-    onMessageSent: () => loadMessages(false, false), // Reload messages after sending
+    onMessageSent: () => loadMessages(false, false),
   });
 
   // Wrap loadMessages in useCallback to prevent closure issues
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
     if (!currentUserId) return;
 
-    // Get current user info inside the function to avoid dependency issues
     const user = useUserStore.getState().user;
     const userName = user?.name || '我';
     const userAvatar = user?.avatar || '';
@@ -166,8 +163,6 @@ export default function ChatRoomScreen() {
         setIsLoading(true);
       }
 
-      // ✅ Load more old messages: use current offset
-      // ✅ Refresh/Polling: always use offset 0 to get latest messages
       const currentOffset = loadMore ? offsetRef.current : 0;
 
       const result = await readChatMessages({
@@ -180,14 +175,12 @@ export default function ChatRoomScreen() {
         const apiMessages = result.data.chat || [];
         const groupMembers = result.data.group || [];
 
-        // ✅ Build member info map from group array (includes name, avatar)
         const memberInfoMap: Record<string, { name: string, avatar: string }> = {};
 
         if (groupMembers.length > 0) {
           const memberIds = groupMembers.map((member: any) => member.user_id);
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
 
-          // Build member info map from group array
           groupMembers.forEach((member: any) => {
             const memberAvatar = member.image || '';
             const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
@@ -200,108 +193,66 @@ export default function ChatRoomScreen() {
         }
 
         if (apiMessages.length > 0) {
-          // Transform API messages to store format
           const transformedMessages = apiMessages.map((msg: any) => {
             let messageText = '';
-            let messageType = 1; // Default to text
+            let messageType = 1;
             let imageUrls: string[] = [];
             let voiceUrl: string = '';
 
             try {
-              // 🔍 Check if msg.message is already an object or a string
               let parsedMessage: any;
 
               if (typeof msg.message === 'string') {
                 try {
                   parsedMessage = JSON.parse(msg.message);
                 } catch {
-                  // If parsing fails, treat as plain text
                   parsedMessage = { message: msg.message };
                 }
               } else if (typeof msg.message === 'object' && msg.message !== null) {
-                parsedMessage = msg.message; // Already an object
+                parsedMessage = msg.message;
               } else {
                 parsedMessage = { message: String(msg.message || '') };
               }
 
-              // console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
-
-              // Extract type: try msg.type first, then parsedMessage.type
               if (msg.type) {
                 messageType = msg.type;
               } else if (parsedMessage.type) {
-                messageType = parsedMessage.type; // ✅ 从 parsedMessage 获取类型
+                messageType = parsedMessage.type;
               }
 
-              // console.log('📦 [Message Parse] Final messageType:', messageType);
-
-              // For type 3 (images/files), extract image URLs
               if (messageType === 3) {
-                // console.log('🖼️ [Image Message] Detected type 3, parsedMessage:', parsedMessage);
-
-                // Check if parsedMessage is an array (direct image URLs)
                 if (Array.isArray(parsedMessage)) {
-                  // console.log('🖼️ [Image Message] parsedMessage is array:', parsedMessage);
-                  imageUrls = parsedMessage.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage.map((url: string) => ensureFullImageUrl(url));
                 }
-                // Check if parsedMessage.message is an array
                 else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is array:', parsedMessage.message);
-                  imageUrls = parsedMessage.message.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage.message.map((url: string) => ensureFullImageUrl(url));
                 }
-                // Check if parsedMessage.message is a comma-separated string
                 else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is string:', parsedMessage.message);
                   const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
-                  imageUrls = urls.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = urls.map((url: string) => ensureFullImageUrl(url));
                 }
 
-                // console.log('🖼️ [Image Message] Final imageUrls:', imageUrls);
-                messageText = `[${imageUrls.length}张图片]`; // Display text
+                messageText = `[${imageUrls.length}张图片]`;
               }
-              // For type 2 (voice), ensure full URL
               else if (messageType === 2) {
-                // console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
-                // console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
-                // console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
-
                 if (typeof parsedMessage === 'string') {
                   voiceUrl = ensureFullImageUrl(parsedMessage);
                   messageText = '[语音消息]';
                 } else if (parsedMessage.message) {
-                  // ✅ Check if it's an error object from backend
                   if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
-                    // console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
-                    voiceUrl = ''; // Empty URL to skip this message
+                    voiceUrl = '';
                     messageText = '[语音上传失败]';
                   }
-                  // Check if parsedMessage.message is an object with uri property
                   else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
                     messageText = '[语音消息]';
                   }
-                  // Normal string path
                   else if (typeof parsedMessage.message === 'string') {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message);
                     messageText = '[语音消息]';
                   }
                 }
-
-                // console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
               }
-              // For type 1 (text), extract text content
               else {
                 if (typeof parsedMessage === 'string') {
                   messageText = parsedMessage;
@@ -312,14 +263,11 @@ export default function ChatRoomScreen() {
                 }
               }
             } catch (e) {
-              // console.error('Failed to parse message:', msg.message, 'Error:', e);
-              // Fallback: convert to string safely
               messageText = typeof msg.message === 'string'
                 ? msg.message
                 : JSON.stringify(msg.message);
             }
 
-            // ✅ Get sender info from memberInfoMap
             const senderInfo = memberInfoMap[msg.sender] || {
               name: msg.sender === currentUserId ? userName : undefined,
               avatar: msg.sender === currentUserId ? userAvatar : undefined,
@@ -327,10 +275,10 @@ export default function ChatRoomScreen() {
 
             return {
               id: msg.message_id,
-              text: messageText, // ✅ Always a string
-              type: messageType, // ✅ Save message type
-              imageUrls: imageUrls, // ✅ Save image URLs with full domain
-              voiceUrl: voiceUrl, // ✅ Save voice URL with full domain
+              text: messageText,
+              type: messageType,
+              imageUrls: imageUrls,
+              voiceUrl: voiceUrl,
               createdAt: msg.created_at,
               senderId: msg.sender,
               name: senderInfo.name,
@@ -338,44 +286,36 @@ export default function ChatRoomScreen() {
             };
           });
 
-          // Store messages in chatStore with deduplication
           const { setMessages } = useChatStore.getState();
           const existingMessages = useChatStore.getState().chats[chatId] || [];
 
           if (loadMore) {
-            // ✅ Loading more OLD messages - append to END of array (visual TOP)
             const allMessages = [...existingMessages, ...transformedMessages];
             const uniqueMessages = Array.from(
               new Map(allMessages.map((m: any) => [m.id, m])).values()
             ) as any[];
             setMessages(chatId, uniqueMessages);
-            offsetRef.current += apiMessages.length; // Increase offset
+            offsetRef.current += apiMessages.length;
           } else {
-            // ✅ Polling/Refresh - only keep NEW messages (newer than current newest)
             if (existingMessages.length === 0) {
-              // First load - use all messages
               const uniqueMessages = Array.from(
                 new Map(transformedMessages.map((m: any) => [m.id, m])).values()
               ) as any[];
               setMessages(chatId, uniqueMessages);
               offsetRef.current = uniqueMessages.length;
             } else {
-              // Filter out messages that are truly new (not already in store)
               const existingIds = new Set(existingMessages.map(m => m.id));
               const newMessages = transformedMessages.filter(
                 (msg: any) => !existingIds.has(msg.id)
               );
 
               if (newMessages.length > 0) {
-                // Insert new messages at START of array (visual BOTTOM)
                 const allMessages = [...newMessages, ...existingMessages];
                 const uniqueMessages = Array.from(
                   new Map(allMessages.map((m: any) => [m.id, m])).values()
                 ) as any[];
                 setMessages(chatId, uniqueMessages);
-                // Don't change offsetRef for polling - keep history
               }
-              // If no new messages, don't update anything - keep existing messages
             }
           }
         }
@@ -394,10 +334,9 @@ export default function ChatRoomScreen() {
 
   // Load messages on mount
   useEffect(() => {
-    offsetRef.current = 0; // Reset offset when entering new chat
+    offsetRef.current = 0;
     loadMessages();
 
-    // Periodic WebSocket connection check (every 10 seconds)
     const connectionCheckInterval = setInterval(() => {
       const connected = WebSocketManager.isWebSocketConnected();
       if (!connected) {
@@ -405,9 +344,8 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
     const pollingInterval = setInterval(() => {
-      loadMessages(false, false); // loadMore=false, showLoading=false
+      loadMessages(false, false);
     }, 3000);
 
     return () => {
@@ -420,26 +358,17 @@ export default function ChatRoomScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
-      loadMessages(false, false); // Silent reload
-      
-      // ✅ Send read signal when entering chat room
-      if (chatMembers.length > 0) {
-        const receivers = chatMembers.filter(id => id !== currentUserId);
-        if (receivers.length > 0) {
-          console.log('📨 [ChatRoom] Sending read signal to:', receivers);
-          WebSocketManager.sendReadSignal({
-            receiver: receivers,
-            chat_id: chatId,
-          });
-        }
-      }
-    }, [loadMessages, chatMembers, currentUserId, chatId])
+      loadMessages(false, false);
+    }, [loadMessages])
   );
 
-  // ✅ Auto-enable search mode if navigated from settings
+  // ✅ Auto-enable search mode if navigated from settings (ONCE)
+  const searchModeInitialized = useRef(false);
   useEffect(() => {
-    if (params.searchMode === true) {
+    if (params.searchMode === true && !searchModeInitialized.current) {
+      console.log('🔍 [Search] Auto-enabling search from params');
       enableSearch();
+      searchModeInitialized.current = true;
     }
   }, [params.searchMode, enableSearch]);
 
@@ -447,14 +376,13 @@ export default function ChatRoomScreen() {
   const scrollToMatch = useCallback((messageId: string) => {
     if (!messageId || !flatListRef.current) return;
 
-    // Find the index of the message with this ID
     const messageIndex = messages.findIndex(msg => msg.id === messageId);
     if (messageIndex >= 0) {
       try {
         flatListRef.current.scrollToIndex({
           index: messageIndex,
           animated: true,
-          viewPosition: 0.5, // Center the item
+          viewPosition: 0.5,
         });
       } catch (error) {
         console.log('Failed to scroll to match:', error);
@@ -478,17 +406,15 @@ export default function ChatRoomScreen() {
     }
   }, [goToPrevMatch, scrollToMatch, messages]);
 
-  // ✅ Auto-scroll to first match when search query changes (not when polling refreshes)
+  // ✅ Auto-scroll to first match when search query changes
   const prevSearchQueryRef = useRef('');
   useEffect(() => {
     if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
-      // Search query changed - scroll to first match
       if (matchedMessageIds.length > 0) {
         scrollToMatch(matchedMessageIds[0]);
       }
       prevSearchQueryRef.current = searchQuery;
     } else if (!searchMode || !searchQuery.trim()) {
-      // Reset when exiting search mode
       prevSearchQueryRef.current = '';
     }
   }, [searchMode, searchQuery, matchedMessageIds, scrollToMatch]);
@@ -496,18 +422,15 @@ export default function ChatRoomScreen() {
   // ✅ Handle scroll to detect if user is near bottom
   const handleScroll = useCallback((event: any) => {
     const { contentOffset } = event.nativeEvent;
-    // FlatList is inverted, so contentOffset.y near 0 means at bottom (newest messages)
     const distanceFromTop = contentOffset.y;
-    const nearBottom = distanceFromTop < 100; // Within 100 pixels of bottom
+    const nearBottom = distanceFromTop < 100;
     setIsNearBottom(nearBottom);
   }, []);
 
-  // ✅ Auto-scroll to bottom when new messages arrive (only if user is near bottom)
+  // ✅ Auto-scroll to bottom when new messages arrive
   const prevMessageCountRef = useRef(messages.length);
   useEffect(() => {
-    // Only scroll if messages increased (new message arrived)
     if (messages.length > prevMessageCountRef.current && isNearBottom && messages.length > 0) {
-      // Small delay to ensure FlatList has rendered the new message
       setTimeout(() => {
         flatListRef.current?.scrollToIndex({
           index: 0,
@@ -523,69 +446,40 @@ export default function ChatRoomScreen() {
   const chatIdRef = useRef(chatId);
   const loadMessagesRef = useRef(loadMessages);
 
-  // Update refs when values change
   useEffect(() => {
     chatIdRef.current = chatId;
     loadMessagesRef.current = loadMessages;
   }, [chatId, loadMessages]);
 
-  // Listen for WebSocket message notifications (registered only once)
+  // Listen for WebSocket message notifications
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
       if (data.type && data.message) {
-        // If chat_id is not provided by backend, refresh anyway (safer approach)
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
-          loadMessagesRef.current(false, false); // Silent refresh, no loading animation
+          loadMessagesRef.current(false, false);
         }
       }
     };
 
-    // ✅ Handle read receipt
-    const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
-      console.log('✔️ [ChatRoom] Read receipt received:', data);
-      
-      // Only update if it's for this chat
-      if (data.chatId === chatIdRef.current) {
-        // Mark all messages in this chat as read by this user
-        const currentMessages = useChatStore.getState().chats[chatIdRef.current] || [];
-        const updatedMessages = currentMessages.map(msg => {
-          // Only update messages sent by current user (not received messages)
-          if (msg.senderId === currentUserId) {
-            const readBy = msg.readBy || [];
-            // Add readerId if not already in the list
-            if (!readBy.includes(data.readerId)) {
-              return { ...msg, readBy: [...readBy, data.readerId] };
-            }
-          }
-          return msg;
-        });
-        
-        useChatStore.getState().setMessages(chatIdRef.current, updatedMessages);
-      }
-    };
-
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
-    WebSocketManager.addReadReceiptCallback(handleReadReceipt);
 
     return () => {
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
-      WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
     };
-  }, [currentUserId]);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadMessages(false, false); // No loading spinner, just refresh control
+    await loadMessages(false, false);
     setRefreshing(false);
   };
 
   // ✅ Handle loading more old messages when scrolling to top
   const handleLoadMore = () => {
     if (!isLoading) {
-      loadMessages(true, true); // loadMore=true, showLoading=true
+      loadMessages(true, true);
     }
   };
-
 
   // ✅ Calculate search matches separately in useEffect
   useEffect(() => {
@@ -596,12 +490,9 @@ export default function ChatRoomScreen() {
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
-
-    // Hide TabBar
     parent?.setOptions({ tabBarStyle: { display: "none" } });
 
     return () => {
-      // Restore TabBar
       parent?.setOptions({
         tabBarStyle: getOriginalTabBarStyle(insets),
       });
@@ -640,7 +531,7 @@ export default function ChatRoomScreen() {
           });
         }
 
-        await loadMessages(false, false); // Silent refresh after sending
+        await loadMessages(false, false);
       } else {
         console.error("Failed to send message:", result.message);
         Alert.alert('发送失败', result.message || '消息发送失败，请重试');
@@ -678,13 +569,12 @@ export default function ChatRoomScreen() {
         memberIds: chat.memberIds || [],
       });
     } else {
-      // For private chats, find the other user's ID
       const otherUserId = chatMembers.find(id => id !== currentUserId);
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
         avatar: chat?.avatar || '',
-        otherUserId: otherUserId, // Pass the other user's ID
+        otherUserId: otherUserId,
       });
     }
   };
@@ -707,72 +597,57 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
         try {
-            // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+          const files = result.assets.map(asset => {
+            const fileName = asset.fileName || 'image.jpg';
+            const extension = fileName.split('.').pop()?.toLowerCase();
 
-            const receiver = chatMembers.filter(id => id !== currentUserId);
-            const files = result.assets.map(asset => {
-                // ✅ Get proper MIME type based on file extension
-                const fileName = asset.fileName || 'image.jpg';
-                const extension = fileName.split('.').pop()?.toLowerCase();
+            let mimeType = 'image/jpeg';
+            if (extension === 'png') mimeType = 'image/png';
+            else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+            else if (extension === 'gif') mimeType = 'image/gif';
+            else if (extension === 'webp') mimeType = 'image/webp';
 
-                let mimeType = 'image/jpeg'; // default
-                if (extension === 'png') mimeType = 'image/png';
-                else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-                else if (extension === 'gif') mimeType = 'image/gif';
-                else if (extension === 'webp') mimeType = 'image/webp';
+            return {
+              uri: asset.uri,
+              name: fileName,
+              type: mimeType
+            };
+          });
 
-                // console.log(`📤 [File Type] ${fileName} → ${mimeType}`);
+          const apiResult = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            files: files
+          });
 
-                return {
-                    uri: asset.uri,
-                    name: fileName,
-                    type: mimeType
-                };
-            });
+          if (apiResult.success && apiResult.data) {
+            const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+              ? apiResult.data.isreceive
+              : receiver;
 
-            // console.log('📤 [Pick Image] Files to send:', files);
-            // console.log('📤 [Pick Image] Receiver:', receiver);
-            // console.log('📤 [Pick Image] Calling sendChatMessage...');
-
-            const apiResult = await sendChatMessage({
+            if (actualReceivers.length > 0) {
+              WebSocketManager.sendForwardMessage({
+                type: apiResult.data.type,
+                message: apiResult.data.message,
+                message_id: apiResult.data.message_id,
                 sender: currentUserId,
-                isreceive: receiver,
-                chat_id: chatId,
-                files: files
-            });
-// 
-            // console.log('📤 [Pick Image] API Result:', apiResult);
-
-            if (apiResult.success && apiResult.data) {
-                // console.log('✅ [Pick Image] Success! Data:', apiResult.data);
-
-                const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
-                    ? apiResult.data.isreceive
-                    : receiver;
-
-                if (actualReceivers.length > 0) {
-                    // console.log('📨 [Pick Image] Sending WebSocket forward...');
-                    WebSocketManager.sendForwardMessage({
-                        type: apiResult.data.type,
-                        message: apiResult.data.message, // This should be the URLs of the images
-                        message_id: apiResult.data.message_id,
-                        sender: currentUserId,
-                        receiver: actualReceivers,
-                        chat_id: chatId
-                    });
-                }
-
-                console.log('🔄 [Pick Image] Refreshing messages...');
-                await loadMessages(false, false); // Silent refresh after sending
-            } else {
-                console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
-                Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
             }
+
+            await loadMessages(false, false);
+          } else {
+            console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
+            Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+          }
         } catch(error: any) {
-            console.error('Failed to send image', error);
-            Alert.alert('发送失败', error.message || '网络错误，请重试');
+          console.error('Failed to send image', error);
+          Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
-            setIsUploadingImage(false);
+          setIsUploadingImage(false);
         }
       }
     } catch (error) {
@@ -810,12 +685,11 @@ export default function ChatRoomScreen() {
       currentMatchId={currentMatchId}
       currentUserAvatar={currentUserAvatar}
       roomStyles={roomStyles}
-      showSenderName={false} // Private chat, no sender names
-      totalMembers={chatMembers.length} // Pass total members for read status calculation
+      showSenderName={false}
     />
   );
 
-  // Handle start call
+  // ✅ Handle start call
   const handleStartCall = useCallback(() => {
     if (chat?.isGroup) {
       Alert.alert("提示", "群聊暂不支持通话功能");
@@ -829,6 +703,46 @@ export default function ChatRoomScreen() {
       Alert.alert("错误", "无法找到通话对象");
     }
   }, [chat?.isGroup, chatMembers, currentUserId]);
+
+  // ✅ CRITICAL FIX: Define handleGoBack BEFORE any conditional returns
+  const handleGoBack = useCallback(() => {
+    console.log('🔙 [Back] Button clicked');
+    
+    // 🔑 检查导航堆栈
+    const state = navigation.getState();
+    console.log('🔙 [Back] Navigation Stack:');
+    state.routes.forEach((route: any, index: number) => {
+      console.log(`  [${index}] ${route.name} ${index === state.index ? '← CURRENT' : ''}`);
+    });
+    
+    const currentRouteName = state.routes[state.index].name;
+    const currentIndex = state.index;
+    
+    // 🔑 关键修复：如果下一个屏幕也是 ChatRoom，连续 pop 两次
+    if (currentIndex > 0) {
+      const previousRoute = state.routes[currentIndex - 1];
+      console.log(`🔙 [Back] Previous route: ${previousRoute.name}`);
+      
+      if (previousRoute.name === currentRouteName) {
+        // 下一个也是相同的屏幕，pop 两次直接回到 ChatList
+        console.log('🔙 [Back] ⚠️ Duplicate route detected! Popping twice...');
+        navigation.pop(2); // 一次性 pop 两个屏幕
+      } else {
+        console.log('🔙 [Back] Normal pop');
+        navigation.pop();
+      }
+    } else {
+      console.log('🔙 [Back] At top, navigating to ChatList');
+      navigation.navigate('ChatList');
+    }
+  }, [navigation]);
+
+  // ✅ CRITICAL FIX: Wrap disableSearch to ensure state cleanup
+  const handleDisableSearch = useCallback(() => {
+    console.log('❌ [Search] Disabling search mode');
+    disableSearch();
+    setSearchQuery('');
+  }, [disableSearch, setSearchQuery]);
 
   // Toolbar buttons configuration
   const toolbarButtons = {
@@ -846,12 +760,13 @@ export default function ChatRoomScreen() {
     ],
   };
 
+  // Loading screen
   if (isLoading && messages.length === 0) {
     return (
       <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
         <SafeAreaView style={{ flex: 1 }}>
           <View style={roomStyles.header}>
-            <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={roomStyles.backButton} onPress={handleGoBack}>
               <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
             <Text style={roomStyles.headerTitle}>{chatName}</Text>
@@ -868,21 +783,22 @@ export default function ChatRoomScreen() {
     );
   }
 
+  // Main screen
   return (
     <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Dynamic Header: Search mode vs Normal mode */}
+        {/* ✅ Dynamic Header: Search mode vs Normal mode */}
         <SearchHeader
           searchMode={searchMode}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          disableSearch={disableSearch}
+          disableSearch={handleDisableSearch}
           totalMatches={totalMatches}
           currentMatchNumber={currentMatchNumber}
           handlePrevMatch={handlePrevMatch}
           handleNextMatch={handleNextMatch}
           chatName={chatName}
-          onBack={() => navigation.goBack()}
+          onBack={handleGoBack}
           onOpenSettings={handleOpenSettings}
           roomStyles={roomStyles}
         />
@@ -903,10 +819,9 @@ export default function ChatRoomScreen() {
             }}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
-            onScroll={handleScroll} // ✅ Track scroll position
-            scrollEventThrottle={16} // ✅ Smooth scroll tracking
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
             onScrollToIndexFailed={(info) => {
-              // Handle scroll failure by waiting and retrying
               setTimeout(() => {
                 if (flatListRef.current) {
                   flatListRef.current.scrollToIndex({
