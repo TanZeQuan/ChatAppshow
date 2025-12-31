@@ -354,12 +354,49 @@ export default function ChatRoomScreen() {
     };
   }, [loadMessages]);
 
+  // ✅ 监听 WebSocket 已读回执，实时更新 unreadCount
+  useEffect(() => {
+    const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
+      // 只处理当前聊天室的已读回执
+      if (data.chatId !== chatId) return;
+      
+      // 对方读了消息，将 unreadCount 设为 0
+      const chatList = useChatStore.getState().chatList;
+      const updatedChatList = chatList.map(c => {
+        if (c.id === chatId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      });
+      useChatStore.getState().setChats(updatedChatList);
+    };
+
+    // 注册回调
+    WebSocketManager.addReadReceiptCallback(handleReadReceipt);
+
+    // 清理
+    return () => {
+      WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
+    };
+  }, [chatId]);
+
   // ✅ Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
       loadMessages(false, false);
-    }, [loadMessages])
+      
+      // ✅ 发送已读回执给对方
+      if (chatMembers && chatMembers.length > 0) {
+        const otherMembers = chatMembers.filter(id => id !== currentUserId);
+        if (otherMembers.length > 0) {
+          WebSocketManager.sendReadSignal({
+            receiver: otherMembers,
+            chat_id: chatId
+          });
+        }
+      }
+    }, [loadMessages, chatId, chatMembers, currentUserId])
   );
 
   // ✅ Auto-enable search mode if navigated from settings (ONCE)
@@ -686,6 +723,7 @@ export default function ChatRoomScreen() {
       currentUserAvatar={currentUserAvatar}
       roomStyles={roomStyles}
       showSenderName={false}
+      chatUnreadCount={chat?.unreadCount || 0}
     />
   );
 

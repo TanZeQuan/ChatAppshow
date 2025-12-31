@@ -213,14 +213,15 @@ export const readChatMessages = async ({
             headers: { "Content-Type": "multipart/form-data" },
         });
 
-        // console.log("📥 [readChatMessages] Response:", {
-        //     error: response.data?.error,
-        //     hasResponse: !!response.data?.response,
-        //     hasChatArray: !!response.data?.response?.chat,
-        //     hasGroupArray: !!response.data?.response?.group,
-        //     chatLength: response.data?.response?.chat?.length || 0,
-        //     groupLength: response.data?.response?.group?.length || 0,
-        // });
+        console.log("📥 [readChatMessages] Response:", {
+            error: response.data?.error,
+            hasResponse: !!response.data?.response,
+            hasChatArray: !!response.data?.response?.chat,
+            hasGroupArray: !!response.data?.response?.group,
+            chatLength: response.data?.response?.chat?.length || 0,
+            groupLength: response.data?.response?.group?.length || 0,
+            firstMessage: response.data?.response?.chat?.[0], // 👈 查看第一条消息的完整结构
+        });
 
         if (response.data?.error === true) {
             return {

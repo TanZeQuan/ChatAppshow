@@ -31,9 +31,6 @@ class WebSocketManager {
   private userActivityTimers: Map<string, NodeJS.Timeout> = new Map();
   private readonly OFFLINE_TIMEOUT = 20000; // ✅ 20 seconds without activity = offline (reduced from 60s)
 
-  // ✅ Heartbeat mechanism
-  private heartbeatInterval: any = null;
-  private readonly HEARTBEAT_INTERVAL = 30000; // Send heartbeat every 30 seconds
 
   // Login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
@@ -98,7 +95,6 @@ class WebSocketManager {
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.initializeCallService();
-            this.startHeartbeat(); // ✅ Start heartbeat after successful login
             this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
@@ -183,7 +179,6 @@ class WebSocketManager {
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.initializeCallService();
-          this.startHeartbeat(); // ✅ Restart heartbeat after reconnection
           this.loginResolver?.(true);
           this.cleanupLoginPromise();
         }
@@ -349,9 +344,6 @@ class WebSocketManager {
     this.userId = null;
     this.reconnectAttempts = 0;
     
-    // ✅ Stop heartbeat
-    this.stopHeartbeat();
-    
     // ✅ Clean up presence tracking
     this.cleanupPresenceTracking();
 
@@ -480,36 +472,6 @@ class WebSocketManager {
     this.onlineUsers.clear();
   }
 
-  /* ===============================
-     Heartbeat Mechanism
-  =============================== */
-  private startHeartbeat() {
-    // Stop existing heartbeat if any
-    this.stopHeartbeat();
-    
-    console.log('💓 [WebSocket] Starting heartbeat (every 30s)');
-    
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.isConnected && this.ws.readyState === WebSocket.OPEN) {
-        const heartbeatMsg = {
-          msg: "heartbeat",
-          user_id: this.userId,
-        };
-        console.log('💓 [WebSocket] Sending heartbeat');
-        this.ws.send(JSON.stringify(heartbeatMsg));
-      } else {
-        console.warn('⚠️ [WebSocket] Heartbeat skipped - connection not ready');
-      }
-    }, this.HEARTBEAT_INTERVAL);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      console.log('💔 [WebSocket] Stopping heartbeat');
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
-  }
 }
 
 export default WebSocketManager.getInstance();

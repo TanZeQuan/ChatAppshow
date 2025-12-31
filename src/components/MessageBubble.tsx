@@ -17,7 +17,6 @@ interface DisplayMessage {
   sender: 'me' | 'other';
   username?: string;
   avatar?: string;
-  readBy?: string[]; // Array of user IDs who have read this message
 }
 
 interface MessageBubbleProps {
@@ -40,8 +39,8 @@ interface MessageBubbleProps {
   roomStyles: any;
   // Group chat specific
   showSenderName?: boolean; // For group chats
-  // Read status
-  totalMembers?: number; // Total members in chat (for group read status)
+  // Read status (based on unread count from chat)
+  chatUnreadCount: number; // Unread count from /chats/read API
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -59,7 +58,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   currentUserAvatar,
   roomStyles,
   showSenderName,
-  totalMembers,
+  chatUnreadCount,
 }) => {
   const [imageViewerVisible, setImageViewerVisible] = React.useState(false);
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string>('');
@@ -84,22 +83,13 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   // Check if this is the currently focused match (by message ID)
   const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
 
-  // ✅ Calculate read status (only for messages sent by me)
+  // ✅ Calculate read status based on unread count (only for messages sent by me)
   const getReadStatus = () => {
     if (item.sender !== 'me') return null; // Don't show ticks for received messages
 
-    const readBy = item.readBy || [];
-    
-    // For private chat: readBy.length > 0 means read
-    // For group chat: readBy.length === totalMembers - 1 means all read (excluding sender)
-    if (totalMembers && totalMembers > 2) {
-      // Group chat: need all members (except sender) to read
-      const isReadByAll = readBy.length >= (totalMembers - 1);
-      return isReadByAll ? 'double' : 'single';
-    } else {
-      // Private chat: any read means double tick
-      return readBy.length > 0 ? 'double' : 'single';
-    }
+    // If unread = 0, all messages are read → double tick
+    // If unread > 0, messages are unread → single tick
+    return chatUnreadCount === 0 ? 'double' : 'single';
   };
 
   const readStatus = getReadStatus();
