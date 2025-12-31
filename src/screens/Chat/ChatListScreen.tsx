@@ -232,7 +232,7 @@ export default function ChatListScreen() {
 
           // ✅ Get real online status from WebSocketManager (for private chats only)
           const otherUserId = !isGroup && finalMemberIds.length > 0 
-            ? finalMemberIds.find(id => id !== currentUserId) 
+            ? finalMemberIds.find((id: number | string) => id !== currentUserId) 
             : undefined;
           const isUserOnline = otherUserId ? WebSocketManager.isUserOnline(otherUserId) : false;
 
