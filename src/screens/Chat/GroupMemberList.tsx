@@ -207,6 +207,11 @@ export default function GroupMemberList() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            if (!currentUserId) {
+                                Alert.alert('错误', '用户ID未获取，请重新登录');
+                                return;
+                            }
+
                             console.log('🔄 [GroupMemberList KickMember] Calling updateGroup API with:', {
                                 chat_id: groupId,
                                 user_id: currentUserId,
