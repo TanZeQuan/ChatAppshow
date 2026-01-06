@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { useUserStore } from './userStore';
 
 type Message = {
+  readBy: never[];
   id: string;
   text: string;
   createdAt: string;

@@ -2,13 +2,12 @@ import config from "../config/api";
 import { WebRTCCallService } from "./CallService";
 import { Emitter } from "./EventEmitter";
 
-// ✅ 新的 WebSocket URL
+// ✅ New WebSocket URL
 const WS_URL = "wss://ws.ngrok-free.dev";
 
 type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
 type PresenceCallback = (data: { userId: string; isOnline: boolean }) => void;
-// ✅ New: Definition for call signaling callback
 type CallCallback = (data: any) => void;
 
 class WebSocketManager {
@@ -26,7 +25,6 @@ class WebSocketManager {
   private messageCallbacks: MessageCallback[] = [];
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
   private presenceCallbacks: PresenceCallback[] = [];
-  // ✅ New: Array to store call callbacks
   private callCallbacks: CallCallback[] = [];
 
   // ✅ Online users tracking
@@ -48,8 +46,21 @@ class WebSocketManager {
     return WebSocketManager.instance;
   }
 
+  // ✅ 1. NEW: Safe Send Method to prevent INVALID_STATE_ERR
+  private safeSend(message: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(message);
+      } catch (error) {
+        console.error("❌ [WebSocket] Send failed:", error);
+      }
+    } else {
+      console.warn("⚠️ [WebSocket] Cannot send message. Socket not OPEN. State:", this.ws?.readyState);
+    }
+  }
+
   /* ===============================
-      Connect + Login
+       Connect + Login
   =============================== */
   public connect(userId: string): Promise<boolean> {
     console.log('🔌 [WebSocket] connect() called');
@@ -118,26 +129,31 @@ class WebSocketManager {
 
   private sendLoginMessage() {
     if (!this.ws || !this.userId) return;
+    
+    // Extra check to prevent crash if socket closed immediately
+    if (this.ws.readyState !== WebSocket.OPEN) {
+        console.warn("⚠️ [WebSocket] onopen fired but socket state is not OPEN");
+        return;
+    }
+
     const payload = { msg: "login", user_id: this.userId };
-    this.ws.send(JSON.stringify(payload));
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(payload));
   }
 
   /* ===============================
-      Message Handler
+       Message Handler
   =============================== */
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
       console.log("📨 [WebSocket] Received:", data);
 
-      // ✅ Updated: Handle call signals for both CallService (1-on-1) and Group Calls
       if (data.msg === "call_signal") {
         console.log(`📞 Call signal received:`, data.type);
-        // 1. Pass to existing 1-on-1 logic
         if (this.callService) {
           this.callService.handleSignal(data);
         }
-        // 2. Pass to GroupCallScreen listeners
         this.callCallbacks.forEach(cb => cb(data));
         return;
       }
@@ -172,10 +188,9 @@ class WebSocketManager {
   }
 
   /* ===============================
-      Send Call Signal (Updated)
+       Send Call Signal
   =============================== */
   public sendCallSignal(payload: {
-    // ✅ Updated type definition to include ALL needed types
     type: "JOIN_CALL" | "LEAVE_CALL" | "OFFER" | "ANSWER" | "CANDIDATE" | "offer" | "answer" | "candidate" | "reject" | "end";
     receiver?: string | string[];
     chat_id?: string;
@@ -198,19 +213,18 @@ class WebSocketManager {
     };
 
     console.log(`📤 [WebSocket] Sending call_signal (${payload.type}):`, JSON.stringify(msg));
-    this.ws.send(JSON.stringify(msg));
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
     return true;
   }
 
   /* ===============================
-      Callbacks (Implemented)
+       Callbacks
   =============================== */
-  // ✅ Implemented: Add listener for group call signals
   public addCallCallback(cb: CallCallback) {
     this.callCallbacks.push(cb);
   }
 
-  // ✅ Implemented: Remove listener
   public removeCallCallback(cb: CallCallback) {
     this.callCallbacks = this.callCallbacks.filter((x) => x !== cb);
   }
@@ -232,7 +246,7 @@ class WebSocketManager {
   }
 
   /* ===============================
-      Other Methods
+       Other Methods
   =============================== */
   public sendForwardMessage(payload: {
     type: number;
@@ -248,7 +262,8 @@ class WebSocketManager {
       user_id: this.userId!,
       ...payload
     };
-    this.ws.send(JSON.stringify(msg));
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
     return true;
   }
 
@@ -262,7 +277,8 @@ class WebSocketManager {
       user_id: this.userId!,
       ...payload
     };
-    this.ws.send(JSON.stringify(msg));
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
     return true;
   }
 
@@ -302,6 +318,14 @@ class WebSocketManager {
 
   public isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  /* ===============================
+       Online Status Management
+  =============================== */
+  // ✅ 2. NEW: Fixed missing method
+  public isUserOnline(userId: string): boolean {
+    return this.onlineUsers.has(userId);
   }
 
   private markUserOnline(userId: string) {

@@ -801,17 +801,67 @@ export default function ChatRoomScreen() {
     setSearchQuery('');
   }, [disableSearch, setSearchQuery]);
 
+  // Handle send contact card
+  const handleSendContactCard = useCallback(() => {
+    (navigation as any).navigate('SelectContactForCard', {
+      onSelectContact: async (contact: any) => {
+        try {
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+
+          // Create contact card message data
+          const cardData = {
+            userId: contact.id,
+            userName: contact.name,
+            userAvatar: contact.avatar,
+          };
+
+          const result = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            message: JSON.stringify(cardData),
+            type: 4, // Type 4 for contact card
+          });
+
+          if (result.success && result.data) {
+            const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
+              ? result.data.isreceive
+              : receiver;
+
+            if (actualReceivers.length > 0) {
+              WebSocketManager.sendForwardMessage({
+                type: 4,
+                message: JSON.stringify(cardData),
+                message_id: result.data.message_id,
+                sender: currentUserId,
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
+            }
+
+            await loadMessages(false, false);
+          } else {
+            Alert.alert('发送失败', result.message || '名片发送失败，请重试');
+          }
+        } catch (error) {
+          console.error('Error sending contact card:', error);
+          Alert.alert('发送失败', '网络错误，请重试');
+        }
+      },
+    });
+  }, [chatMembers, currentUserId, chatId, navigation, loadMessages]);
+
   // Toolbar buttons configuration
   const toolbarButtons = {
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
       { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'videocam-outline', label: '视频通话' },
+      { icon: 'call-outline', label: '通话', onPress: handleStartCall },
     ],
     row2: [
       { icon: 'document-outline', label: '文件' },
-      { icon: 'card-outline', label: '个人名片' },
+      { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
       { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
       { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
     ],

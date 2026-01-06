@@ -1,12 +1,26 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Dimensions, Image, Modal, ScrollView, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
+import {
+  Dimensions,
+  Image,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+  StyleSheet,
+  Alert
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+
+// 引入 API 和 Store
+import { createFriendRequest } from '../api/Friend';
+import { useContactStore } from '../store/contactStore';
+import { useUserStore } from '../store/userStore';
 
 const { width, height } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
 
-// ... 保持 Interface 定义不变 ...
 interface DisplayMessage {
   id: string;
   senderId: string;
@@ -15,10 +29,16 @@ interface DisplayMessage {
   type?: number;
   imageUrls?: string[];
   voiceUrl?: string;
+  cardData?: {
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+  };
   createdAt: string;
   sender: 'me' | 'other';
   username?: string;
   avatar?: string;
+  readBy?: string[];
 }
 
 interface MessageBubbleProps {
@@ -37,6 +57,7 @@ interface MessageBubbleProps {
   roomStyles: any;
   showSenderName?: boolean;
   chatUnreadCount: number;
+  totalMembers?: number;
 }
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -54,73 +75,168 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   roomStyles,
   showSenderName,
   chatUnreadCount,
+  totalMembers,
 }) => {
   const navigation = useNavigation<any>();
   const [imageViewerVisible, setImageViewerVisible] = useState(false);
   const [initialImageIndex, setInitialImageIndex] = useState(0);
+
+  const contacts = useContactStore((state) => state.contacts);
+  const currentUser = useUserStore((state) => state.user);
 
   const openImageViewer = (index: number) => {
     setInitialImageIndex(index);
     setImageViewerVisible(true);
   };
 
+  // ---------------------------------------------------------
+  // 1. 核心解析逻辑 (修复显示代码的问题)
+  // ---------------------------------------------------------
   const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
+
+  // 🕵️‍♂️ 智能识别：尝试解析 JSON
+  let parsedCardData = item.cardData; // 优先使用外部传入的 cardData
+  let isCallMessage = false;
+  let isContactCard = false;
+
+  // 如果没有 cardData，尝试从 text 解析
+  if (!parsedCardData && typeof messageText === 'string' && (messageText.startsWith('{') || messageText.startsWith('['))) {
+    try {
+      const parsed = JSON.parse(messageText);
+
+      // A. 判断是否为通话
+      if (parsed.type === 'GROUP_VIDEO_CALL' || parsed.type === 'SINGLE_VOICE_CALL') {
+        isCallMessage = true;
+      }
+      // B. 判断是否为名片 (检查关键字段)
+      else if (parsed.userId && parsed.userName) {
+        parsedCardData = parsed;
+        isContactCard = true;
+      }
+    } catch (e) {
+      // 解析失败，说明是普通文本
+    }
+  } else {
+    // 使用 item.type 辅助判断
+    if (item.type === 4 && !parsedCardData) isCallMessage = true; // 假设 type 4 且无名片数据就是通话
+    if (item.cardData) isContactCard = true;
+  }
+
+  // ---------------------------------------------------------
+  // 2. 状态与逻辑
+  // ---------------------------------------------------------
   const isSearchMatched = searchMode && searchQuery.trim() && messageText.toLowerCase().includes(searchQuery.toLowerCase());
   const isCurrentMatch = searchMode && currentMatchId && item.id === currentMatchId;
-  
-  const readStatus = item.sender === 'me' ? (chatUnreadCount === 0 ? 'double' : 'single') : null;
 
-  // 🕵️‍♂️ 智能检测：是否为通话信令消息
-  // 即使后端 type 传错了，这里也能拦截到
-  const isCallMessage = item.type === 4 || (typeof messageText === 'string' && messageText.includes('"type":"GROUP_VIDEO_CALL"'));
+  const getReadStatus = () => {
+    if (item.sender !== 'me') return null;
+    const readBy = item.readBy || [];
+    if (totalMembers && totalMembers > 2) {
+      const isReadByAll = readBy.length >= (totalMembers - 1);
+      return isReadByAll ? 'double' : 'single';
+    } else {
+      if (!item.readBy) return chatUnreadCount === 0 ? 'double' : 'single';
+      return readBy.length > 0 ? 'double' : 'single';
+    }
+  };
+  const readStatus = getReadStatus();
 
-  // ✅ 渲染微信风格通话卡片
+  // ---------------------------------------------------------
+  // 3. 点击名片处理
+  // ---------------------------------------------------------
+  const handleContactCardPress = async (cardData: any) => {
+    if (!cardData || !cardData.userId) return;
+
+    if (currentUser && cardData.userId === currentUser.id) {
+      Alert.alert('提示', '这是你自己的名片');
+      return;
+    }
+
+    const isAlreadyFriend = contacts.some(contact => contact.id === cardData.userId);
+    if (isAlreadyFriend) {
+      Alert.alert('提示', `${cardData.userName} 已经是你的好友了`);
+      return;
+    }
+
+    Alert.alert(
+      '添加好友',
+      `是否添加 ${cardData.userName} 为好友？`,
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '添加',
+          onPress: async () => {
+            try {
+              const result = await createFriendRequest(cardData.userId);
+              if (result.success) {
+                Alert.alert('成功', '好友请求已发送');
+              } else {
+                const msg = result.message || '';
+                if (msg.includes('好友') || msg.includes('friend')) Alert.alert('提示', '你们已经是好友了');
+                else if (msg.includes('pending')) Alert.alert('提示', '请求已发送，请等待');
+                else Alert.alert('错误', msg || '发送失败');
+              }
+            } catch (error) {
+              Alert.alert('错误', '网络请求失败');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  // ---------------------------------------------------------
+  // 4. 渲染通话卡片
+  // ---------------------------------------------------------
   const renderCallCard = () => {
     let callData: any = {};
     let isEnded = false;
-
     try {
       callData = JSON.parse(messageText);
-      if (callData.status === 'ended') {
-        isEnded = true;
-      }
+      if (callData.status === 'ended') isEnded = true;
     } catch (e) {
-      // 如果解析失败，回退显示文本
       return <Text style={roomStyles.messageText}>{messageText}</Text>;
     }
 
     return (
-      <TouchableOpacity 
-        style={[
-          styles.callCardContainer, 
-          isEnded ? styles.callCardEnded : styles.callCardActive
-        ]} 
+      <TouchableOpacity
+        style={[styles.callCardContainer, isEnded ? styles.callCardEnded : styles.callCardActive]}
         disabled={isEnded}
         onPress={() => navigation.navigate('GroupCallScreen', { chatId: callData.roomId, isHost: false })}
       >
         <View style={styles.callCardIconContent}>
           <View style={[styles.iconCircle, isEnded && styles.iconCircleEnded]}>
-              <Ionicons name="videocam" size={scaleWidth(24)} color={isEnded ? "#FFF" : "#FFF"} />
+            <Ionicons name="videocam" size={scaleWidth(24)} color="#FFF" />
           </View>
           <View style={styles.callCardTextContent}>
             <Text style={styles.callCardTitle}>
-              {isEnded ? '通话已结束' : '邀请你加入群聊视频'}
+              {isEnded ? '通话已结束' : (callData.type === 'SINGLE_VOICE_CALL' ? '语音通话邀请' : '群聊视频通话')}
             </Text>
-            <Text style={styles.callCardSubtext}>
-              {isEnded 
-                ? `通话时长 ${callData.duration || '00:00'}` 
-                : '点击加入通话'}
-            </Text>
+            <Text style={styles.callCardSubtext}>{isEnded ? `时长 ${callData.duration || '00:00'}` : '点击加入'}</Text>
           </View>
         </View>
       </TouchableOpacity>
     );
   };
 
+  // ---------------------------------------------------------
+  // 5. 渲染组件主体
+  // ---------------------------------------------------------
   return (
     <>
       <Modal visible={imageViewerVisible} transparent={true} animationType="fade" onRequestClose={() => setImageViewerVisible(false)}>
-        {/* ... 图片预览 Modal 代码不变 ... */}
+        <View style={styles.imageViewerContainer}>
+          <TouchableOpacity style={styles.closeButton} onPress={() => setImageViewerVisible(false)}>
+            <Ionicons name="close" size={30} color="white" />
+          </TouchableOpacity>
+          <ScrollView horizontal pagingEnabled contentOffset={{ x: initialImageIndex * width, y: 0 }} showsHorizontalScrollIndicator={false}>
+            {item.imageUrls?.map((url, imgIndex) => (
+              <View key={imgIndex} style={styles.imageContainer}>
+                <Image source={{ uri: url }} style={styles.fullScreenImage} resizeMode="contain" />
+              </View>
+            ))}
+          </ScrollView>
+        </View>
       </Modal>
 
       <View style={[roomStyles.messageRow, item.sender === 'me' ? roomStyles.messageRowRight : roomStyles.messageRowLeft]}>
@@ -136,40 +252,64 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
         <View style={[
           roomStyles.bubble,
           item.sender === 'me' ? roomStyles.bubbleRight : roomStyles.bubbleLeft,
-          
-          // 🔑 关键修复：如果是通话卡片，移除气泡的默认背景色和内边距，让卡片自己控制样式
-          isCallMessage && { padding: 0, backgroundColor: 'transparent', overflow: 'visible', borderWidth: 0 },
-          
+          // 🔑 针对卡片移除默认气泡背景和内边距，防止绿色背景包住白色卡片
+          (isCallMessage || isContactCard) && { padding: 0, backgroundColor: 'transparent', overflow: 'visible', borderWidth: 0 },
           isSearchMatched && { backgroundColor: '#FFA500' },
           isCurrentMatch && { backgroundColor: '#FF8C00', borderWidth: 1.5, borderColor: '#FF6347' },
         ]}>
-          
-          {showSenderName && item.sender === 'other' && !isCallMessage && (
+
+          {/* 发送者名字 (非卡片模式才显示) */}
+          {showSenderName && item.sender === 'other' && !isCallMessage && !isContactCard && (
             <Text style={roomStyles.senderName}>{item.senderName}</Text>
           )}
 
-          {/* 渲染逻辑分流 */}
+          {/* === 内容分发 === */}
+
+          {/* A. 通话卡片 */}
           {isCallMessage ? (
             renderCallCard()
+          ) : isContactCard && parsedCardData ? (
+            // ✅ B. 名片卡片 (使用 parsedCardData)
+            <TouchableOpacity
+              style={styles.contactCard}
+              onPress={() => handleContactCardPress(parsedCardData)}
+              activeOpacity={0.9}
+            >
+              <Image
+                source={
+                  !parsedCardData.userAvatar ||
+                    parsedCardData.userAvatar.length < 10
+                    ? require('../assets/images/personal.png')
+                    : { uri: parsedCardData.userAvatar }
+                }
+                style={styles.contactCardAvatar}
+              />
+              <View style={styles.contactCardInfo}>
+                <Text style={styles.contactCardName} numberOfLines={1}>
+                  {parsedCardData.userName}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="person-circle-outline" size={14} color="#888" style={{ marginRight: 4 }} />
+                  <Text style={styles.contactCardLabel}>个人名片</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
           ) : (
+            // C. 普通消息
             <>
-              {/* 普通文本 */}
               {item.type === 1 && <Text style={roomStyles.messageText}>{messageText}</Text>}
 
-              {/* 语音消息 */}
               {item.type === 2 && item.voiceUrl && (
                 <View style={roomStyles.voiceMessageContainer}>
-                  {/* ... 语音逻辑不变 ... */}
                   <TouchableOpacity onPress={() => playingVoice === item.id ? stopAudio() : playAudio(item.voiceUrl!, item.id)}>
-                    <Ionicons name={playingVoice === item.id ? "pause-circle" : "play-circle"} size={scaleWidth(28)} color={item.sender === 'me' ? "#FFF" : "#1c275b"} />
+                    <Ionicons name={playingVoice === item.id ? "pause-circle" : "play-circle"} size={scaleWidth(28)} color={item.sender === 'me' ? "#000000ff" : "#1c275b"} />
                   </TouchableOpacity>
-                  <Text style={[roomStyles.voiceDuration, item.sender === 'me' && { color: '#EEE' }]}>
+                  <Text style={[roomStyles.voiceDuration, item.sender === 'me' && { color: '#000000ff' }]}>
                     {playingVoice === item.id ? '播放中' : '语音'}
                   </Text>
                 </View>
               )}
 
-              {/* 图片消息 */}
               {item.type === 3 && (
                 <View style={roomStyles.imageGridContainer}>
                   {item.imageUrls?.map((url, idx) => (
@@ -182,20 +322,27 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
             </>
           )}
 
-          {/* 时间戳 (通话卡片不显示这个时间戳，因为卡片样式里通常不带外置时间) */}
+          {/* D. 页脚 (时间 & 已读) */}
           {!isCallMessage && (
-            <View style={[styles.bubbleFooter, { justifyContent: item.sender === 'me' ? 'flex-end' : 'flex-start' }]}>
+            <View style={[styles.bubbleFooter, {
+              justifyContent: item.sender === 'me' ? 'flex-end' : 'flex-start',
+              // 如果是名片，需要给时间戳一点偏移，因为我们移除了 padding
+              marginTop: isContactCard ? 4 : 0,
+              marginRight: isContactCard ? 4 : 0,
+              marginLeft: isContactCard ? 8 : 0,
+            }]}>
               <Text style={[
-                roomStyles.timestamp, 
-                item.sender === 'me' && { color: '#EEE' }
+                roomStyles.timestamp,
+                item.sender === 'me' && !isContactCard && { color: '#080808ff' },
+                isContactCard && { color: '#999', fontSize: 10 }
               ]}>
                 {new Date(item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
               </Text>
               {readStatus && (
-                <Ionicons 
-                  name={readStatus === 'double' ? "checkmark-done" : "checkmark"} 
-                  size={16} 
-                  color={readStatus === 'double' ? "#4facfe" : "#CCC"} 
+                <Ionicons
+                  name={readStatus === 'double' ? "checkmark-done" : "checkmark"}
+                  size={16}
+                  color={readStatus === 'double' ? "#4facfe" : "#CCC"}
                   style={{ marginLeft: 4 }}
                 />
               )}
@@ -216,59 +363,68 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   );
 };
 
-// 🎨 微信/WhatsApp 风格样式
+// 🎨 样式定义
 const styles = StyleSheet.create({
-  // ... 图片预览样式不变 ...
   imageViewerContainer: { flex: 1, backgroundColor: 'black', justifyContent: 'center' },
   closeButton: { position: 'absolute', top: 50, right: 25, zIndex: 10 },
-  closeButtonText: { color: '#FFF', fontSize: 24, fontWeight: 'bold' },
   imageContainer: { width: width, height: height, justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: width, height: height * 0.85 },
   bubbleFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
 
-  // ✅ 通话卡片样式
+  // 通话卡片样式
   callCardContainer: {
     padding: 15,
-    width: width * 0.65,
+    width: width * 0.53,
     borderRadius: 12,
     flexDirection: 'column',
     justifyContent: 'center',
   },
-  // 正在通话：橙色背景 (类似微信邀请)
-  callCardActive: {
-    backgroundColor: '#FA9D3B', 
-  },
-  // 通话结束：深灰色背景
-  callCardEnded: {
-    backgroundColor: '#333', 
-  },
-  callCardIconContent: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-  },
-  iconCircle: { 
-    width: 48, 
-    height: 48, 
-    borderRadius: 24, 
-    backgroundColor: 'rgba(255,255,255,0.2)', // 半透明白底
-    justifyContent: 'center', 
+  callCardActive: { backgroundColor: '#ffc824ff' },
+  callCardEnded: { backgroundColor: '#333' },
+  callCardIconContent: { flexDirection: 'row', alignItems: 'center' },
+  iconCircle: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  iconCircleEnded: { backgroundColor: 'rgba(255,255,255,0.1)' },
+  callCardTextContent: { flex: 1 },
+  callCardTitle: { color: '#FFF', fontWeight: 'bold', fontSize: 16, marginBottom: 4 },
+  callCardSubtext: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
+
+  // ✅ 名片卡片样式 (类似微信)
+  contactCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginRight: 12
+    backgroundColor: '#fff',
+    padding: 15, // 增加 padding
+    borderRadius: 10,
+    width: scaleWidth(200),
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    // 阴影
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  iconCircleEnded: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  contactCardAvatar: {
+    width: 50,
+    height: 50,
+    borderRadius: 6, // 微信风格是方圆角
+    marginRight: 12,
+    backgroundColor: '#F0F0F0',
   },
-  callCardTextContent: { 
-    flex: 1 
+  contactCardInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
-  callCardTitle: { 
-    color: '#FFF', 
-    fontWeight: 'bold', 
+  contactCardName: {
     fontSize: 16,
-    marginBottom: 4
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 6,
   },
-  callCardSubtext: { 
-    color: 'rgba(255,255,255,0.9)', 
-    fontSize: 12, 
+  contactCardLabel: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '400',
   },
 });
