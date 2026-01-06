@@ -42,9 +42,14 @@ interface DisplayMessage {
     senderId: string;
     senderName: string;
     text: string;
-    type?: number; // 1=text, 2=voice, 3=images
+    type?: number; // 1=text, 2=voice, 3=images, 4=contact card
     imageUrls?: string[]; // For type 3 messages
     voiceUrl?: string; // For type 2 messages
+    cardData?: { // For type 4 messages (contact card)
+        userId: string;
+        userName: string;
+        userAvatar?: string;
+    };
     createdAt: string;
     sender: 'me' | 'other';
     username?: string;
@@ -222,6 +227,7 @@ export default function GroupRoomScreen() {
                         let messageType = 1; // Default to text
                         let imageUrls: string[] = [];
                         let voiceUrl: string = '';
+                        let cardData: any = null;
 
                         try {
                             // 🔍 Check if msg.message is already an object or a string
@@ -245,6 +251,19 @@ export default function GroupRoomScreen() {
                                 messageType = msg.type;
                             } else if (parsedMessage.type) {
                                 messageType = parsedMessage.type;
+                            }
+
+                            // ✅ Smart detection: Check if message is a contact card
+                            // If parsedMessage.message is a JSON string with userId/userName/userAvatar, it's a contact card
+                            if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                                try {
+                                    const possibleCardData = JSON.parse(parsedMessage.message);
+                                    if (possibleCardData.userId && possibleCardData.userName) {
+                                        messageType = 4; // Override to contact card type
+                                    }
+                                } catch (e) {
+                                    // Not a contact card, continue with current messageType
+                                }
                             }
 
                             // For type 3 (images/files), extract image URLs
@@ -273,6 +292,28 @@ export default function GroupRoomScreen() {
                                 } else if (parsedMessage.message) {
                                     voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
                                     messageText = '[语音消息]';
+                                }
+                            }
+                            // For type 4 (contact card), extract card data
+                            else if (messageType === 4) {
+                                try {
+                                    if (typeof parsedMessage === 'string') {
+                                        cardData = JSON.parse(parsedMessage);
+                                    } else if (parsedMessage.message) {
+                                        cardData = typeof parsedMessage.message === 'string' 
+                                            ? JSON.parse(parsedMessage.message) 
+                                            : parsedMessage.message;
+                                    } else {
+                                        cardData = parsedMessage;
+                                    }
+                                    // Ensure avatar URL is full
+                                    if (cardData && cardData.userAvatar) {
+                                        cardData.userAvatar = ensureFullImageUrl(cardData.userAvatar);
+                                    }
+                                    messageText = `[个人名片: ${cardData.userName}]`;
+                                } catch (e) {
+                                    console.error('Failed to parse contact card:', e);
+                                    messageText = '[个人名片]';
                                 }
                             }
                             // For type 1 (text), extract text content
@@ -305,6 +346,7 @@ export default function GroupRoomScreen() {
                             type: messageType,
                             imageUrls: imageUrls,
                             voiceUrl: voiceUrl,
+                            cardData: cardData,
                             createdAt: msg.created_at || msg.createdAt || new Date().toISOString(),
                             name: senderInfo.name,
                             avatar: senderInfo.avatar,
@@ -786,6 +828,56 @@ export default function GroupRoomScreen() {
         return null;
     };
 
+    // Handle send contact card
+    const handleSendContactCard = useCallback(() => {
+        (navigation as any).navigate('SelectContactForCard', {
+            onSelectContact: async (contact: any) => {
+                try {
+                    const receiver = chatMembers.filter(id => id !== currentUserId);
+                    
+                    // Create contact card message data
+                    const cardData = {
+                        userId: contact.id,
+                        userName: contact.name,
+                        userAvatar: contact.avatar,
+                    };
+
+                    const result = await sendChatMessage({
+                        sender: currentUserId,
+                        isreceive: receiver,
+                        chat_id: chatId,
+                        message: JSON.stringify(cardData),
+                        type: 4, // Type 4 for contact card
+                    });
+
+                    if (result.success && result.data) {
+                        const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
+                            ? result.data.isreceive
+                            : receiver;
+
+                        if (actualReceivers.length > 0) {
+                            WebSocketManager.sendForwardMessage({
+                                type: 4,
+                                message: JSON.stringify(cardData),
+                                message_id: result.data.message_id,
+                                sender: currentUserId,
+                                receiver: actualReceivers,
+                                chat_id: chatId
+                            });
+                        }
+
+                        await loadMessages(false, false);
+                    } else {
+                        Alert.alert('发送失败', result.message || '名片发送失败，请重试');
+                    }
+                } catch (error) {
+                    console.error('Error sending contact card:', error);
+                    Alert.alert('发送失败', '网络错误，请重试');
+                }
+            },
+        });
+    }, [chatMembers, currentUserId, chatId, navigation, loadMessages]);
+
     // Toolbar buttons configuration
     const toolbarButtons = {
         row1: [
@@ -796,7 +888,7 @@ export default function GroupRoomScreen() {
         ],
         row2: [
             { icon: 'document-outline', label: '文件' },
-            { icon: 'location-outline', label: '位置' },
+            { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
             { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
             { icon: 'settings-outline', label: '群设置', onPress: handleOpenSettings },
         ],

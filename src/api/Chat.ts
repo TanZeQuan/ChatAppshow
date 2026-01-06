@@ -251,6 +251,7 @@ export interface MessagePayload {
   sender: string;
   isreceive: string[];
   chat_id: string;
+  type?: number; // 1=text, 2=voice, 3=images, 4=contact card
   message?: string; // for text
   voice?: { uri: string; name: string; type: string }; // for voice
   files?: { uri: string; name: string; type: string }[]; // for files
@@ -266,6 +267,10 @@ export const sendChatMessage = async (payload: MessagePayload) => {
       isreceive: payload.isreceive,
       chat_id: payload.chat_id,
     };
+
+    if (payload.type) {
+      dataPayload.type = payload.type;
+    }
 
     if (payload.message) {
       dataPayload.message = payload.message;

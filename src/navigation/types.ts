@@ -73,6 +73,9 @@ export type ChatStackParamList = {
     chatId: string;
     chatName: string;
   };
+  SelectContactForCard: {
+    onSelectContact: (contact: any) => void;
+  };
 };
 
 /**

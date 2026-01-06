@@ -1,6 +1,9 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Dimensions, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Dimensions, Image, Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { createFriendRequest, searchUser } from '../api/Friend';
+import { useContactStore } from '../store/contactStore';
+import { useUserStore } from '../store/userStore';
 
 const { width, height } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -10,9 +13,14 @@ interface DisplayMessage {
   senderId: string;
   senderName: string;
   text: string;
-  type?: number; // 1=text, 2=voice, 3=images
+  type?: number; // 1=text, 2=voice, 3=images, 4=contact card
   imageUrls?: string[]; // For type 3 messages
   voiceUrl?: string; // For type 2 messages
+  cardData?: { // For type 4 messages (contact card)
+    userId: string;
+    userName: string;
+    userAvatar?: string;
+  };
   createdAt: string;
   sender: 'me' | 'other';
   username?: string;
@@ -65,6 +73,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const [selectedImageUrl, setSelectedImageUrl] = React.useState<string>('');
   const [selectedImageIndex, setSelectedImageIndex] = React.useState<number>(0);
 
+  const contacts = useContactStore((state) => state.contacts);
+  const currentUser = useUserStore((state) => state.user);
+
   const openImageViewer = (url: string, index: number) => {
     setSelectedImageUrl(url);
     setSelectedImageIndex(index);
@@ -73,6 +84,62 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
   const closeImageViewer = () => {
     setImageViewerVisible(false);
+  };
+
+  // Handle contact card press
+  const handleContactCardPress = async (cardData: any) => {
+    if (!cardData || !cardData.userId) return;
+
+    // Check if it's current user
+    if (currentUser && cardData.userId === currentUser.id) {
+      Alert.alert('提示', '这是你自己的名片');
+      return;
+    }
+
+    // Check if already a friend
+    const isAlreadyFriend = contacts.some(contact => contact.id === cardData.userId);
+    
+    if (isAlreadyFriend) {
+      Alert.alert('提示', `${cardData.userName} 已经是你的好友了`);
+      return;
+    }
+
+    // Ask user if they want to add this friend
+    Alert.alert(
+      '添加好友',
+      `是否添加 ${cardData.userName} 为好友？`,
+      [
+        {
+          text: '取消',
+          style: 'cancel',
+        },
+        {
+          text: '添加',
+          onPress: async () => {
+            try {
+              const result = await createFriendRequest(cardData.userId);
+
+              if (result.success) {
+                Alert.alert('成功', '好友请求已发送');
+              } else {
+                const errorMessage = result.message || '发送请求失败';
+                
+                if (errorMessage.includes('已经是好友') || errorMessage.includes('already friends')) {
+                  Alert.alert('提示', '你们已经是好友了');
+                } else if (errorMessage.includes('已发送') || errorMessage.includes('pending')) {
+                  Alert.alert('提示', '已有待处理的好友请求');
+                } else {
+                  Alert.alert('错误', errorMessage);
+                }
+              }
+            } catch (error) {
+              console.error('Error adding friend:', error);
+              Alert.alert('错误', '发送请求失败，请重试');
+            }
+          },
+        },
+      ]
+    );
   };
   // Safety check: ensure text is a string
   const messageText = typeof item.text === 'string' ? item.text : String(item.text || '');
@@ -228,6 +295,35 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           </View>
         )}
 
+        {/* Type 4: Contact Card Message */}
+        {item.type === 4 && item.cardData && (
+          <TouchableOpacity 
+            style={styles.contactCard}
+            onPress={() => handleContactCardPress(item.cardData)}
+            activeOpacity={0.8}
+          >
+            <Image
+              source={
+                !item.cardData.userAvatar || 
+                item.cardData.userAvatar.trim() === '' || 
+                item.cardData.userAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                  ? require('../assets/images/personal.png')
+                  : { uri: item.cardData.userAvatar }
+              }
+              style={styles.contactCardAvatar}
+            />
+            <View style={styles.contactCardInfo}>
+              <Text style={styles.contactCardName} numberOfLines={1}>
+                {item.cardData.userName}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="person-outline" size={13} color="#888" style={{ marginRight: 4 }} />
+                <Text style={styles.contactCardLabel}>个人名片</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        )}
+
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
           <Text style={roomStyles.timestamp}>
             {new Date(item.createdAt).toLocaleTimeString('zh-CN', {
@@ -298,5 +394,43 @@ const styles = {
   fullScreenImage: {
     width: width,
     height: height * 0.8,
+  },
+  // Contact Card Styles (WeChat-like design)
+  contactCard: {
+    flexDirection: 'row' as 'row',
+    alignItems: 'center' as 'center',
+    backgroundColor: '#fff',
+    padding: 18,
+    borderRadius: 8,
+    width: scaleWidth(180),
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  contactCardAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 6,
+    marginRight: 12,
+    backgroundColor: '#F0F0F0',
+  },
+  contactCardInfo: {
+    flex: 1,
+    justifyContent: 'center' as 'center',
+  },
+  contactCardName: {
+    fontSize: 15,
+    fontWeight: '500' as '500',
+    color: '#1a1a1a',
+    marginBottom: 4,
+  },
+  contactCardLabel: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '400' as '400',
   },
 };

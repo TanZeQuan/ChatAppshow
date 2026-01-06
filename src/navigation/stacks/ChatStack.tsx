@@ -1,15 +1,16 @@
-import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import React from "react";
 import { ChatStackParamList } from "../types";
 
+import AddGroupMembers from "../../screens/Chat/AddGroupMembers";
+import ChatHistory from "../../screens/Chat/ChatHistory";
 import ChatListScreen from "../../screens/Chat/ChatListScreen";
 import ChatRoomScreen from "../../screens/Chat/ChatRoomScreen";
 import ChatSettingScreen from "../../screens/Chat/ChatSettingScreen";
+import GroupMemberList from "../../screens/Chat/GroupMemberList";
 import GroupRoomScreen from "../../screens/Chat/GroupRoomScreen";
 import GroupSettingScreen from "../../screens/Chat/GroupSettingScreen";
-import GroupMemberList from "../../screens/Chat/GroupMemberList";
-import AddGroupMembers from "../../screens/Chat/AddGroupMembers";
-import ChatHistory from "../../screens/Chat/ChatHistory";
+import SelectContactForCard from "../../screens/Chat/SelectContactForCard";
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
@@ -62,6 +63,12 @@ export default function ChatStack() {
         name="ChatHistory"
         component={ChatHistory}
         options={{ title: "Chat History" }}
+      />
+
+      <Stack.Screen
+        name="SelectContactForCard"
+        component={SelectContactForCard}
+        options={{ title: "Select Contact" }}
       />
     </Stack.Navigator>
   );
