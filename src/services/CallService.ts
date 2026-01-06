@@ -14,6 +14,7 @@ export class WebRTCCallService {
   onIncomingCall: (callerId: string) => void;
   peerConnection: RTCPeerConnection | null;
   localStream: MediaStream | null;
+  remoteStream: MediaStream | null;
   targetUserId: string | null;
   candidateQueue: RTCIceCandidate[];
   configuration: { iceServers: { urls: string; }[]; };
@@ -28,6 +29,7 @@ export class WebRTCCallService {
 
     this.peerConnection = null;
     this.localStream = null;
+    this.remoteStream = null;
     this.targetUserId = null;
     this.currentCallId = null;
     this.candidateQueue = [];
@@ -199,12 +201,19 @@ export class WebRTCCallService {
         console.log('📡 [CallService] Streams:', event.streams.length);
         
         if (event.streams && event.streams[0]) {
+          // ✅ Save remote stream for audio playback
+          this.remoteStream = event.streams[0];
+          console.log('✅ [CallService] Remote stream saved!');
           console.log('📡 [CallService] Remote stream tracks:', event.streams[0].getTracks().map((t: any) => ({
             kind: t.kind,
             enabled: t.enabled,
             readyState: t.readyState,
             muted: t.muted
           })));
+          
+          // ✅ In React Native WebRTC, audio tracks are automatically played
+          // No need for explicit audio element attachment
+          console.log('🔊 [CallService] Remote audio should now be playing automatically');
         }
         
         this.onStatusChange('Connected');
@@ -278,6 +287,11 @@ export class WebRTCCallService {
     if (this.localStream) {
         this.localStream.getTracks().forEach(t => t.stop());
         this.localStream = null;
+    }
+    if (this.remoteStream) {
+        console.log('🔇 [CallService] Stopping remote stream');
+        this.remoteStream.getTracks().forEach(t => t.stop());
+        this.remoteStream = null;
     }
     if (this.peerConnection) {
         this.peerConnection.close();
