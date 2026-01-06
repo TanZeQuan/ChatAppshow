@@ -386,11 +386,10 @@ export default function GroupRoomScreen() {
         };
     }, [loadMessages]);
 
-    // ✅ Reload data when screen gains focus
+    // ✅ Send read signal when entering group chat room (without reloading messages)
     useFocusEffect(
         useCallback(() => {
-            console.log('🔄 [GroupRoom] Screen focused, reloading messages...');
-            loadMessages(false, false); // Silent reload
+            console.log('📨 [GroupRoom] Screen focused, sending read signal...');
             
             // ✅ Send read signal when entering group chat room
             if (chatMembers.length > 0) {
@@ -403,7 +402,7 @@ export default function GroupRoomScreen() {
                     });
                 }
             }
-        }, [loadMessages, chatMembers, currentUserId, chatId])
+        }, [chatMembers, currentUserId, chatId])
     );
 
     // ✅ Auto-enable search mode if navigated from settings
@@ -509,14 +508,8 @@ export default function GroupRoomScreen() {
             }
         }, 10000);
 
-        // Polling fallback: Check for new messages every 3 seconds (silent, no loading animation)
-        const pollingInterval = setInterval(() => {
-            loadMessagesRef.current(true, false); // Use ref - isRefresh=true, showLoading=false
-        }, 3000);
-
         return () => {
             clearInterval(connectionCheckInterval);
-            clearInterval(pollingInterval);
         };
     }, []); // Empty dependency - only set up once
 

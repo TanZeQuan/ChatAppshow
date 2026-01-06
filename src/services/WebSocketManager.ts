@@ -98,7 +98,7 @@ class WebSocketManager {
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.initializeCallService();
-            this.startHeartbeat(); // ✅ Start heartbeat after successful login
+            // this.startHeartbeat(); // ✅ Start heartbeat after successful login - DISABLED
             this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
@@ -183,7 +183,7 @@ class WebSocketManager {
           this.isConnected = true;
           this.reconnectAttempts = 0;
           this.initializeCallService();
-          this.startHeartbeat(); // ✅ Restart heartbeat after reconnection
+          // this.startHeartbeat(); // ✅ Restart heartbeat after reconnection - DISABLED
           this.loginResolver?.(true);
           this.cleanupLoginPromise();
         }
@@ -349,8 +349,8 @@ class WebSocketManager {
     this.userId = null;
     this.reconnectAttempts = 0;
     
-    // ✅ Stop heartbeat
-    this.stopHeartbeat();
+    // ✅ Stop heartbeat - DISABLED
+    // this.stopHeartbeat();
     
     // ✅ Clean up presence tracking
     this.cleanupPresenceTracking();
