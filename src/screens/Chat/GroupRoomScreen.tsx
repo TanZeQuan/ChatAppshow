@@ -359,7 +359,7 @@ export default function ChatRoomScreen() {
     const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
       // 只处理当前聊天室的已读回执
       if (data.chatId !== chatId) return;
-      
+
       // 对方读了消息，将 unreadCount 设为 0
       const chatList = useChatStore.getState().chatList;
       const updatedChatList = chatList.map(c => {
@@ -385,7 +385,7 @@ export default function ChatRoomScreen() {
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
       loadMessages(false, false);
-      
+
       // ✅ 发送已读回执给所有群成员
       if (chatMembers && chatMembers.length > 0) {
         const otherMembers = chatMembers.filter(id => id !== currentUserId);
@@ -680,7 +680,7 @@ export default function ChatRoomScreen() {
             console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
             Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
           }
-        } catch(error: any) {
+        } catch (error: any) {
           console.error('Failed to send image', error);
           Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
@@ -728,39 +728,58 @@ export default function ChatRoomScreen() {
   );
 
   // ✅ Handle start call
-  const handleStartCall = useCallback(() => {
+  // Inside ChatRoomScreen component
+  const handleStartCall = useCallback(async () => {
     if (chat?.isGroup) {
-      Alert.alert("提示", "群聊暂不支持通话功能");
-      return;
-    }
+      // 1. 构造通话卡片数据 (JSON 字符串)
+      const callInviteData = JSON.stringify({
+        type: 'GROUP_VIDEO_CALL',
+        roomId: chatId,
+        hostName: currentUserName,
+        startTime: new Date().toISOString()
+      });
 
-    const otherUserId = chatMembers.find(id => id !== currentUserId);
-    if (otherUserId) {
-      WebSocketManager.startCall(otherUserId);
+      // 2. 发送消息，注意 type 设为 4
+      const result = await sendChatMessage({
+        sender: currentUserId,
+        isreceive: chatMembers.filter(id => id !== currentUserId),
+        chat_id: chatId,
+        message: callInviteData,
+        type: 4, // 🔑 关键：类型 4 代表通话卡片
+      });
+
+      if (result.success) {
+        // 3. 跳转到通话页面（确保路由已注册）
+        navigation.navigate('GroupCallScreen', { chatId, isHost: true });
+      }
     } else {
-      Alert.alert("错误", "无法找到通话对象");
+      // 原有的单聊逻辑
+      const otherUserId = chatMembers.find(id => id !== currentUserId);
+      if (otherUserId) {
+        WebSocketManager.startCall(otherUserId);
+      }
     }
-  }, [chat?.isGroup, chatMembers, currentUserId]);
+  }, [chat, chatId, currentUserName, currentUserId, chatMembers, navigation]);
 
   // ✅ CRITICAL FIX: Define handleGoBack BEFORE any conditional returns
   const handleGoBack = useCallback(() => {
     console.log('🔙 [Back] Button clicked');
-    
+
     // 🔑 检查导航堆栈
     const state = navigation.getState();
     console.log('🔙 [Back] Navigation Stack:');
     state.routes.forEach((route: any, index: number) => {
       console.log(`  [${index}] ${route.name} ${index === state.index ? '← CURRENT' : ''}`);
     });
-    
+
     const currentRouteName = state.routes[state.index].name;
     const currentIndex = state.index;
-    
+
     // 🔑 关键修复：如果下一个屏幕也是 ChatRoom，连续 pop 两次
     if (currentIndex > 0) {
       const previousRoute = state.routes[currentIndex - 1];
       console.log(`🔙 [Back] Previous route: ${previousRoute.name}`);
-      
+
       if (previousRoute.name === currentRouteName) {
         // 下一个也是相同的屏幕，pop 两次直接回到 ChatList
         console.log('🔙 [Back] ⚠️ Duplicate route detected! Popping twice...');

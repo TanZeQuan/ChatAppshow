@@ -22,12 +22,10 @@ export default function CallScreen() {
 
   // 获取用户信息
   const fetchUserInfo = React.useCallback(async (userId: string) => {
-    console.log('[CallScreen] Fetching user info for:', userId);
     
     // 优先尝试从本地联系人获取
     const localContact = getContactById(userId);
     if (localContact && localContact.name) {
-      console.log('[CallScreen] ✅ Using local contact data:', localContact.name);
       setUserName(localContact.name);
       setUserAvatar(localContact.avatar || '');
       return;
@@ -37,7 +35,6 @@ export default function CallScreen() {
     setLoadingUserInfo(true);
     try {
       const result = await readUsers(userId);
-      console.log('[CallScreen] API result:', JSON.stringify(result, null, 2));
       
       if (result.success && result.data) {
         // 尝试多种可能的数据结构
@@ -48,7 +45,6 @@ export default function CallScreen() {
           userData = result.data.response;
         }
         
-        console.log('[CallScreen] Parsed user data:', JSON.stringify(userData, null, 2));
         
         // 统一处理多种可能的字段名
         const name = userData.name || userData.username || userData.nickname || '';
@@ -57,19 +53,18 @@ export default function CallScreen() {
         if (name) {
           setUserName(name);
           setUserAvatar(avatar);
-          console.log('[CallScreen] ✅ Set userName:', name, 'avatar:', avatar ? 'YES' : 'NO');
+
         } else {
-          console.warn('[CallScreen] ⚠️ API returned no name, using userId');
+
           setUserName(userId);
           setUserAvatar('');
         }
       } else {
-        console.warn('[CallScreen] ⚠️ API failed, using userId as fallback');
+  
         setUserName(userId);
         setUserAvatar('');
       }
     } catch (error) {
-      console.error('[CallScreen] ❌ Error fetching user info:', error);
       setUserName(userId);
       setUserAvatar('');
     } finally {

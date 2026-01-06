@@ -255,6 +255,7 @@ export interface MessagePayload {
   message?: string; // for text
   voice?: { uri: string; name: string; type: string }; // for voice
   files?: { uri: string; name: string; type: string }[]; // for files
+  type?: number; // optional message type
 }
 
 export const sendChatMessage = async (payload: MessagePayload) => {

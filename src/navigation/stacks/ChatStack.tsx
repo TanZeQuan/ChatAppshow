@@ -10,6 +10,7 @@ import GroupSettingScreen from "../../screens/Chat/GroupSettingScreen";
 import GroupMemberList from "../../screens/Chat/GroupMemberList";
 import AddGroupMembers from "../../screens/Chat/AddGroupMembers";
 import ChatHistory from "../../screens/Chat/ChatHistory";
+import GroupCallScreen from "../../screens/Chat/GroupCallScreen";
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
@@ -62,6 +63,11 @@ export default function ChatStack() {
         name="ChatHistory"
         component={ChatHistory}
         options={{ title: "Chat History" }}
+      />
+       <Stack.Screen
+        name="GroupCallScreen"
+        component={GroupCallScreen}
+        options={{ title: "Group Call" }}
       />
     </Stack.Navigator>
   );

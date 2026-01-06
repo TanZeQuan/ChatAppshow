@@ -73,6 +73,10 @@ export type ChatStackParamList = {
     chatId: string;
     chatName: string;
   };
+  GroupCallScreen: {
+    chatId: string;
+    isHost: boolean;
+  };
 };
 
 /**
