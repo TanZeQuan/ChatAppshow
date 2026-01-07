@@ -80,6 +80,9 @@ export type ChatStackParamList = {
     chatId: string;
     isHost: boolean;
   };
+  SingleCallScreen: {
+    chatId: string;
+  };
 };
 
 /**

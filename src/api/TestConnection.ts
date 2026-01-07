@@ -1,4 +1,6 @@
+// eslint-disable-next-line import/no-duplicates
 import api from './service';
+// eslint-disable-next-line import/no-duplicates
 import { API_BASE_URL } from './service';
 
 /**

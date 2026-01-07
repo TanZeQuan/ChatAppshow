@@ -2,14 +2,15 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Dimensions, Image, StyleSheet, Text, TouchableOpacity, View, FlatList, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { mediaDevices, MediaStream } from 'react-native-webrtc';
-import { Ionicons } from '@expo/vector-icons'; 
+import { MediaStream } from 'react-native-webrtc';
+import { Ionicons } from '@expo/vector-icons';
 
-import { readUsers } from '../../api/User';
+import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
+
 import { useUserStore } from '../../store/userStore';
 import { useContactStore } from '../../store/contactStore';
-import { sendChatMessage } from '../../api/Chat';
+import { P2PManager } from '../../services/GroupCallService';
 
 const { width } = Dimensions.get('window');
 
@@ -18,8 +19,8 @@ interface CallParticipant {
   userName: string;
   avatar: string;
   stream?: MediaStream | null;
-  isSpeaking?: boolean; 
-  isMuted?: boolean;    
+  isSpeaking?: boolean;
+  isMuted?: boolean;
 }
 
 // ✅ Helper function to format seconds into MM:SS
@@ -40,119 +41,162 @@ export default function GroupCallScreen() {
 
   const [participants, setParticipants] = useState<CallParticipant[]>([]);
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  
+
   // Local control state
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
 
   // ✅ Timer state
   const [durationSeconds, setDurationSeconds] = useState(0);
-  const durationRef = useRef(0); // Use Ref to ensure hangup function accesses the latest value
+  const durationRef = useRef(0);
+  
+  // ✅ P2P Manager Reference
+  const p2pRef = useRef<P2PManager | null>(null);
 
   // 1. Start Timer Effect
   useEffect(() => {
     const timer = setInterval(() => {
       setDurationSeconds(prev => {
         const next = prev + 1;
-        durationRef.current = next; // Sync ref update
+        durationRef.current = next;
         return next;
       });
     }, 1000);
-
     return () => clearInterval(timer);
   }, []);
 
-  // 2. Get Local Stream (Audio Only)
-  const startLocalStream = useCallback(async () => {
-    try {
-      const stream = await mediaDevices.getUserMedia({
-        audio: true, 
-        video: false, // ❌ Disable video for voice call
-      });
-      
-      setLocalStream(stream);
-
-      // Initialize self
-      setParticipants([{
-        userId: currentUserId,
-        userName: currentUser?.name || 'Me',
-        avatar: currentUser?.avatar || '',
-        stream: stream,
-        isSpeaking: false, 
-      }]);
-
-      // Send Join Signal
-      WebSocketManager.sendCallSignal({
-        type: 'JOIN_CALL',
-        chat_id: chatId,
-        sender: currentUserId
-      });
-
-    } catch (err) {
-      console.error('Failed to get local stream', err);
-      Alert.alert('Permission Error', 'Cannot access microphone');
-    }
-  }, [chatId, currentUserId, currentUser]);
-
-  // 3. Fetch and Add Participant Logic
-  const fetchAndAddParticipant = useCallback(async (userId: string, stream?: any) => {
+  // 2. Helper: Add or Update Participant
+  const addOrUpdateParticipant = useCallback((userId: string, extraData?: any, stream?: MediaStream) => {
     if (userId === currentUserId) return;
 
-    let name = userId;
-    let avatar = '';
-
-    const localContact = getContactById(userId);
-    if (localContact) {
-      name = localContact.name || userId;
-      avatar = localContact.avatar || '';
-    } else {
-      try {
-        const result = await readUsers(userId);
-        if (result.success && result.data) {
-          const userData = result.data.response || result.data;
-          name = userData.name || userData.username || userId;
-          avatar = userData.image || userData.avatar || '';
-        }
-      } catch (e) {
-        console.error('Fetch user error', e);
-      }
-    }
-
     setParticipants(prev => {
-      const exists = prev.some(p => p.userId === userId);
+      const exists = prev.find(p => p.userId === userId);
+      
+      // Update existing
       if (exists) {
-        return prev.map(p => p.userId === userId ? { ...p, stream: stream || p.stream } : p);
+        return prev.map(p => p.userId === userId ? {
+          ...p,
+          stream: stream || p.stream, // Update stream if provided
+          userName: extraData?.userName || p.userName,
+          avatar: extraData?.avatar || p.avatar
+        } : p);
       }
-      return [...prev, { userId, userName: name, avatar, stream, isSpeaking: false }];
+
+      // Add new
+      let name = extraData?.userName || userId;
+      let avatar = extraData?.avatar || '';
+
+      // Try fetching from local store if name is missing
+      if (!extraData?.userName) {
+          const localContact = getContactById(userId);
+          if (localContact) {
+              name = localContact.name;
+              avatar = localContact.avatar || '';
+          }
+      }
+
+      return [...prev, { 
+        userId, 
+        userName: name, 
+        avatar, 
+        stream: stream || null, 
+        isSpeaking: false 
+      }];
     });
-  }, [getContactById, currentUserId]);
+  }, [currentUserId, getContactById]);
 
-  // 4. Simulate Speaking State (Placeholder for VAD)
-  useEffect(() => {
-    const interval = setInterval(() => {
-        // In real WebRTC, you would monitor audioLevel here
-        setParticipants(prev => prev.map(p => ({
-            ...p,
-            isSpeaking: false 
-        })));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // 5. Initialize & Listen for Signals
+  // 3. Initialize P2P & Local Stream
   useEffect(() => {
     console.log('🚀 GroupCallScreen Mounted');
-    startLocalStream();
+    
+    // Initialize P2P Manager
+    p2pRef.current = new P2PManager(currentUserId, chatId);
 
-    const handleCallSignal = (data: any) => {
-      if (data.chat_id !== chatId || data.sender === currentUserId) return;
+    const initCall = async () => {
+      try {
+        // Get Local Stream via P2P Manager
+        const stream = await p2pRef.current?.initLocalStream();
+        setLocalStream(stream || null);
 
-      switch (data.type) {
-        case 'JOIN_CALL':
-          fetchAndAddParticipant(data.sender);
+        // Add self to grid
+        setParticipants([{
+          userId: currentUserId,
+          userName: currentUser?.name || 'Me',
+          avatar: currentUser?.avatar || '',
+          stream: stream,
+          isSpeaking: false,
+        }]);
+
+        // Get Group Members (to broadcast JOIN)
+        // Note: Ideally fetch from API, here we rely on broadcasting
+        const result = await readChatMessages({ chat_id: chatId, user_id: currentUserId, offset: 0 });
+        const receivers = result.data?.group?.map((m: any) => m.user_id).filter((id: string) => id !== currentUserId) || [];
+
+        if (receivers.length > 0) {
+            console.log('📡 发送 JOIN_CALL (用于触发连接，不应触发弹窗)');
+            // ✅ 改回 JOIN_CALL，确保 P2P 握手正常
+            WebSocketManager.sendCallSignal({
+              type: 'JOIN_CALL', 
+              chat_id: chatId,
+              sender: currentUserId,
+              receiver: receivers,
+              payload: { userName: currentUser?.name, avatar: currentUser?.avatar }
+            });
+        }
+        
+
+      } catch (err) {
+        console.error('Failed to init call:', err);
+        Alert.alert('Error', 'Failed to access microphone');
+      }
+    };
+
+    initCall();
+
+    // 4. Signal Handling (Delegated to P2PManager)
+    const handleCallSignal = async (data: any) => {
+      // Basic validation
+      const incomingChatId = data.chat_id || chatId;
+      if (String(incomingChatId) !== String(chatId)) return;
+      
+      const senderId = data.sender || data.user_id;
+      if (String(senderId) === String(currentUserId)) return;
+
+      const payload = data.payload || {}; // Contains sdp, candidate, or user info
+
+     switch (data.type) {
+        // ✅ 监听 JOIN_CALL，这样别人进来时，你才会发 Offer，大家才能互看
+        case 'JOIN_CALL': 
+          addOrUpdateParticipant(senderId, payload);
+          console.log(`⚡以此触发 P2P Offer -> ${senderId}`);
+          await p2pRef.current?.makeOffer(senderId, (remoteStream: MediaStream | undefined) => {
+             addOrUpdateParticipant(senderId, null, remoteStream);
+          });
           break;
+
+        case 'offer':
+          // Received Offer: Handle & Answer
+          addOrUpdateParticipant(senderId, payload); // Ensure user shows up
+          await p2pRef.current?.handleOffer(senderId, payload.sdp, data.call_id, (remoteStream: MediaStream | undefined) => {
+             addOrUpdateParticipant(senderId, null, remoteStream);
+          });
+          break;
+
+        case 'answer':
+          // Received Answer
+          await p2pRef.current?.handleAnswer(senderId, payload.sdp);
+          break;
+
+        case 'candidate':
+          // Received ICE Candidate
+          await p2pRef.current?.handleCandidate(senderId, payload.candidate);
+          break;
+
         case 'LEAVE_CALL':
-          setParticipants(prev => prev.filter(p => p.userId !== data.sender));
+        case 'end':
+          // User left
+          p2pRef.current?.removePeer(senderId);
+          setParticipants(prev => prev.filter(p => p.userId !== senderId));
           break;
       }
     };
@@ -161,16 +205,9 @@ export default function GroupCallScreen() {
 
     return () => {
       WebSocketManager.removeCallCallback(handleCallSignal);
-      if (localStream) {
-        localStream.getTracks().forEach(t => t.stop());
-      }
-      WebSocketManager.sendCallSignal({
-        type: 'LEAVE_CALL',
-        chat_id: chatId,
-        sender: currentUserId
-      });
+      p2pRef.current?.destroy(); // Cleanup P2P connections and streams
     };
-  }, []);
+  }, [addOrUpdateParticipant, chatId, currentUser?.avatar, currentUser?.name, currentUserId]);
 
   const toggleMute = () => {
     if (localStream) {
@@ -182,49 +219,54 @@ export default function GroupCallScreen() {
   };
 
   const hangup = async () => {
-    // ✅ Get final duration string
     const finalDuration = formatDuration(durationRef.current);
+    const receivers = participants.filter(p => p.userId !== currentUserId).map(p => p.userId);
 
     if (isHost) {
+        // Host sends system message to end call in chat
         const endCallData = JSON.stringify({
             type: 'GROUP_VIDEO_CALL',
             roomId: chatId,
             hostName: currentUser?.name,
             status: 'ended',
-            duration: finalDuration, // ✅ Send actual calculated duration
+            duration: finalDuration,
             startTime: new Date().toISOString()
         });
         
-        await sendChatMessage({
+        sendChatMessage({
             sender: currentUserId,
-            isreceive: [],
+            isreceive: [], // Server handles broadcast for system messages usually
             chat_id: chatId,
             message: endCallData,
             type: 4
+        }).catch(e => console.log('End call msg error', e));
+    }
+
+    // Broadcast LEAVE to peers so they close connection
+    if (receivers.length > 0) {
+        WebSocketManager.sendCallSignal({
+            type: 'LEAVE_CALL',
+            chat_id: chatId,
+            sender: currentUserId,
+            receiver: receivers
         });
     }
 
-    WebSocketManager.sendCallSignal({
-        type: 'LEAVE_CALL',
-        chat_id: chatId,
-        sender: currentUserId
-    });
     navigation.goBack();
   };
 
-  // ✅ Render Single Participant (WeChat Voice Style)
+  // ✅ Render Single Participant
   const renderParticipant = ({ item }: { item: CallParticipant }) => (
     <View style={styles.gridItem}>
       <View style={[
           styles.avatarContainer, 
-          // 🟢 Green border when speaking
           item.isSpeaking && styles.speakingBorder 
       ]}>
         {item.avatar ? (
           <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
         ) : (
-          <View style={[styles.avatarImage, { backgroundColor: '#555', justifyContent: 'center', alignItems: 'center' }]}>
-             <Text style={{color:'#fff', fontSize: 24}}>{item.userName?.charAt(0).toUpperCase()}</Text>
+          <View style={[styles.avatarImage, styles.placeholderAvatar]}>
+             <Text style={styles.placeholderText}>{item.userName?.charAt(0).toUpperCase()}</Text>
           </View>
         )}
       </View>
@@ -238,12 +280,11 @@ export default function GroupCallScreen() {
     <SafeAreaView style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>聊天室({participants.length})</Text>
-        {/* ✅ Dynamic Timer */}
+        <Text style={styles.headerTitle}>多人通话 ({participants.length})</Text>
         <Text style={styles.timerText}>{formatDuration(durationSeconds)}</Text> 
       </View>
 
-      {/* Grid List (3 Columns) */}
+      {/*  */}
       <FlatList
         data={participants}
         renderItem={renderParticipant}
@@ -259,7 +300,7 @@ export default function GroupCallScreen() {
             <View style={[styles.iconCircle, isMicMuted ? styles.iconActive : null]}>
                 <Ionicons name={isMicMuted ? "mic-off" : "mic"} size={28} color={isMicMuted ? "#000" : "#fff"} />
             </View>
-            <Text style={styles.controlText}>{isMicMuted ? "Muted" : "Mute"}</Text>
+            <Text style={styles.controlText}>{isMicMuted ? "已静音" : "静音"}</Text>
         </TouchableOpacity>
 
         {/* Hangup Button */}
@@ -267,7 +308,7 @@ export default function GroupCallScreen() {
             <View style={styles.hangupButton}>
                 <Ionicons name="call" size={32} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
             </View>
-            <Text style={styles.controlText}>End</Text>
+            <Text style={styles.controlText}>挂断</Text>
         </TouchableOpacity>
 
         {/* Speaker Button */}
@@ -275,7 +316,7 @@ export default function GroupCallScreen() {
             <View style={[styles.iconCircle, isSpeakerOn ? styles.iconActive : null]}>
                 <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color={isSpeakerOn ? "#000" : "#fff"} />
             </View>
-            <Text style={styles.controlText}>{isSpeakerOn ? "Speaker" : "Speaker"}</Text>
+            <Text style={styles.controlText}>{isSpeakerOn ? "免提开" : "免提"}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -285,7 +326,7 @@ export default function GroupCallScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#202020', // Dark grey background like WeChat
+    backgroundColor: '#202020', 
   },
   header: {
     paddingTop: 20,
@@ -301,14 +342,14 @@ const styles = StyleSheet.create({
   timerText: {
     color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
-    fontVariant: ['tabular-nums'], // Prevents numbers jumping
+    fontVariant: ['tabular-nums'], 
   },
   gridContainer: {
     padding: 20,
     alignItems: 'flex-start',
   },
   gridItem: {
-    width: width / 3 - 20, // 3 Columns
+    width: width / 3 - 20, 
     alignItems: 'center',
     marginBottom: 30,
     marginHorizontal: 3,
@@ -316,7 +357,7 @@ const styles = StyleSheet.create({
   avatarContainer: {
     width: 70,
     height: 70,
-    borderRadius: 8, // Rounded square
+    borderRadius: 8, 
     overflow: 'hidden',
     backgroundColor: '#333',
     justifyContent: 'center',
@@ -325,11 +366,22 @@ const styles = StyleSheet.create({
   },
   speakingBorder: {
     borderWidth: 3,
-    borderColor: '#07C160', // WeChat Green
+    borderColor: '#07C160', 
   },
   avatarImage: {
     width: '100%',
     height: '100%',
+  },
+  placeholderAvatar: { 
+    backgroundColor: '#555', 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    width: '100%',
+    height: '100%'
+  },
+  placeholderText: {
+      color: '#fff', 
+      fontSize: 24
   },
   nameText: {
     color: 'white',

@@ -93,6 +93,7 @@ export const useChatStore = create<ChatStore>()(
           senderId: messageData.senderId || user.id,
           name: messageData.name || user.name,
           avatar: messageData.avatar || user.avatar,
+          readBy: []
         };
 
         const current = get().chats[chatId] || [];

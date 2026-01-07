@@ -87,7 +87,7 @@ export class WebRTCCallService {
 
   // --- Call Initiation ---
 
-  async startCall(targetUserId: string) {
+  async startCall(targetUserId: string, userName: string, avatar: string) {
     this.targetUserId = targetUserId;
     this.onStatusChange('Calling...');
     Emitter.emit('startCall', targetUserId);
@@ -97,7 +97,7 @@ export class WebRTCCallService {
     const offer = await this.peerConnection!.createOffer();
     await this.peerConnection!.setLocalDescription(offer);
 
-    this.sendSignal('offer', { sdp: offer }, targetUserId);
+    this.sendSignal('offer', { sdp: offer, userName, avatar }, targetUserId);
   }
 
   async handleOffer(data: any) {

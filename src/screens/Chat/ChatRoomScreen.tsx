@@ -255,15 +255,18 @@ export default function ChatRoomScreen() {
                 messageText = `[${imageUrls.length} images]`;
               }
               else if (messageType === 2) {
-                if (typeof parsedMessage === 'string') {
+                if (typeof parsedMessage === 'string') { // Direct URL
                   voiceUrl = ensureFullImageUrl(parsedMessage);
                   messageText = '[Voice Message]';
-                } else if (parsedMessage.message) {
-                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
+                } else if (parsedMessage.message) { // Nested message object
+                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
+                    voiceUrl = '';
+                    messageText = '[Voice upload failed]';
+                  } else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
                     messageText = '[Voice Message]';
-                  } else {
-                    voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                  } else if (typeof parsedMessage.message === 'string') {
+                    voiceUrl = ensureFullImageUrl(parsedMessage.message);
                     messageText = '[Voice Message]';
                   }
                 }
@@ -348,13 +351,8 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    const pollingInterval = setInterval(() => {
-      loadMessages(false, false);
-    }, 3000);
-
     return () => {
       clearInterval(connectionCheckInterval);
-      clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 
@@ -388,7 +386,7 @@ export default function ChatRoomScreen() {
         const otherMembers = chatMembers.filter(id => id !== currentUserId);
         if (otherMembers.length > 0) {
           WebSocketManager.sendReadSignal({
-            receiver: otherMembers,
+            receiver: otherMembers, // Pass otherMembers as an array
             chat_id: chatId
           });
         }
@@ -633,34 +631,43 @@ export default function ChatRoomScreen() {
     }
   };
 
-  // ✅ Handle start call
+  // ✅ 修正版：单聊和群聊分别跳转到正确的 Screen
   const handleStartCall = useCallback(async () => {
     if (chat?.isGroup) {
-      const callInviteData = JSON.stringify({
-        type: 'GROUP_VIDEO_CALL',
-        roomId: chatId,
-        hostName: currentUserName,
-        startTime: new Date().toISOString()
-      });
+      // 群组视频通话
+      const UserId = chatMembers.find(id => id !== currentUserId);
+      if (UserId) {
+        // 跳转到通话界面
+        navigation.navigate('SingleCallScreen', {  // ❗ 改为 CallScreen
+          callerId: UserId,        // 对方ID
+          chatId: chatId,
+          isIncoming: false,            // 拨出状态
+          callerName: chatName,         // 对方名字
+          callerAvatar: chat?.avatar    // 对方头像
+        });
 
-      const result = await sendChatMessage({
-        sender: currentUserId,
-        isreceive: chatMembers.filter(id => id !== currentUserId),
-        chat_id: chatId,
-        message: callInviteData,
-        type: 4,
-      });
-
-      if (result.success) {
-        navigation.navigate('GroupCallScreen', { chatId, isHost: true });
+        // 发起通话信号
+        WebSocketManager.startCall(UserId, currentUserName, currentUserAvatar);
       }
+
     } else {
+      // ✅ 单聊语音通话：跳转到 CallScreen
       const otherUserId = chatMembers.find(id => id !== currentUserId);
       if (otherUserId) {
-        WebSocketManager.startCall(otherUserId);
+        // 跳转到通话界面
+        navigation.navigate('SingleCallScreen', {  // ❗ 改为 CallScreen
+          callerId: otherUserId,        // 对方ID
+          chatId: chatId,
+          isIncoming: false,            // 拨出状态
+          callerName: chatName,         // 对方名字
+          callerAvatar: chat?.avatar    // 对方头像
+        });
+
+        // 发起通话信号
+        WebSocketManager.startCall(otherUserId, currentUserName, currentUserAvatar);
       }
     }
-  }, [chat?.isGroup, chatId, currentUserName, currentUserId, chatMembers, navigation]);
+  }, [chat?.isGroup, chat?.avatar, chatId, chatName, currentUserId, chatMembers, navigation]);
 
   // ✅ Core Addition: Send Contact Card Logic
   const handleSendContactCard = useCallback(() => {
@@ -779,7 +786,7 @@ export default function ChatRoomScreen() {
       { icon: 'videocam-outline', label: '视频通话', onPress: handleStartCall },
     ],
     row2: [
-      { icon: 'document-outline', label: '文件' },
+      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('Coming Soon', 'File sharing is not yet implemented.') },
       // ✅ Added Contact Card Button
       { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
       { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
