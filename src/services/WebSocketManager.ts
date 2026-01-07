@@ -106,21 +106,32 @@ class WebSocketManager {
     });
   }
 
+  // ✅ 核心修复 1: 确保 WebRTCCallService 总是使用最新的 WebSocket 连接
   private initializeServices() {
     if (this.ws && this.userId) {
       if (!this.callService) {
+        // 第一次创建
         this.callService = new WebRTCCallService(this.ws, this.userId);
+      } else {
+        // ✅ 关键：如果已经存在，必须更新它的 WebSocket 引用！
+        // 否则重连后，CallService 依然拿着旧的断开的 ws 实例，发不出 offer
+        this.callService.ws = this.ws;
+        this.callService.currentUserId = this.userId;
       }
     }
   }
 
+  // 发起呼叫 (由 UI 触发)
   public startCall(
     targetUserId: string,
     userName: string,
     avatar: string
   ) {
     if (this.callService) {
+      // 确保 CallService 将这些信息放入 payload
       this.callService.startCall(targetUserId, userName, avatar);
+    } else {
+      console.warn("⚠️ CallService not initialized, cannot start call");
     }
   }
 
@@ -130,7 +141,7 @@ class WebSocketManager {
     this.safeSend(JSON.stringify(payload));
   }
 
-  // ✅ 核心消息处理逻辑
+  // ✅ 消息分发逻辑
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
@@ -140,7 +151,7 @@ class WebSocketManager {
         console.log("✅ Reconnected confirmed by server");
         this.isConnected = true;
         this.reconnectAttempts = 0;
-        this.initializeServices();
+        this.initializeServices(); // 这里会更新 CallService 的 socket
         this.loginResolver?.(true);
         this.cleanupLoginPromise();
         return;
@@ -154,16 +165,18 @@ class WebSocketManager {
         console.log(`📞 Call signal routed:`, data.type);
         const normalizedData = { msg: "call_signal", ...data };
 
-        // ✅ 提取 payload 里的 call_mode
+        // 提取 call_mode (优先从 payload 取，兼容性好)
         const payload = data.payload || {};
-        const callMode = payload.call_mode; // 从 payload 里取！
+        const callMode = payload.call_mode || data.call_mode;
 
-        // ✅ 只有不是 'group' 的时候，才发给单聊服务
+        // ✅ 只有明确不是 group 时，才让单聊服务处理
+        // 这样可以防止单聊服务处理群聊信号导致的报错
         if (this.callService && callMode !== 'group') {
           this.callService.handleSignal(normalizedData);
         }
 
-        // 所有的信号依然发给 UI (群聊需要这个)
+        // 无论单聊群聊，都发给 UI 层 (App.tsx / GroupCallScreen)
+        // App.tsx 会根据 type='offer' 且 call_mode!='group' 来决定是否弹窗
         this.callCallbacks.forEach(cb => cb(normalizedData));
         return;
       }
@@ -190,26 +203,36 @@ class WebSocketManager {
     }
   }
 
-  // ✅ 发送方法 (支持 call_mode)
+  // ✅ 核心修复 2: 确保 receiver 是数组，防止服务器丢弃
   public sendCallSignal(payload: {
     type: "offer" | "answer" | "candidate" | "reject" | "end" | "JOIN_CALL" | "LEAVE_CALL" | "PEER_JOIN";
-    receiver?: string[];
+    receiver?: string[] | string; // 允许传入字符串，但发送时转为数组
     chat_id?: string;
     sender?: string;
     call_type?: 0 | 1;
     call_id?: string;
-    call_mode?: 'group' | 'single'; // ✅ 新增
+    call_mode?: 'group' | 'single';
     payload?: any;
   }): boolean {
     if (!this.ws || !this.isConnected) return false;
 
+    // 1. 规范化 receiver
+    let receivers: string[] = [];
+    if (Array.isArray(payload.receiver)) {
+      receivers = payload.receiver;
+    } else if (typeof payload.receiver === 'string') {
+      receivers = [payload.receiver];
+    }
+
+    // 2. 构造消息
     const msg = {
       msg: "call_signal",
       user_id: this.userId!,
-      ...payload
+      ...payload,
+      receiver: receivers // 强制覆盖为数组
     };
 
-    console.log(`📤 [WebSocket] Sending signal (${payload.type})`);
+    console.log(`📤 [WebSocket] Sending signal (${payload.type}) to ${receivers.length} receivers`);
     this.safeSend(JSON.stringify(msg));
     return true;
   }
@@ -263,7 +286,7 @@ class WebSocketManager {
     }, delay);
   }
 
-  // Callbacks & Presence ... (省略标准代码)
+  // Callbacks ...
   public addCallCallback(cb: CallCallback) { this.callCallbacks.push(cb); }
   public removeCallCallback(cb: CallCallback) { this.callCallbacks = this.callCallbacks.filter((x) => x !== cb); }
   public addMessageCallback(cb: MessageCallback) { this.messageCallbacks.push(cb); }

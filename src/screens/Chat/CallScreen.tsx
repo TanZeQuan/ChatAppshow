@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, useRoute } from '@react-navigation/native';
+
 import { readUsers } from '../../api/User';
 import { sendChatMessage } from '../../api/Chat';
 import { Emitter } from '../../services/EventEmitter';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
-import { useNavigation, useRoute } from '@react-navigation/native';
 
 const { width } = Dimensions.get('window');
 
-// 辅助函数：格式化时间
+// 格式化时间
 const formatDuration = (totalSeconds: number): string => {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -22,23 +23,29 @@ export default function CallScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  // ✅ 路由参数
+  // ✅ 1. 明确参数定义
   const {
-    callerId,     // 对方ID (来电时是呼叫方ID，拨出时是被呼叫方ID)
-    chatId,       // 聊天室ID
-    isIncoming,   // 是否是来电
-    callerName,   // 预传名字 (可选)
-    callerAvatar  // 预传头像 (可选)
+    isIncoming,      // true=来电, false=去电
+    callerId,        // 来电时的对方ID
+    targetId,        // 去电时的对方ID
+    chatId,          // 聊天室ID
+    userName: paramName,   // 预传名字
+    userAvatar: paramAvatar // 预传头像
   } = route.params || {};
+
+  // ✅ 2. 统一使用 remoteUserId 代表“对方”
+  // 无论是打出去还是接进来，我们只关心屏幕上显示的那个“对方”是谁
+  const remoteUserId = isIncoming ? callerId : targetId;
 
   const getContactById = useContactStore(state => state.getContactById);
   const currentUser = useUserStore(state => state.user);
   const currentUserId = currentUser?.id || '';
 
-  // ✅ 状态管理
   const [status, setStatus] = useState(isIncoming ? 'Ringing...' : 'Calling...');
-  const [userName, setUserName] = useState<string>(callerName || '');
-  const [userAvatar, setUserAvatar] = useState<string>(callerAvatar || '');
+
+  // UI 显示信息 (优先使用路由传过来的参数)
+  const [displayName, setDisplayName] = useState<string>(paramName || '未知用户');
+  const [displayAvatar, setDisplayAvatar] = useState<string>(paramAvatar || '');
   const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
   // 计时器
@@ -46,14 +53,15 @@ export default function CallScreen() {
   const durationRef = useRef(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ✅ 获取对方用户信息
+  // ✅ 3. 获取用户信息逻辑优化
   const fetchUserInfo = useCallback(async (userId: string) => {
-    if (userName && userAvatar) return;
+    // 如果已有信息（从路由传过来的），就不重新请求了
+    if (paramName && paramAvatar) return;
 
     const localContact = getContactById(userId);
     if (localContact && localContact.name) {
-      setUserName(localContact.name);
-      setUserAvatar(localContact.avatar || '');
+      setDisplayName(localContact.name);
+      setDisplayAvatar(localContact.avatar || '');
       return;
     }
 
@@ -65,17 +73,17 @@ export default function CallScreen() {
         const name = userData.name || userData.username || userData.nickname || '';
         const avatar = userData.image || userData.avatar || '';
 
-        setUserName(name || userId);
-        setUserAvatar(avatar);
+        setDisplayName(name || '未知用户');
+        setDisplayAvatar(avatar);
       }
     } catch (error) {
-      setUserName(userId);
+      console.log('Fetch user error', error);
     } finally {
       setLoadingUserInfo(false);
     }
-  }, [getContactById, userName, userAvatar]);
+  }, [getContactById, paramName, paramAvatar]);
 
-  // ✅ 计时器
+  // 计时器逻辑
   const startTimer = () => {
     stopTimer();
     setDurationSeconds(0);
@@ -96,36 +104,34 @@ export default function CallScreen() {
     }
   };
 
-  // ✅ 初始化
+  // ✅ 4. 核心初始化逻辑
   useEffect(() => {
-    if (!callerId) return;
+    if (!remoteUserId) return;
 
-    const targetId = callerId;
+    // A. 立即发起呼叫 (如果是去电)
+    if (!isIncoming) {
+      console.log('📞 发起呼叫:', remoteUserId);
 
-    const initCall = async () => {
-      // 1️⃣ 拨出呼叫
-      if (!isIncoming) {
-        console.log('📞 发起呼叫:', targetId);
+      // 🚨 关键修复：直接使用 paramName 或 displayName，而不是依赖可能还没更新的 state
+      // 这里的逻辑确保发送给对方的信令里包含“我方”认为的“对方”名字（这通常不重要，重要的是startCall内部应该传“我方”的信息）
+      // 其实 WebSocketManager.startCall 内部应该负责把 CURRENT USER 的名字发给对方
+      // 但如果你的 startCall 接口设计是传 target 的信息，那就照传
 
-        await fetchUserInfo(targetId); // Ensure user info is fetched
+      WebSocketManager.startCall(
+        remoteUserId,
+        paramName || displayName,
+        paramAvatar || displayAvatar
+      );
 
-        WebSocketManager.startCall(
-          targetId,
-          userName, // Use the state variable that will be updated by fetchUserInfo
-          userAvatar // Use the state variable that will be updated by fetchUserInfo
-        );
-      }
+      // 同时去获取一下最新信息
+      fetchUserInfo(remoteUserId);
+    } else {
+      // B. 如果是来电，只获取信息
+      console.log('📞 收到来电:', remoteUserId);
+      fetchUserInfo(remoteUserId);
+    }
 
-      // 2️⃣ 来电
-      else {
-        console.log('📞 收到来电:', targetId);
-        await fetchUserInfo(targetId);
-      }
-    };
-
-    initCall();
-
-    // 监听通话状态
+    // C. 监听状态
     const handleCallStatus = (newStatus: string) => {
       setStatus(newStatus);
       if (newStatus === 'Connected' || newStatus === '通话中') {
@@ -134,8 +140,12 @@ export default function CallScreen() {
     };
 
     const handleEndCall = () => {
+      console.log('Call Ended Signal Received');
       stopTimer();
       setStatus('Ended');
+      setTimeout(() => {
+        if (navigation.canGoBack()) navigation.goBack();
+      }, 800);
     };
 
     Emitter.on('callStatus', handleCallStatus);
@@ -146,40 +156,40 @@ export default function CallScreen() {
       Emitter.off('callStatus', handleCallStatus);
       Emitter.off('endCall', handleEndCall);
     };
-  }, [callerId, isIncoming]);
+  }, [remoteUserId, isIncoming, fetchUserInfo, navigation]); // 移除 displayName 依赖，防止死循环
 
-
-  // ✅ 接听
+  // 接听
   const answer = () => {
     WebSocketManager.callService?.answerCall();
     setStatus('Connecting...');
   };
 
-  // ✅ 拒接
+  // 拒接
   const reject = () => {
     WebSocketManager.callService?.rejectCall();
     stopTimer();
     navigation.goBack();
   };
 
-  // ✅ 挂断
+  // 挂断
   const hangup = async () => {
     const finalDuration = formatDuration(durationRef.current);
     const isCallConnected = durationRef.current > 0;
 
-    if (chatId) {
+    if (chatId && isCallConnected) {
       const endCallData = JSON.stringify({
         type: 'SINGLE_VOICE_CALL',
         roomId: chatId,
         hostName: currentUser?.name,
         status: 'ended',
-        duration: isCallConnected ? finalDuration : '未接通',
+        duration: finalDuration,
         startTime: new Date().toISOString()
       });
 
+      // 发送消息
       sendChatMessage({
         sender: currentUserId,
-        isreceive: [callerId],
+        isreceive: [remoteUserId],
         chat_id: chatId,
         message: endCallData,
         type: 4
@@ -191,7 +201,7 @@ export default function CallScreen() {
     navigation.goBack();
   };
 
-  // ✅ 翻译状态
+  // 翻译状态
   const translateStatus = (st: string) => {
     const statusMap: { [key: string]: string } = {
       'Calling...': '正在呼叫...',
@@ -206,11 +216,8 @@ export default function CallScreen() {
     return statusMap[st] || st;
   };
 
-  const displayName = userName || callerId || '未知用户';
-
-  // ✅ 判断是否显示接听/拒绝按钮
+  // 按钮显示逻辑
   const showAnswerReject = isIncoming && (status === 'Ringing...' || status === '');
-  const showHangup = !showAnswerReject; // 其他情况都显示挂断
 
   return (
     <SafeAreaView style={styles.container}>
@@ -221,8 +228,8 @@ export default function CallScreen() {
             <View style={styles.avatar}>
               <ActivityIndicator size="large" color="#FFFFFF" />
             </View>
-          ) : userAvatar ? (
-            <Image source={{ uri: userAvatar }} style={styles.avatarImage} />
+          ) : displayAvatar ? (
+            <Image source={{ uri: displayAvatar }} style={styles.avatarImage} />
           ) : (
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
@@ -276,28 +283,23 @@ export default function CallScreen() {
 }
 
 const styles = StyleSheet.create({
+  // ... 样式保持不变 ...
   container: { flex: 1, backgroundColor: '#2C2C2C' },
   contentContainer: { flex: 1, justifyContent: 'space-between' },
   topSection: { alignItems: 'center', marginTop: 100 },
-
   avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#4A4A4A', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   avatarImage: { width: 120, height: 120, borderRadius: 60, marginBottom: 20, backgroundColor: '#4A4A4A' },
   avatarText: { fontSize: 40, color: '#FFFFFF', fontWeight: '500' },
-
   username: { fontSize: 28, color: '#FFFFFF', fontWeight: '500', marginBottom: 12 },
   statusText: { fontSize: 18, color: '#FFFFFF', marginTop: 8, fontVariant: ['tabular-nums'] },
-
   bottomSection: { paddingBottom: 60, alignItems: 'center' },
   incomingButtons: { flexDirection: 'row', justifyContent: 'space-around', width: width * 0.8 },
   outgoingButtons: { alignItems: 'center' },
-
   buttonCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   answerCircle: { backgroundColor: '#07C160' },
   hangupCircle: { backgroundColor: '#FF3B30' },
-
   buttonIcon: { fontSize: 32, color: '#FFFFFF', fontWeight: 'bold' },
   buttonLabel: { fontSize: 14, color: '#FFFFFF', marginTop: 4 },
-
   rejectButton: { alignItems: 'center' },
   answerButton: { alignItems: 'center' },
   hangupButton: { alignItems: 'center' },

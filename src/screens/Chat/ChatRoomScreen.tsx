@@ -633,41 +633,68 @@ export default function ChatRoomScreen() {
 
   // ✅ 修正版：单聊和群聊分别跳转到正确的 Screen
   const handleStartCall = useCallback(async () => {
+    // ===========================
+    // 1. 群聊逻辑 (Group Call)
+    // ===========================
     if (chat?.isGroup) {
-      // 群组视频通话
-      const UserId = chatMembers.find(id => id !== currentUserId);
-      if (UserId) {
-        // 跳转到通话界面
-        navigation.navigate('SingleCallScreen', {  // ❗ 改为 CallScreen
-          callerId: UserId,        // 对方ID
-          chatId: chatId,
-          isIncoming: false,            // 拨出状态
-          callerName: chatName,         // 对方名字
-          callerAvatar: chat?.avatar    // 对方头像
+      // A. 构造群通话邀请消息
+      const callInviteData = JSON.stringify({
+        type: 'GROUP_VIDEO_CALL',
+        roomId: chatId,
+        hostName: currentUserName,
+        startTime: new Date().toISOString()
+      });
+
+      // B. 发送消息给群成员
+      const result = await sendChatMessage({
+        sender: currentUserId,
+        isreceive: chatMembers.filter(id => id !== currentUserId),
+        chat_id: chatId,
+        message: callInviteData,
+        type: 4, // 系统消息/卡片类型
+      });
+
+      // C. 发送成功后，自己跳转到群通话界面
+      if (result.success) {
+        // ❗ 注意：群聊是跳 GroupCallScreen
+        navigation.navigate('GroupCallScreen', {
+          chatId,
+          isHost: true // 标记我是主持人
         });
-
-        // 发起通话信号
-        WebSocketManager.startCall(UserId, currentUserName, currentUserAvatar);
-      }
-
-    } else {
-      // ✅ 单聊语音通话：跳转到 CallScreen
-      const otherUserId = chatMembers.find(id => id !== currentUserId);
-      if (otherUserId) {
-        // 跳转到通话界面
-        navigation.navigate('SingleCallScreen', {  // ❗ 改为 CallScreen
-          callerId: otherUserId,        // 对方ID
-          chatId: chatId,
-          isIncoming: false,            // 拨出状态
-          callerName: chatName,         // 对方名字
-          callerAvatar: chat?.avatar    // 对方头像
-        });
-
-        // 发起通话信号
-        WebSocketManager.startCall(otherUserId, currentUserName, currentUserAvatar);
       }
     }
-  }, [chat?.isGroup, chat?.avatar, chatId, chatName, currentUserId, chatMembers, navigation]);
+    // ===========================
+    // 2. 单聊逻辑 (1v1 Call)
+    // ===========================
+    else {
+      const otherUserId = chatMembers.find(id => id !== currentUserId);
+
+      if (otherUserId) {
+        // 尝试获取对方名字/头像，确保传参准确
+        const contact = getChatById(otherUserId);
+        const targetName = contact?.name || chatName || '未知用户';
+        const targetAvatar = contact?.avatar || chat?.avatar || '';
+
+        console.log('📞 跳转单聊页面:', targetName);
+
+        // ❗ 注意：单聊是跳 CallScreen
+        navigation.navigate('SingleCallScreen', {
+          callerId: currentUserId,   // 传自己ID (备用)
+          targetId: otherUserId,     // ❌ 必须传：你要打给谁
+          chatId: chatId,
+          isIncoming: false,         // ✅ 必须是 false (拨出状态)
+          userName: targetName,      // 传名字给 CallScreen 显示
+          userAvatar: targetAvatar   // 传头像给 CallScreen 显示
+        });
+
+        // ❌ 删除 WebSocketManager.startCall(...)
+        // 原因：CallScreen 页面加载时会自动发起 startCall，这里再写就重复了
+      } else {
+        Alert.alert('错误', '无法找到对方信息');
+      }
+    }
+  }, [chat, chatId, currentUserName, currentUserId, chatMembers, navigation, chatName, getChatById]);
+
 
   // ✅ Core Addition: Send Contact Card Logic
   const handleSendContactCard = useCallback(() => {
