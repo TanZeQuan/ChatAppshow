@@ -67,7 +67,6 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
-  console.log('🆔 ChatRoomScreen chatId:', chatId);
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -697,21 +696,30 @@ export default function ChatRoomScreen() {
 
 
   // ✅ Core Addition: Send Contact Card Logic
+  // ✅ 发送名片逻辑 (已修复头像为空的情况)
   const handleSendContactCard = useCallback(() => {
-    // Assuming you have a contact selection screen, ensure 'SelectContactForCard' route exists
+    // 跳转到联系人选择页
     (navigation as any).navigate('SelectContactForCard', {
       onSelectContact: async (contact: any) => {
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
 
-          // Construct contact card JSON data
+          // ✅ 1. 处理头像逻辑：如果为空或无效，设为 ''
+          let safeAvatar = contact.avatar || '';
+
+          // (可选) 过滤无效的 ngrok 链接，防止显示裂图
+          if (safeAvatar.includes('ngrok-free.dev') && !safeAvatar.includes('/uploads/')) {
+            safeAvatar = '';
+          }
+
+          // ✅ 2. 构造名片数据
           const cardData = {
             userId: contact.id,
-            userName: contact.name,
-            userAvatar: contact.avatar,
+            userName: contact.name || '未知用户', // 防止名字也为空
+            userAvatar: safeAvatar,               // 如果是 ''，接收方会自动显示默认图
           };
 
-          // Send message Type 4 (shared with call card, distinguished by content)
+          // 3. 发送消息 (Type 4)
           const result = await sendChatMessage({
             sender: currentUserId,
             isreceive: receiver,
@@ -738,11 +746,11 @@ export default function ChatRoomScreen() {
 
             await loadMessages(false, false);
           } else {
-            Alert.alert('Send Failed', result.message || 'Contact card failed to send, please retry');
+            Alert.alert('发送失败', result.message || '名片发送失败，请重试');
           }
         } catch (error) {
           console.error('Error sending contact card:', error);
-          Alert.alert('Send Failed', 'Network error, please retry');
+          Alert.alert('发送失败', '网络错误，请重试');
         }
       },
     });

@@ -197,8 +197,6 @@ export default function CallScreen() {
     }
 
     WebSocketManager.callService?.cleanup();
-    stopTimer();
-    navigation.goBack();
   };
 
   // 翻译状态

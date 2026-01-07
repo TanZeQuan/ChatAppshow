@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Image, View, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AnonymousAvatar from '../assets/images/personal.png';
+const AnonymousAvatar = require('../assets/images/personal.png');
 
 interface AvatarProps {
   uri?: string | null;
