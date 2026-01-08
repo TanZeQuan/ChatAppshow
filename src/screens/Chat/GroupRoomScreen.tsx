@@ -344,13 +344,13 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    const pollingInterval = setInterval(() => {
-      loadMessages(false, false);
-    }, 3000);
+    // const pollingInterval = setInterval(() => {
+    //   loadMessages(false, false);
+    // }, 3000);
 
     return () => {
       clearInterval(connectionCheckInterval);
-      clearInterval(pollingInterval);
+      // clearInterval(pollingInterval);
     };
   }, [loadMessages]);
 
