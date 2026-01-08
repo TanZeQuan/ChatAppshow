@@ -49,7 +49,7 @@ export default function AddFriendScreen() {
 
   // Prevent memory leaks
   const isMounted = useRef(true);
-  
+
   useFocusEffect(
     React.useCallback(() => {
       // Hide tab bar when screen is focused
@@ -92,22 +92,11 @@ export default function AddFriendScreen() {
     try {
       const result = await searchUser(searchText.trim());
 
-      // console.log("=== Search Result Debug ===");
-      // console.log("Full result:", JSON.stringify(result, null, 2));
-      // console.log("result.success:", result.success);
-      // console.log("result.user:", result.user);
-      // console.log("Is array:", Array.isArray(result.user));
-      // console.log("Array length:", result.user?.length);
-
       if (!isMounted.current) return;
 
       // API returns response as an array, get the first item
       if (result.success && result.user && Array.isArray(result.user) && result.user.length > 0) {
         const userData = result.user[0]; // Get first result
-        // console.log("✅ User found:", userData);
-        // console.log("Friend status (isstatus):", userData.isstatus);
-        // console.log("Status meaning: 0=not friends, 1=pending, 2=already friends");
-
         setSearchResult(userData);
       } else {
         console.log("❌ No user found");
@@ -197,10 +186,6 @@ export default function AddFriendScreen() {
     // TODO: Implement QR scanner navigation
     // navigation.navigate("QRScanner" as never);
     Alert.alert("提示", "扫描功能即将推出");
-  };
-
-  const handleMyQR = () => {
-    navigation.navigate("FriendRequest" as never);
   };
 
   const handleClearSearch = () => {
@@ -386,20 +371,7 @@ export default function AddFriendScreen() {
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
 
-            {/* My QR Code → FriendRequest */}
-            <TouchableOpacity
-              style={styles.actionItem}
-              onPress={handleMyQR}
-              activeOpacity={0.7}
-            >
-              <View style={styles.actionLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: "#fbbf24" }]}>
-                  <Ionicons name="person-outline" size={22} color="#78350f" />
-                </View>
-                <Text style={styles.actionLabel}>好友请求</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+            {/* Removed "Friend Request" button here */}
           </View>
         </ScrollView>
       </SafeAreaView>

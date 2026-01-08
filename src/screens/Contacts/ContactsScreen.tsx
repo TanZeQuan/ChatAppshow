@@ -21,6 +21,7 @@ import { readFriends } from "../../api/Friend";
 import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
+import { useFriendRequestStore } from "../../store/friendRequestStore"; // Import friend request store
 import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
@@ -48,6 +49,7 @@ export default function ContactsScreen() {
   const { contacts, setContacts } = useContactStore();
   const { token, user } = useUserStore();
   const { addChat } = useChatStore();
+  const friendRequestCount = useFriendRequestStore(state => state.requests.length); // Get friend request count
 
   // Fetch contacts when screen comes into focus
   useFocusEffect(
@@ -459,6 +461,21 @@ export default function ContactsScreen() {
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={styles.actionButton}
+          onPress={() => navigation.navigate("FriendRequest")}
+        >
+          <View style={styles.actionIcon}>
+            <Ionicons name="mail-unread-outline" size={22} color="#666" />
+            {friendRequestCount > 0 && (
+              <View style={styles.badgeContainer}>
+                <Text style={styles.badgeText}>{friendRequestCount}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.actionLabel}>好友请求</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.actionButton}
           onPress={() => navigation.navigate("AddGroup")}
         >
           <View style={styles.actionIcon}>
@@ -661,6 +678,24 @@ const styles = StyleSheet.create({
     fontSize: typography.fontSize13,
     color: colors.text.blackMedium,
     textAlign: 'center',
+  },
+  
+  badgeContainer: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    backgroundColor: colors.functional.red,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+  },
+  badgeText: {
+    color: colors.text.white,
+    fontSize: typography.fontSize12,
+    fontWeight: typography.fontWeight600,
   },
 
   /** CONTACT LIST */
