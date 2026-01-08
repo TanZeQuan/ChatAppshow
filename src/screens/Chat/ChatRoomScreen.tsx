@@ -90,8 +90,11 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
-  const [isNearBottom, setIsNearBottom] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // ✅ 优化 1: 添加滚动控制 Ref 和 状态
+  const flatListRef = useRef<FlatList>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true); // 默认在底部
 
   // ✅ Search functionality
   const {
@@ -108,9 +111,6 @@ export default function ChatRoomScreen() {
     goToNextMatch,
     goToPrevMatch
   } = useSearchChatHistory();
-
-  // ✅ FlatList ref for scrolling to matched messages
-  const flatListRef = useRef<FlatList>(null);
 
   // ✅ Transform messages - logic enhanced to parse JSON for cards
   const messages: DisplayMessage[] = useMemo(() => {
@@ -151,6 +151,36 @@ export default function ChatRoomScreen() {
 
   const offsetRef = useRef(0);
 
+  // ✅ 优化 2: 滚动到底部辅助函数
+  // Inverted 模式下，offset 0 就是视觉上的底部
+  const scrollToBottom = (animated = true) => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToOffset({ offset: 0, animated });
+    }
+  };
+
+  // ✅ 优化 3: 监听消息列表变化，智能滚动
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    // 获取最新的一条消息
+    const latestMessage = messages[0];
+
+    // 情况 A: 我自己发的消息 -> 必须强制滚到底部
+    if (latestMessage.senderId === currentUserId) {
+      scrollToBottom(true);
+      return;
+    }
+
+    // 情况 B: 收到别人发的消息
+    // 逻辑：如果我当前就在底部（isNearBottom），说明我在等消息，直接滚下去显示
+    // 如果我在看上面的历史记录（isNearBottom = false），就不滚，避免打断阅读
+    if (isNearBottom) {
+      scrollToBottom(true);
+    }
+  }, [messages.length, messages[0]?.id]);
+
+
   // ✅ Use voice recorder hook
   const {
     isRecording,
@@ -167,7 +197,11 @@ export default function ChatRoomScreen() {
     chatId,
     currentUserId,
     chatMembers,
-    onMessageSent: () => loadMessages(false, false),
+    onMessageSent: () => {
+        loadMessages(false, false);
+        // ✅ 语音发送成功后，强制滚到底部
+        scrollToBottom(true);
+    },
   });
 
   // Wrap loadMessages in useCallback
@@ -355,7 +389,7 @@ export default function ChatRoomScreen() {
     };
   }, [loadMessages]);
 
-  // ✅ Listen for WebSocket read receipts, update unreadCount in real-time
+  // Listen for WebSocket read receipts
   useEffect(() => {
     const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
       if (data.chatId !== chatId) return;
@@ -375,7 +409,7 @@ export default function ChatRoomScreen() {
     };
   }, [chatId]);
 
-  // ✅ Reload data when screen gains focus
+  // Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
@@ -393,7 +427,7 @@ export default function ChatRoomScreen() {
     }, [loadMessages, chatId, chatMembers, currentUserId])
   );
 
-  // ✅ Auto-enable search mode if navigated from settings (ONCE)
+  // Auto-enable search mode if navigated from settings (ONCE)
   const searchModeInitialized = useRef(false);
   useEffect(() => {
     if (params.searchMode === true && !searchModeInitialized.current) {
@@ -403,6 +437,7 @@ export default function ChatRoomScreen() {
   }, [params.searchMode, enableSearch]);
 
   const scrollToMatch = useCallback((messageId: string) => {
+    // ✅ 优化 4: 使用 ref 滚动
     if (!messageId || !flatListRef.current) return;
     const messageIndex = messages.findIndex(msg => msg.id === messageId);
     if (messageIndex >= 0) {
@@ -420,7 +455,7 @@ export default function ChatRoomScreen() {
     if (prevMessageId) scrollToMatch(prevMessageId);
   }, [goToPrevMatch, scrollToMatch, messages]);
 
-  // Use refs for WebSocket callback
+  // WebSocket Handler
   const chatIdRef = useRef(chatId);
   const loadMessagesRef = useRef(loadMessages);
 
@@ -434,6 +469,7 @@ export default function ChatRoomScreen() {
       if (data.type && data.message) {
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
           loadMessagesRef.current(false, false);
+          // 注意：滚动逻辑已统一交给上面的 messages useEffect 监听
         }
       }
     };
@@ -476,6 +512,9 @@ export default function ChatRoomScreen() {
     if (!inputText.trim()) return;
     const messageText = inputText.trim();
     setInputText('');
+
+    // ✅ 优化 5: 发送时立即强制滚动到底部
+    scrollToBottom(true);
 
     try {
       const receiver = chatMembers.filter(id => id !== currentUserId);
@@ -581,6 +620,9 @@ export default function ChatRoomScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
+        // ✅ 优化 6: 发送图片时也滚动
+        scrollToBottom(true);
+
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
           const files = result.assets.map(asset => {
@@ -728,6 +770,9 @@ export default function ChatRoomScreen() {
             type: 4,
           });
 
+          // ✅ 优化 7: 发送名片也滚动
+          scrollToBottom(true);
+
           if (result.success && result.data) {
             const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
               ? result.data.isreceive
@@ -873,7 +918,9 @@ export default function ChatRoomScreen() {
         <KeyboardAvoidingView
           style={roomStyles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
+          {/* ✅ 优化 8: FlatList 配置 Ref 和 onScroll */}
           <FlatList
             ref={flatListRef}
             data={[...messages]}
@@ -882,12 +929,17 @@ export default function ChatRoomScreen() {
             contentContainerStyle={roomStyles.chatList}
             inverted
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
+            
+            // 核心：监听滚动位置，更新状态
             onScroll={(e) => {
               const { contentOffset } = e.nativeEvent;
-              setIsNearBottom(contentOffset.y < 100);
+              // Inverted 模式下，y=0 是视觉底部，<50 视为接近底部
+              setIsNearBottom(contentOffset.y < 50);
             }}
+            scrollEventThrottle={16} // 提高滚动帧率
+
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

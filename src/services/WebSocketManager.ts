@@ -1,7 +1,7 @@
 import { WebRTCCallService } from "./CallService";
 import { Emitter } from "./EventEmitter";
 
-const WS_URL = "wss://ws.ngrok-free.dev";
+const WS_URL = "wss://ws.ngrok-free.dev"; // ⚠️ 请确保这个地址是有效的，ngrok 每次重启都会变
 
 // 定义回调类型
 type MessageCallback = (data: any) => void;
@@ -45,15 +45,29 @@ class WebSocketManager {
     return WebSocketManager.instance;
   }
 
+  // ✅ 修复 1: 智能发送。如果正在连接中(State 0)，自动放入等待队列
   private safeSend(message: string) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (!this.ws) {
+      console.warn("⚠️ [WebSocket] Cannot send: WebSocket instance is null");
+      return;
+    }
+
+    if (this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(message);
       } catch (error) {
         console.error("❌ [WebSocket] Send failed:", error);
       }
+    } else if (this.ws.readyState === WebSocket.CONNECTING) {
+      // 关键修复：如果在连接中，监听一次 'open' 事件，连接成功后自动补发
+      console.log("⏳ [WebSocket] Connection presumed in progress, queuing message...");
+      const sendWhenOpen = () => {
+        this.ws?.send(message);
+        console.log("✅ [WebSocket] Queued message sent successfully");
+      };
+      this.ws.addEventListener('open', sendWhenOpen, { once: true });
     } else {
-      console.warn("⚠️ [WebSocket] Cannot send. Socket State:", this.ws?.readyState);
+      console.warn("⚠️ [WebSocket] Cannot send. Socket State:", this.ws.readyState);
     }
   }
 
@@ -62,6 +76,17 @@ class WebSocketManager {
     console.log('🔌 [WebSocket] connect() called for:', userId);
 
     if (this.isConnected && this.userId === userId) return Promise.resolve(true);
+    // 如果已经在连接中且是同一个用户，避免重复创建
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING && this.userId === userId) {
+      console.log('⏳ [WebSocket] Connection already connecting...');
+      return new Promise((resolve) => {
+        // 简单的等待逻辑，复用当前的连接过程
+        const check = setInterval(() => {
+          if (this.isConnected) { clearInterval(check); resolve(true); }
+        }, 500);
+      });
+    }
+
     if (this.userId && this.userId !== userId) this.disconnect();
 
     this.userId = userId;
@@ -79,6 +104,7 @@ class WebSocketManager {
 
       this.ws.onopen = () => {
         console.log("✅ WebSocket opened");
+        // 这里的 sendLoginMessage 会触发 safeSend，现在 safeSend 即使状态不稳定也很安全
         this.sendLoginMessage();
 
         this.loginTimeoutTimer = setTimeout(() => {
@@ -102,19 +128,25 @@ class WebSocketManager {
         if (event.code !== 1000 && this.userId) this.attemptReconnect();
       };
 
-      this.ws.onerror = (error) => console.error("❌ WebSocket error:", error);
+      this.ws.onerror = (error) => {
+        // ✅ 修复 2: 提供更有用的错误信息，并触发重连机制
+        console.error("❌ WebSocket error. Please check: 1. Server is running? 2. URL correct? 3. VPN/Firewall?", error);
+        // 在错误发生时，通常也会触发 onclose，所以重连逻辑交给 onclose 处理即可
+        // 但如果是在连接阶段就错了，可能需要手动拒绝 Promise
+        if (!this.isConnected && this.loginRejecter) {
+          // 这种情况通常是 URL 连不上
+          // 不 reject，让它自动进入重连尝试，或者你可以选择 reject
+        }
+      };
     });
   }
 
-  // ✅ 核心修复 1: 确保 WebRTCCallService 总是使用最新的 WebSocket 连接
+  // ✅ 确保 WebRTCCallService 总是使用最新的 WebSocket 连接
   private initializeServices() {
     if (this.ws && this.userId) {
       if (!this.callService) {
-        // 第一次创建
         this.callService = new WebRTCCallService(this.ws, this.userId);
       } else {
-        // ✅ 关键：如果已经存在，必须更新它的 WebSocket 引用！
-        // 否则重连后，CallService 依然拿着旧的断开的 ws 实例，发不出 offer
         this.callService.ws = this.ws;
         this.callService.currentUserId = this.userId;
       }
@@ -128,7 +160,6 @@ class WebSocketManager {
     avatar: string
   ) {
     if (this.callService) {
-      // 确保 CallService 将这些信息放入 payload
       this.callService.startCall(targetUserId, userName, avatar);
     } else {
       console.warn("⚠️ CallService not initialized, cannot start call");
@@ -151,7 +182,7 @@ class WebSocketManager {
         console.log("✅ Reconnected confirmed by server");
         this.isConnected = true;
         this.reconnectAttempts = 0;
-        this.initializeServices(); // 这里会更新 CallService 的 socket
+        this.initializeServices();
         this.loginResolver?.(true);
         this.cleanupLoginPromise();
         return;
@@ -164,19 +195,13 @@ class WebSocketManager {
       if (isCallSignal) {
         console.log(`📞 Call signal routed:`, data.type);
         const normalizedData = { msg: "call_signal", ...data };
-
-        // 提取 call_mode (优先从 payload 取，兼容性好)
         const payload = data.payload || {};
         const callMode = payload.call_mode || data.call_mode;
 
-        // ✅ 只有明确不是 group 时，才让单聊服务处理
-        // 这样可以防止单聊服务处理群聊信号导致的报错
         if (this.callService && callMode !== 'group') {
           this.callService.handleSignal(normalizedData);
         }
 
-        // 无论单聊群聊，都发给 UI 层 (App.tsx / GroupCallScreen)
-        // App.tsx 会根据 type='offer' 且 call_mode!='group' 来决定是否弹窗
         this.callCallbacks.forEach(cb => cb(normalizedData));
         return;
       }
@@ -203,10 +228,10 @@ class WebSocketManager {
     }
   }
 
-  // ✅ 核心修复 2: 确保 receiver 是数组，防止服务器丢弃
+  // ✅ 确保 receiver 是数组
   public sendCallSignal(payload: {
     type: "offer" | "answer" | "candidate" | "reject" | "end" | "JOIN_CALL" | "LEAVE_CALL" | "PEER_JOIN";
-    receiver?: string[] | string; // 允许传入字符串，但发送时转为数组
+    receiver?: string[] | string;
     chat_id?: string;
     sender?: string;
     call_type?: 0 | 1;
@@ -214,9 +239,9 @@ class WebSocketManager {
     call_mode?: 'group' | 'single';
     payload?: any;
   }): boolean {
-    if (!this.ws || !this.isConnected) return false;
+    if (!this.ws) return false;
+    // 注意：这里去掉了 !this.isConnected 判断，交给 safeSend 处理排队逻辑，提高成功率
 
-    // 1. 规范化 receiver
     let receivers: string[] = [];
     if (Array.isArray(payload.receiver)) {
       receivers = payload.receiver;
@@ -224,12 +249,11 @@ class WebSocketManager {
       receivers = [payload.receiver];
     }
 
-    // 2. 构造消息
     const msg = {
       msg: "call_signal",
       user_id: this.userId!,
       ...payload,
-      receiver: receivers // 强制覆盖为数组
+      receiver: receivers
     };
 
     console.log(`📤 [WebSocket] Sending signal (${payload.type}) to ${receivers.length} receivers`);
@@ -238,34 +262,57 @@ class WebSocketManager {
   }
 
   public sendForwardMessage(payload: any): boolean {
-    if (!this.ws || !this.isConnected) return false;
+    if (!this.ws) return false;
     const msg = { msg: "forward", user_id: this.userId!, ...payload };
     this.safeSend(JSON.stringify(msg));
     return true;
   }
 
   public sendReadSignal(payload: any): boolean {
-    if (!this.ws || !this.isConnected) return false;
+    if (!this.ws) return false;
     const msg = { msg: "read_signal", user_id: this.userId!, ...payload };
     this.safeSend(JSON.stringify(msg));
     return true;
   }
 
   public disconnect() {
+    console.log("🧹 [WebSocket] Performing full cleanup/disconnect...");
+
+    // 1. 关闭物理连接
     if (this.ws) {
-      this.ws.close(1000, "Client disconnect");
+      // 移除所有监听器，防止关闭时的回调触发重连逻辑
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
+      this.ws.onopen = null;
+
+      this.ws.close(1000, "User logout / Switch account");
       this.ws = null;
     }
+
+    // 2. 清理 WebRTC 服务 (关键！)
     if (this.callService) {
       if (typeof (this.callService as any).cleanup === 'function') {
         (this.callService as any).cleanup();
       }
       this.callService = null;
     }
+
+    // 3. 重置所有状态变量
     this.isConnected = false;
     this.userId = null;
+    this.reconnectAttempts = 0; // 重置重连次数
+
+    // 4. 清理定时器
     this.cleanupLoginPromise();
     this.cleanupPresenceTracking();
+
+    // 5. (可选) 如果你希望切换账号后，旧的UI回调也失效，可以清空回调数组
+    // 但通常建议保留回调，因为 React 组件卸载时会自己 removeCallback
+    // this.messageCallbacks = []; 
+    // this.callCallbacks = [];
+
+    console.log("✨ [WebSocket] Cleanup finished. Ready for new user.");
   }
 
   private cleanupLoginPromise() {
@@ -281,6 +328,7 @@ class WebSocketManager {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * this.reconnectAttempts;
+    console.log(`♻️ Attempting reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms...`);
     setTimeout(() => {
       if (this.userId) this.connect(this.userId).catch(() => { });
     }, delay);
