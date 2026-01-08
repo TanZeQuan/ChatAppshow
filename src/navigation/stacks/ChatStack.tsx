@@ -12,6 +12,7 @@ import GroupMemberList from "../../screens/Chat/GroupMemberList";
 import GroupRoomScreen from "../../screens/Chat/GroupRoomScreen";
 import GroupSettingScreen from "../../screens/Chat/GroupSettingScreen";
 import SelectContactForCard from "../../screens/Chat/SelectContactForCard";
+import SingleCallScreen from "../../screens/Chat/CallScreen";
 
 const Stack = createNativeStackNavigator<ChatStackParamList>();
 
@@ -69,6 +70,11 @@ export default function ChatStack() {
         name="SelectContactForCard"
         component={SelectContactForCard}
         options={{ title: "Select Contact" }}
+      />
+      <Stack.Screen
+        name="SingleCallScreen"
+        component={SingleCallScreen}
+        options={{ title: "Personal Call" }}
       />
       <Stack.Screen
         name="GroupCallScreen"

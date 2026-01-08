@@ -36,7 +36,7 @@ export default function LoginScreen() {
       const loginResult = await login({ phone, passcode: password });
 
       if (!loginResult.error) {
-        const userId = loginResult.response; 
+        const userId = loginResult.response;
 
         // fetch full user info
         const userResult = await readUsers(userId);
@@ -49,8 +49,12 @@ export default function LoginScreen() {
             avatar: userResult.data.response.image,
             about: userResult.data.response.about,
           };
-          
+
+          // ✅ 关键一步：先彻底断开可能存在的旧连接（防止单例残留旧数据）
+          WebSocketManager.disconnect();
+
           // Step 1: Connect to WebSocket and wait for login confirmation
+          // 这里的 await 很好，它确保连上了再进 App
           await WebSocketManager.connect(fullUser.id);
 
           // Step 2: Now set the user state. This will trigger navigation to the main app.
@@ -64,6 +68,8 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       console.error('登录错误:', err);
+      // 如果登录报错，也可以顺手断开一下，保持干净
+      WebSocketManager.disconnect();
       Alert.alert('登录错误', err.message || '发生未知错误');
     } finally {
       setIsLoading(false);
@@ -136,13 +142,13 @@ export default function LoginScreen() {
 
           {/* 链接 */}
           <View style={styles.linksContainer}>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => navigation.navigate('Register')}
               disabled={isLoading}
             >
               <Text style={styles.linkText}>注册账号</Text>
             </TouchableOpacity>
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => navigation.navigate('Forget')}
               disabled={isLoading}
             >

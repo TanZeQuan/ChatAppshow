@@ -731,7 +731,7 @@ export default function ChatRoomScreen() {
   // Inside ChatRoomScreen component
   const handleStartCall = useCallback(async () => {
     if (chat?.isGroup) {
-      // 1. 构造通话卡片数据 (JSON 字符串)
+      // 群聊：发通话卡片
       const callInviteData = JSON.stringify({
         type: 'GROUP_VIDEO_CALL',
         roomId: chatId,
@@ -739,27 +739,32 @@ export default function ChatRoomScreen() {
         startTime: new Date().toISOString()
       });
 
-      // 2. 发送消息，注意 type 设为 4
       const result = await sendChatMessage({
         sender: currentUserId,
         isreceive: chatMembers.filter(id => id !== currentUserId),
         chat_id: chatId,
         message: callInviteData,
-        type: 4, // 🔑 关键：类型 4 代表通话卡片
+        type: 4,
       });
 
       if (result.success) {
-        // 3. 跳转到通话页面（确保路由已注册）
-        navigation.navigate('GroupCallScreen', { chatId, isHost: true });
+        navigation.navigate('GroupCallScreen', {
+          chatId,
+          isHost: true
+        });
       }
     } else {
-      // 原有的单聊逻辑
+      // 单聊：只跳转，不 startCall
       const otherUserId = chatMembers.find(id => id !== currentUserId);
       if (otherUserId) {
-        WebSocketManager.startCall(otherUserId);
+        navigation.navigate('CallScreen', {
+          targetUserId: otherUserId,
+          isIncoming: false
+        });
       }
     }
   }, [chat, chatId, currentUserName, currentUserId, chatMembers, navigation]);
+
 
   // ✅ CRITICAL FIX: Define handleGoBack BEFORE any conditional returns
   const handleGoBack = useCallback(() => {

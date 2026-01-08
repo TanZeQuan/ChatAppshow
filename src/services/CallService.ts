@@ -63,12 +63,12 @@ export class WebRTCCallService {
 
   sendSignal(type: string, payload: any, receiverId: string, callType: number = 0) {
     console.log('📤 [CallService] sendSignal() called:', { type, receiverId, wsState: this.ws.readyState });
-    
+
     if (this.ws.readyState !== 1) {
       console.error('❌ [CallService] WebSocket not ready! State:', this.ws.readyState);
       return;
     }
-    
+
     const message: any = {
       msg: 'call_signal',
       type: type,
@@ -89,7 +89,7 @@ export class WebRTCCallService {
 
   // --- Call Initiation ---
 
-  async startCall(targetUserId: string) {
+  async startCall(targetUserId: string, userName: string, avatar: string) {
     this.targetUserId = targetUserId;
     this.onStatusChange('Calling...');
     Emitter.emit('startCall', targetUserId);
@@ -99,7 +99,7 @@ export class WebRTCCallService {
     const offer = await this.peerConnection!.createOffer();
     await this.peerConnection!.setLocalDescription(offer);
 
-    this.sendSignal('offer', { sdp: offer }, targetUserId);
+    this.sendSignal('offer', { sdp: offer, userName, avatar }, targetUserId);
   }
 
   async handleOffer(data: any) {
@@ -111,7 +111,7 @@ export class WebRTCCallService {
   async answerCall() {
     console.log('📞 [CallService] answerCall() - Starting to answer call');
     this.onStatusChange('Connecting...');
-    
+
     try {
       await this.setupPeerConnection();
       console.log('✅ [CallService] PeerConnection setup complete');
@@ -152,7 +152,7 @@ export class WebRTCCallService {
 
   async setupPeerConnection() {
     console.log('🔧 [CallService] setupPeerConnection() - Starting setup');
-    
+
     try {
       console.log('🔧 [CallService] Requesting microphone access...');
       const stream = await mediaDevices.getUserMedia({
@@ -161,10 +161,10 @@ export class WebRTCCallService {
       });
       this.localStream = stream;
       console.log('✅ [CallService] Microphone access granted');
-      console.log('🔧 [CallService] Local stream tracks:', stream.getTracks().map(t => ({ 
-        kind: t.kind, 
-        enabled: t.enabled, 
-        readyState: t.readyState 
+      console.log('🔧 [CallService] Local stream tracks:', stream.getTracks().map(t => ({
+        kind: t.kind,
+        enabled: t.enabled,
+        readyState: t.readyState
       })));
 
       console.log('📡 [CallService] Creating RTCPeerConnection...');
@@ -173,14 +173,14 @@ export class WebRTCCallService {
 
       console.log('🔧🎤 [CallService] Adding local tracks to peer connection...');
       this.localStream.getTracks().forEach(track => {
-          console.log('➕ Adding track:', track.kind, 'enabled:', track.enabled);
-          this.peerConnection!.addTrack(track, this.localStream!);
+        console.log('➕ Adding track:', track.kind, 'enabled:', track.enabled);
+        this.peerConnection!.addTrack(track, this.localStream!);
       });
       console.log('✅ [CallService] Local tracks added');
 
       // Use type assertion to access addEventListener (it exists at runtime)
       const pc = this.peerConnection as any;
-      
+
       pc.addEventListener('icecandidate', (event: any) => {
         if (event.candidate) {
           console.log('🧊 [CallService] ICE candidate generated:', event.candidate.candidate);
@@ -199,7 +199,7 @@ export class WebRTCCallService {
           muted: event.track.muted
         });
         console.log('📡 [CallService] Streams:', event.streams.length);
-        
+
         if (event.streams && event.streams[0]) {
           // ✅ Save remote stream for audio playback
           this.remoteStream = event.streams[0];
@@ -215,18 +215,18 @@ export class WebRTCCallService {
           // No need for explicit audio element attachment
           console.log('🔊 [CallService] Remote audio should now be playing automatically');
         }
-        
+
         this.onStatusChange('Connected');
       });
 
       pc.addEventListener('connectionstatechange', () => {
-         const state = this.peerConnection?.connectionState;
-         console.log('📡 [CallService] Connection state changed:', state);
-         if (this.peerConnection && state === 'connected') {
-             this.onStatusChange('Connected');
-         } else if (state === 'failed' || state === 'disconnected') {
-             console.error('❌ [CallService] Connection failed/disconnected');
-         }
+        const state = this.peerConnection?.connectionState;
+        console.log('📡 [CallService] Connection state changed:', state);
+        if (this.peerConnection && state === 'connected') {
+          this.onStatusChange('Connected');
+        } else if (state === 'failed' || state === 'disconnected') {
+          console.error('❌ [CallService] Connection failed/disconnected');
+        }
       });
 
       pc.addEventListener('iceconnectionstatechange', () => {
@@ -242,25 +242,29 @@ export class WebRTCCallService {
   }
 
   async handleAnswer(data: any) {
-    console.log('📞 [CallService] handleAnswer() - Received answer from:', data.user_id);
+    console.log('📞 [CallService] handleAnswer() - 收到对方应答:', data.user_id);
     
     if (this.peerConnection && !this.peerConnection.remoteDescription) {
-        console.log('✅ [CallService] Setting remote description (answer)');
+        console.log('✅ [CallService] 设置远程描述 (answer)');
         await this.peerConnection.setRemoteDescription(new RTCSessionDescription(data.payload.sdp));
-        console.log('✅ [CallService] Remote description set');
         
         this.processBufferedCandidates();
-        console.log('✅ [CallService] Answer processed - call should be connected');
-        this.onStatusChange('Call Accepted - Connecting...');
+        console.log('✅ [CallService] Answer 处理完成');
+        
+        // 🔴 关键修改在这里！🔴
+        // 之前可能是: this.onStatusChange('Call Accepted - Connecting...');
+        // 必须改成: 'Connected'，这样 CallScreen 才会识别并开始计时
+        this.onStatusChange('Connected'); 
+        
     } else {
-      console.warn('⚠️ [CallService] Cannot handle answer - peerConnection or remoteDescription issue');
+      console.warn('⚠️ [CallService] 无法处理 answer - 状态不对');
     }
   }
 
   async handleCandidate(data: any) {
     console.log('🧊 [CallService] handleCandidate() - Received ICE candidate');
     const candidate = new RTCIceCandidate(data.payload.candidate);
-    
+
     if (!this.peerConnection || !this.peerConnection.remoteDescription) {
       console.log('⏳ [CallService] Queueing candidate (no remote description yet)');
       this.candidateQueue.push(candidate);
@@ -272,10 +276,10 @@ export class WebRTCCallService {
   }
 
   processBufferedCandidates() {
-      if (!this.peerConnection) return;
-      while(this.candidateQueue.length > 0) {
-        this.peerConnection.addIceCandidate(this.candidateQueue.shift()!);
-      }
+    if (!this.peerConnection) return;
+    while (this.candidateQueue.length > 0) {
+      this.peerConnection.addIceCandidate(this.candidateQueue.shift()!);
+    }
   }
 
   cleanup(skipSignal: boolean = false) {
@@ -285,8 +289,8 @@ export class WebRTCCallService {
     }
 
     if (this.localStream) {
-        this.localStream.getTracks().forEach(t => t.stop());
-        this.localStream = null;
+      this.localStream.getTracks().forEach(t => t.stop());
+      this.localStream = null;
     }
     if (this.remoteStream) {
         console.log('🔇 [CallService] Stopping remote stream');
@@ -294,8 +298,8 @@ export class WebRTCCallService {
         this.remoteStream = null;
     }
     if (this.peerConnection) {
-        this.peerConnection.close();
-        this.peerConnection = null;
+      this.peerConnection.close();
+      this.peerConnection = null;
     }
     this.targetUserId = null;
     this.currentCallId = null;

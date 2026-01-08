@@ -67,7 +67,6 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
-  console.log('🆔 ChatRoomScreen chatId:', chatId);
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -91,8 +90,11 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
-  const [isNearBottom, setIsNearBottom] = useState(true);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // ✅ 优化 1: 添加滚动控制 Ref 和 状态
+  const flatListRef = useRef<FlatList>(null);
+  const [isNearBottom, setIsNearBottom] = useState(true); // 默认在底部
 
   // ✅ Search functionality
   const {
@@ -109,9 +111,6 @@ export default function ChatRoomScreen() {
     goToNextMatch,
     goToPrevMatch
   } = useSearchChatHistory();
-
-  // ✅ FlatList ref for scrolling to matched messages
-  const flatListRef = useRef<FlatList>(null);
 
   // ✅ Transform messages - logic enhanced to parse JSON for cards
   const messages: DisplayMessage[] = useMemo(() => {
@@ -152,6 +151,36 @@ export default function ChatRoomScreen() {
 
   const offsetRef = useRef(0);
 
+  // ✅ 优化 2: 滚动到底部辅助函数
+  // Inverted 模式下，offset 0 就是视觉上的底部
+  const scrollToBottom = (animated = true) => {
+    if (flatListRef.current && messages.length > 0) {
+      flatListRef.current.scrollToOffset({ offset: 0, animated });
+    }
+  };
+
+  // ✅ 优化 3: 监听消息列表变化，智能滚动
+  useEffect(() => {
+    if (messages.length === 0) return;
+    
+    // 获取最新的一条消息
+    const latestMessage = messages[0];
+
+    // 情况 A: 我自己发的消息 -> 必须强制滚到底部
+    if (latestMessage.senderId === currentUserId) {
+      scrollToBottom(true);
+      return;
+    }
+
+    // 情况 B: 收到别人发的消息
+    // 逻辑：如果我当前就在底部（isNearBottom），说明我在等消息，直接滚下去显示
+    // 如果我在看上面的历史记录（isNearBottom = false），就不滚，避免打断阅读
+    if (isNearBottom) {
+      scrollToBottom(true);
+    }
+  }, [messages.length, messages[0]?.id]);
+
+
   // ✅ Use voice recorder hook
   const {
     isRecording,
@@ -168,7 +197,11 @@ export default function ChatRoomScreen() {
     chatId,
     currentUserId,
     chatMembers,
-    onMessageSent: () => loadMessages(false, false),
+    onMessageSent: () => {
+        loadMessages(false, false);
+        // ✅ 语音发送成功后，强制滚到底部
+        scrollToBottom(true);
+    },
   });
 
   // Wrap loadMessages in useCallback
@@ -256,15 +289,18 @@ export default function ChatRoomScreen() {
                 messageText = `[${imageUrls.length} images]`;
               }
               else if (messageType === 2) {
-                if (typeof parsedMessage === 'string') {
+                if (typeof parsedMessage === 'string') { // Direct URL
                   voiceUrl = ensureFullImageUrl(parsedMessage);
                   messageText = '[Voice Message]';
-                } else if (parsedMessage.message) {
-                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
+                } else if (parsedMessage.message) { // Nested message object
+                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
+                    voiceUrl = '';
+                    messageText = '[Voice upload failed]';
+                  } else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
                     messageText = '[Voice Message]';
-                  } else {
-                    voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                  } else if (typeof parsedMessage.message === 'string') {
+                    voiceUrl = ensureFullImageUrl(parsedMessage.message);
                     messageText = '[Voice Message]';
                   }
                 }
@@ -349,16 +385,12 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
-    const pollingInterval = setInterval(() => {
-      loadMessages(false, false);
-    }, 3000);
-
     return () => {
       clearInterval(connectionCheckInterval);
     };
   }, [loadMessages]);
 
-  // ✅ Listen for WebSocket read receipts, update unreadCount in real-time
+  // Listen for WebSocket read receipts
   useEffect(() => {
     const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
       if (data.chatId !== chatId) return;
@@ -378,7 +410,7 @@ export default function ChatRoomScreen() {
     };
   }, [chatId]);
 
-  // ✅ Reload data when screen gains focus
+  // Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
       console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
@@ -388,7 +420,7 @@ export default function ChatRoomScreen() {
         const otherMembers = chatMembers.filter(id => id !== currentUserId);
         if (otherMembers.length > 0) {
           WebSocketManager.sendReadSignal({
-            receiver: otherMembers,
+            receiver: otherMembers, // Pass otherMembers as an array
             chat_id: chatId
           });
         }
@@ -396,7 +428,7 @@ export default function ChatRoomScreen() {
     }, [loadMessages, chatId, chatMembers, currentUserId])
   );
 
-  // ✅ Auto-enable search mode if navigated from settings (ONCE)
+  // Auto-enable search mode if navigated from settings (ONCE)
   const searchModeInitialized = useRef(false);
   useEffect(() => {
     if (params.searchMode === true && !searchModeInitialized.current) {
@@ -406,6 +438,7 @@ export default function ChatRoomScreen() {
   }, [params.searchMode, enableSearch]);
 
   const scrollToMatch = useCallback((messageId: string) => {
+    // ✅ 优化 4: 使用 ref 滚动
     if (!messageId || !flatListRef.current) return;
     const messageIndex = messages.findIndex(msg => msg.id === messageId);
     if (messageIndex >= 0) {
@@ -423,7 +456,7 @@ export default function ChatRoomScreen() {
     if (prevMessageId) scrollToMatch(prevMessageId);
   }, [goToPrevMatch, scrollToMatch, messages]);
 
-  // Use refs for WebSocket callback
+  // WebSocket Handler
   const chatIdRef = useRef(chatId);
   const loadMessagesRef = useRef(loadMessages);
 
@@ -437,6 +470,7 @@ export default function ChatRoomScreen() {
       if (data.type && data.message) {
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
           loadMessagesRef.current(false, false);
+          // 注意：滚动逻辑已统一交给上面的 messages useEffect 监听
         }
       }
     };
@@ -479,6 +513,9 @@ export default function ChatRoomScreen() {
     if (!inputText.trim()) return;
     const messageText = inputText.trim();
     setInputText('');
+
+    // ✅ 优化 5: 发送时立即强制滚动到底部
+    scrollToBottom(true);
 
     try {
       const receiver = chatMembers.filter(id => id !== currentUserId);
@@ -584,6 +621,9 @@ export default function ChatRoomScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
+        // ✅ 优化 6: 发送图片时也滚动
+        scrollToBottom(true);
+
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
           const files = result.assets.map(asset => {
@@ -633,9 +673,13 @@ export default function ChatRoomScreen() {
     }
   };
 
-  // ✅ Handle start call
+  // ✅ 修正版：单聊和群聊分别跳转到正确的 Screen
   const handleStartCall = useCallback(async () => {
+    // ===========================
+    // 1. 群聊逻辑 (Group Call)
+    // ===========================
     if (chat?.isGroup) {
+      // A. 构造群通话邀请消息
       const callInviteData = JSON.stringify({
         type: 'GROUP_VIDEO_CALL',
         roomId: chatId,
@@ -643,41 +687,82 @@ export default function ChatRoomScreen() {
         startTime: new Date().toISOString()
       });
 
+      // B. 发送消息给群成员
       const result = await sendChatMessage({
         sender: currentUserId,
         isreceive: chatMembers.filter(id => id !== currentUserId),
         chat_id: chatId,
         message: callInviteData,
-        type: 4,
+        type: 4, // 系统消息/卡片类型
       });
 
+      // C. 发送成功后，自己跳转到群通话界面
       if (result.success) {
-        navigation.navigate('GroupCallScreen', { chatId, isHost: true });
-      }
-    } else {
-      const otherUserId = chatMembers.find(id => id !== currentUserId);
-      if (otherUserId) {
-        WebSocketManager.startCall(otherUserId);
+        // ❗ 注意：群聊是跳 GroupCallScreen
+        navigation.navigate('GroupCallScreen', {
+          chatId,
+          isHost: true // 标记我是主持人
+        });
       }
     }
-  }, [chat?.isGroup, chatId, currentUserName, currentUserId, chatMembers, navigation]);
+    // ===========================
+    // 2. 单聊逻辑 (1v1 Call)
+    // ===========================
+    else {
+      const otherUserId = chatMembers.find(id => id !== currentUserId);
+
+      if (otherUserId) {
+        // 尝试获取对方名字/头像，确保传参准确
+        const contact = getChatById(otherUserId);
+        const targetName = contact?.name || chatName || '未知用户';
+        const targetAvatar = contact?.avatar || chat?.avatar || '';
+
+        console.log('📞 跳转单聊页面:', targetName);
+
+        // ❗ 注意：单聊是跳 CallScreen
+        navigation.navigate('SingleCallScreen', {
+          callerId: currentUserId,   // 传自己ID (备用)
+          targetId: otherUserId,     // ❌ 必须传：你要打给谁
+          chatId: chatId,
+          isIncoming: false,         // ✅ 必须是 false (拨出状态)
+          userName: targetName,      // 传名字给 CallScreen 显示
+          userAvatar: targetAvatar   // 传头像给 CallScreen 显示
+        });
+
+        // ❌ 删除 WebSocketManager.startCall(...)
+        // 原因：CallScreen 页面加载时会自动发起 startCall，这里再写就重复了
+      } else {
+        Alert.alert('错误', '无法找到对方信息');
+      }
+    }
+  }, [chat, chatId, currentUserName, currentUserId, chatMembers, navigation, chatName, getChatById]);
+
 
   // ✅ Core Addition: Send Contact Card Logic
+  // ✅ 发送名片逻辑 (已修复头像为空的情况)
   const handleSendContactCard = useCallback(() => {
-    // Assuming you have a contact selection screen, ensure 'SelectContactForCard' route exists
+    // 跳转到联系人选择页
     (navigation as any).navigate('SelectContactForCard', {
       onSelectContact: async (contact: any) => {
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
 
-          // Construct contact card JSON data
+          // ✅ 1. 处理头像逻辑：如果为空或无效，设为 ''
+          let safeAvatar = contact.avatar || '';
+
+          // (可选) 过滤无效的 ngrok 链接，防止显示裂图
+          if (safeAvatar.includes('ngrok-free.dev') && !safeAvatar.includes('/uploads/')) {
+            safeAvatar = '';
+          }
+
+          // ✅ 2. 构造名片数据
           const cardData = {
             userId: contact.id,
-            userName: contact.name,
-            userAvatar: contact.avatar,
+            userName: contact.name || '未知用户', // 防止名字也为空
+            userAvatar: safeAvatar,               // 如果是 ''，接收方会自动显示默认图
           };
 
-          // Send message Type 4 (shared with call card, distinguished by content)
+          // 3. 发送消息 (Type 4)
           const result = await sendChatMessage({
             sender: currentUserId,
             isreceive: receiver,
@@ -685,6 +770,9 @@ export default function ChatRoomScreen() {
             message: JSON.stringify(cardData),
             type: 4,
           });
+
+          // ✅ 优化 7: 发送名片也滚动
+          scrollToBottom(true);
 
           if (result.success && result.data) {
             const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
@@ -704,11 +792,11 @@ export default function ChatRoomScreen() {
 
             await loadMessages(false, false);
           } else {
-            Alert.alert('Send Failed', result.message || 'Contact card failed to send, please retry');
+            Alert.alert('发送失败', result.message || '名片发送失败，请重试');
           }
         } catch (error) {
           console.error('Error sending contact card:', error);
-          Alert.alert('Send Failed', 'Network error, please retry');
+          Alert.alert('发送失败', '网络错误，请重试');
         }
       },
     });
@@ -779,7 +867,7 @@ export default function ChatRoomScreen() {
       { icon: 'videocam-outline', label: '视频通话', onPress: handleStartCall },
     ],
     row2: [
-      { icon: 'document-outline', label: '文件' },
+      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('Coming Soon', 'File sharing is not yet implemented.') },
       // ✅ Added Contact Card Button
       { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
       { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
@@ -831,7 +919,9 @@ export default function ChatRoomScreen() {
         <KeyboardAvoidingView
           style={roomStyles.keyboardAvoidingView}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
+          {/* ✅ 优化 8: FlatList 配置 Ref 和 onScroll */}
           <FlatList
             ref={flatListRef}
             data={[...messages]}
@@ -840,12 +930,17 @@ export default function ChatRoomScreen() {
             contentContainerStyle={roomStyles.chatList}
             inverted
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.5}
+            
+            // 核心：监听滚动位置，更新状态
             onScroll={(e) => {
               const { contentOffset } = e.nativeEvent;
-              setIsNearBottom(contentOffset.y < 100);
+              // Inverted 模式下，y=0 是视觉底部，<50 视为接近底部
+              setIsNearBottom(contentOffset.y < 50);
             }}
+            scrollEventThrottle={16} // 提高滚动帧率
+
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}

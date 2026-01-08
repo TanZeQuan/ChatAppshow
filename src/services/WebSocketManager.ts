@@ -1,9 +1,9 @@
 import { WebRTCCallService } from "./CallService";
 import { Emitter } from "./EventEmitter";
 
-// ✅ New WebSocket URL
-const WS_URL = "wss://ws.ngrok-free.dev";
+const WS_URL = "wss://ws.ngrok-free.dev"; // ⚠️ 请确保这个地址是有效的，ngrok 每次重启都会变
 
+// 定义回调类型
 type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
 type PresenceCallback = (data: { userId: string; isOnline: boolean }) => void;
@@ -16,27 +16,27 @@ class WebSocketManager {
   public callService: WebRTCCallService | null = null;
   private userId: string | null = null;
   private isConnected = false;
-
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 3000;
 
+  // 回调队列
   private messageCallbacks: MessageCallback[] = [];
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
   private presenceCallbacks: PresenceCallback[] = [];
   private callCallbacks: CallCallback[] = [];
 
-  // ✅ Online users tracking
+  // 在线状态追踪
   private onlineUsers: Set<string> = new Set();
   private userActivityTimers: Map<string, NodeJS.Timeout> = new Map();
-  private readonly OFFLINE_TIMEOUT = 20000; 
+  private readonly OFFLINE_TIMEOUT = 20000;
 
-  // Login Promise control
+  // 登录控制
   private loginResolver: ((v: boolean) => void) | null = null;
   private loginRejecter: ((e: Error) => void) | null = null;
   private loginTimeoutTimer: any = null;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): WebSocketManager {
     if (!WebSocketManager.instance) {
@@ -45,32 +45,49 @@ class WebSocketManager {
     return WebSocketManager.instance;
   }
 
-  // ✅ 1. NEW: Safe Send Method to prevent INVALID_STATE_ERR
+  // ✅ 修复 1: 智能发送。如果正在连接中(State 0)，自动放入等待队列
   private safeSend(message: string) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    if (!this.ws) {
+      console.warn("⚠️ [WebSocket] Cannot send: WebSocket instance is null");
+      return;
+    }
+
+    if (this.ws.readyState === WebSocket.OPEN) {
       try {
         this.ws.send(message);
       } catch (error) {
         console.error("❌ [WebSocket] Send failed:", error);
       }
+    } else if (this.ws.readyState === WebSocket.CONNECTING) {
+      // 关键修复：如果在连接中，监听一次 'open' 事件，连接成功后自动补发
+      console.log("⏳ [WebSocket] Connection presumed in progress, queuing message...");
+      const sendWhenOpen = () => {
+        this.ws?.send(message);
+        console.log("✅ [WebSocket] Queued message sent successfully");
+      };
+      this.ws.addEventListener('open', sendWhenOpen, { once: true });
     } else {
-      console.warn("⚠️ [WebSocket] Cannot send message. Socket not OPEN. State:", this.ws?.readyState);
+      console.warn("⚠️ [WebSocket] Cannot send. Socket State:", this.ws.readyState);
     }
   }
 
-  /* ===============================
-       Connect + Login
-  =============================== */
+  // Connect + Login
   public connect(userId: string): Promise<boolean> {
-    console.log('🔌 [WebSocket] connect() called');
-    
-    if (this.isConnected && this.userId !== userId) {
-      this.disconnect();
+    console.log('🔌 [WebSocket] connect() called for:', userId);
+
+    if (this.isConnected && this.userId === userId) return Promise.resolve(true);
+    // 如果已经在连接中且是同一个用户，避免重复创建
+    if (this.ws && this.ws.readyState === WebSocket.CONNECTING && this.userId === userId) {
+      console.log('⏳ [WebSocket] Connection already connecting...');
+      return new Promise((resolve) => {
+        // 简单的等待逻辑，复用当前的连接过程
+        const check = setInterval(() => {
+          if (this.isConnected) { clearInterval(check); resolve(true); }
+        }, 500);
+      });
     }
 
-    if (this.isConnected && this.userId === userId) {
-      return Promise.resolve(true);
-    }
+    if (this.userId && this.userId !== userId) this.disconnect();
 
     this.userId = userId;
 
@@ -87,82 +104,105 @@ class WebSocketManager {
 
       this.ws.onopen = () => {
         console.log("✅ WebSocket opened");
+        // 这里的 sendLoginMessage 会触发 safeSend，现在 safeSend 即使状态不稳定也很安全
         this.sendLoginMessage();
 
         this.loginTimeoutTimer = setTimeout(() => {
-          if (!this.isConnected) {
+          if (this.ws?.readyState === WebSocket.OPEN) {
+            console.log("🚀 [WebSocket] Silent login presumed success");
             this.isConnected = true;
             this.reconnectAttempts = 0;
-            this.initializeCallService();
+            this.initializeServices();
             this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
-        }, 2000);
+        }, 1500);
       };
 
-      this.ws.onmessage = (event) => {
-        this.handleMessage(event);
-      };
+      this.ws.onmessage = (event) => this.handleMessage(event);
 
       this.ws.onclose = (event) => {
+        console.log(`🔌 WebSocket closed code=${event.code}`);
         this.isConnected = false;
         this.cleanupLoginPromise();
-        if (event.code !== 1000 && this.userId) {
-          this.attemptReconnect();
+        if (event.code !== 1000 && this.userId) this.attemptReconnect();
+      };
+
+      this.ws.onerror = (error) => {
+        // ✅ 修复 2: 提供更有用的错误信息，并触发重连机制
+        console.error("❌ WebSocket error. Please check: 1. Server is running? 2. URL correct? 3. VPN/Firewall?", error);
+        // 在错误发生时，通常也会触发 onclose，所以重连逻辑交给 onclose 处理即可
+        // 但如果是在连接阶段就错了，可能需要手动拒绝 Promise
+        if (!this.isConnected && this.loginRejecter) {
+          // 这种情况通常是 URL 连不上
+          // 不 reject，让它自动进入重连尝试，或者你可以选择 reject
         }
       };
     });
   }
 
-  private initializeCallService() {
+  // ✅ 确保 WebRTCCallService 总是使用最新的 WebSocket 连接
+  private initializeServices() {
     if (this.ws && this.userId) {
-      this.callService = new WebRTCCallService(this.ws, this.userId);
+      if (!this.callService) {
+        this.callService = new WebRTCCallService(this.ws, this.userId);
+      } else {
+        this.callService.ws = this.ws;
+        this.callService.currentUserId = this.userId;
+      }
     }
   }
 
-  public startCall(targetUserId: string) {
+  // 发起呼叫 (由 UI 触发)
+  public startCall(
+    targetUserId: string,
+    userName: string,
+    avatar: string
+  ) {
     if (this.callService) {
-      this.callService.startCall(targetUserId);
+      this.callService.startCall(targetUserId, userName, avatar);
+    } else {
+      console.warn("⚠️ CallService not initialized, cannot start call");
     }
   }
 
   private sendLoginMessage() {
     if (!this.ws || !this.userId) return;
-    
-    // Extra check to prevent crash if socket closed immediately
-    if (this.ws.readyState !== WebSocket.OPEN) {
-        console.warn("⚠️ [WebSocket] onopen fired but socket state is not OPEN");
-        return;
-    }
-
     const payload = { msg: "login", user_id: this.userId };
-    // ✅ Use safeSend
     this.safeSend(JSON.stringify(payload));
   }
 
-  /* ===============================
-       Message Handler
-  =============================== */
+  // ✅ 消息分发逻辑
   private handleMessage(event: MessageEvent) {
     try {
       const data = JSON.parse(event.data);
       console.log("📨 [WebSocket] Received:", data);
 
-      if (data.msg === "call_signal") {
-        console.log(`📞 Call signal received:`, data.type);
-        if (this.callService) {
-          this.callService.handleSignal(data);
-        }
-        this.callCallbacks.forEach(cb => cb(data));
+      if (data.status === 0 && data.message === "Reconnected") {
+        console.log("✅ Reconnected confirmed by server");
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.initializeServices();
+        this.loginResolver?.(true);
+        this.cleanupLoginPromise();
         return;
       }
 
-      if (data.status === 0 && data.message === "Reconnected") {
-        this.isConnected = true;
-        this.reconnectAttempts = 0;
-        this.initializeCallService();
-        this.loginResolver?.(true);
-        this.cleanupLoginPromise();
+      const isCallSignal =
+        data.msg === "call_signal" ||
+        (data.type && ["offer", "answer", "candidate", "reject", "end", "JOIN_CALL", "LEAVE_CALL", "PEER_JOIN"].includes(data.type));
+
+      if (isCallSignal) {
+        console.log(`📞 Call signal routed:`, data.type);
+        const normalizedData = { msg: "call_signal", ...data };
+        const payload = data.payload || {};
+        const callMode = payload.call_mode || data.call_mode;
+
+        if (this.callService && callMode !== 'group') {
+          this.callService.handleSignal(normalizedData);
+        }
+
+        this.callCallbacks.forEach(cb => cb(normalizedData));
         return;
       }
 
@@ -180,119 +220,99 @@ class WebSocketManager {
         return;
       }
 
+      if (data.status === 1 && data.message === "Success") return;
+
       this.messageCallbacks.forEach((cb) => cb(data));
     } catch (err) {
       console.error("❌ WebSocket parse error", err);
     }
   }
 
-  /* ===============================
-       Send Call Signal
-  =============================== */
+  // ✅ 确保 receiver 是数组
   public sendCallSignal(payload: {
-    type: "JOIN_CALL" | "LEAVE_CALL" | "OFFER" | "ANSWER" | "CANDIDATE" | "offer" | "answer" | "candidate" | "reject" | "end";
-    receiver?: string | string[];
+    type: "offer" | "answer" | "candidate" | "reject" | "end" | "JOIN_CALL" | "LEAVE_CALL" | "PEER_JOIN";
+    receiver?: string[] | string;
     chat_id?: string;
     sender?: string;
     call_type?: 0 | 1;
     call_id?: string;
+    call_mode?: 'group' | 'single';
     payload?: any;
-    sdp?: any;
-    candidate?: any;
   }): boolean {
-    if (!this.ws || !this.isConnected) {
-      console.warn("⚠️ WebSocket not connected");
-      return false;
+    if (!this.ws) return false;
+    // 注意：这里去掉了 !this.isConnected 判断，交给 safeSend 处理排队逻辑，提高成功率
+
+    let receivers: string[] = [];
+    if (Array.isArray(payload.receiver)) {
+      receivers = payload.receiver;
+    } else if (typeof payload.receiver === 'string') {
+      receivers = [payload.receiver];
     }
 
     const msg = {
       msg: "call_signal",
       user_id: this.userId!,
-      ...payload
+      ...payload,
+      receiver: receivers
     };
 
-    console.log(`📤 [WebSocket] Sending call_signal (${payload.type}):`, JSON.stringify(msg));
-    // ✅ Use safeSend
+    console.log(`📤 [WebSocket] Sending signal (${payload.type}) to ${receivers.length} receivers`);
     this.safeSend(JSON.stringify(msg));
     return true;
   }
 
-  /* ===============================
-       Callbacks
-  =============================== */
-  public addCallCallback(cb: CallCallback) {
-    this.callCallbacks.push(cb);
-  }
-
-  public removeCallCallback(cb: CallCallback) {
-    this.callCallbacks = this.callCallbacks.filter((x) => x !== cb);
-  }
-
-  public addMessageCallback(cb: MessageCallback) {
-    this.messageCallbacks.push(cb);
-  }
-
-  public removeMessageCallback(cb: MessageCallback) {
-    this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb);
-  }
-
-  public addReadReceiptCallback(cb: ReadReceiptCallback) {
-    this.readReceiptCallbacks.push(cb);
-  }
-
-  public removeReadReceiptCallback(cb: ReadReceiptCallback) {
-    this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb);
-  }
-
-  /* ===============================
-       Other Methods
-  =============================== */
-  public sendForwardMessage(payload: {
-    type: number;
-    message: string;
-    message_id: string;
-    sender: string;
-    receiver: string[];
-    chat_id: string;
-  }): boolean {
-    if (!this.ws || !this.isConnected) return false;
-    const msg = {
-      msg: "forward",
-      user_id: this.userId!,
-      ...payload
-    };
-    // ✅ Use safeSend
+  public sendForwardMessage(payload: any): boolean {
+    if (!this.ws) return false;
+    const msg = { msg: "forward", user_id: this.userId!, ...payload };
     this.safeSend(JSON.stringify(msg));
     return true;
   }
 
-  public sendReadSignal(payload: {
-    receiver: string[];
-    chat_id: string;
-  }): boolean {
-    if (!this.ws || !this.isConnected) return false;
-    const msg = {
-      msg: "read_signal",
-      user_id: this.userId!,
-      ...payload
-    };
-    // ✅ Use safeSend
+  public sendReadSignal(payload: any): boolean {
+    if (!this.ws) return false;
+    const msg = { msg: "read_signal", user_id: this.userId!, ...payload };
     this.safeSend(JSON.stringify(msg));
     return true;
   }
 
   public disconnect() {
+    console.log("🧹 [WebSocket] Performing full cleanup/disconnect...");
+
+    // 1. 关闭物理连接
     if (this.ws) {
-      this.ws.close(1000, "Client disconnect");
+      // 移除所有监听器，防止关闭时的回调触发重连逻辑
+      this.ws.onclose = null;
+      this.ws.onerror = null;
+      this.ws.onmessage = null;
+      this.ws.onopen = null;
+
+      this.ws.close(1000, "User logout / Switch account");
       this.ws = null;
     }
+
+    // 2. 清理 WebRTC 服务 (关键！)
     if (this.callService) {
-      this.callService.cleanup();
+      if (typeof (this.callService as any).cleanup === 'function') {
+        (this.callService as any).cleanup();
+      }
       this.callService = null;
     }
+
+    // 3. 重置所有状态变量
     this.isConnected = false;
     this.userId = null;
+    this.reconnectAttempts = 0; // 重置重连次数
+
+    // 4. 清理定时器
+    this.cleanupLoginPromise();
     this.cleanupPresenceTracking();
+
+    // 5. (可选) 如果你希望切换账号后，旧的UI回调也失效，可以清空回调数组
+    // 但通常建议保留回调，因为 React 组件卸载时会自己 removeCallback
+    // this.messageCallbacks = []; 
+    // this.callCallbacks = [];
+
+    console.log("✨ [WebSocket] Cleanup finished. Ready for new user.");
   }
 
   private cleanupLoginPromise() {
@@ -308,24 +328,20 @@ class WebSocketManager {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * this.reconnectAttempts;
+    console.log(`♻️ Attempting reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms...`);
     setTimeout(() => {
-      if (this.userId) {
-        this.connect(this.userId).catch(() => {});
-      }
+      if (this.userId) this.connect(this.userId).catch(() => { });
     }, delay);
   }
 
-  public isWebSocketConnected() {
-    return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
-  }
-
-  /* ===============================
-       Online Status Management
-  =============================== */
-  // ✅ 2. NEW: Fixed missing method
-  public isUserOnline(userId: string): boolean {
-    return this.onlineUsers.has(userId);
-  }
+  // Callbacks ...
+  public addCallCallback(cb: CallCallback) { this.callCallbacks.push(cb); }
+  public removeCallCallback(cb: CallCallback) { this.callCallbacks = this.callCallbacks.filter((x) => x !== cb); }
+  public addMessageCallback(cb: MessageCallback) { this.messageCallbacks.push(cb); }
+  public removeMessageCallback(cb: MessageCallback) { this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb); }
+  public addReadReceiptCallback(cb: ReadReceiptCallback) { this.readReceiptCallbacks.push(cb); }
+  public removeReadReceiptCallback(cb: ReadReceiptCallback) { this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb); }
+  public isUserOnline(userId: string): boolean { return this.onlineUsers.has(userId); }
 
   private markUserOnline(userId: string) {
     if (!userId || userId === this.userId) return;
@@ -337,9 +353,7 @@ class WebSocketManager {
       this.markUserOffline(userId);
     }, this.OFFLINE_TIMEOUT);
     this.userActivityTimers.set(userId, timer);
-    if (wasOffline) {
-      this.notifyPresenceChange(userId, true);
-    }
+    if (wasOffline) this.notifyPresenceChange(userId, true);
   }
 
   private markUserOffline(userId: string) {
@@ -353,14 +367,9 @@ class WebSocketManager {
     this.presenceCallbacks.forEach((cb) => cb({ userId, isOnline }));
   }
 
-  public addPresenceCallback(cb: PresenceCallback) {
-    this.presenceCallbacks.push(cb);
-  }
-
-  public removePresenceCallback(cb: PresenceCallback) {
-    this.presenceCallbacks = this.presenceCallbacks.filter((x) => x !== cb);
-  }
-
+  public addPresenceCallback(cb: PresenceCallback) { this.presenceCallbacks.push(cb); }
+  public removePresenceCallback(cb: PresenceCallback) { this.presenceCallbacks = this.presenceCallbacks.filter((x) => x !== cb); }
+  public isWebSocketConnected(): boolean { return this.isConnected && this.ws?.readyState === WebSocket.OPEN; }
   private cleanupPresenceTracking() {
     this.userActivityTimers.forEach((timer) => clearTimeout(timer));
     this.userActivityTimers.clear();
