@@ -1,14 +1,13 @@
-import config from "../config/api";
 import { WebRTCCallService } from "./CallService";
 import { Emitter } from "./EventEmitter";
 
-
-// ✅ 新的 WebSocket URL（根据文档）
+// ✅ New WebSocket URL
 const WS_URL = "wss://ws.ngrok-free.dev";
 
 type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
 type PresenceCallback = (data: { userId: string; isOnline: boolean }) => void;
+type CallCallback = (data: any) => void;
 
 class WebSocketManager {
   private static instance: WebSocketManager;
@@ -25,15 +24,12 @@ class WebSocketManager {
   private messageCallbacks: MessageCallback[] = [];
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
   private presenceCallbacks: PresenceCallback[] = [];
+  private callCallbacks: CallCallback[] = [];
 
   // ✅ Online users tracking
   private onlineUsers: Set<string> = new Set();
   private userActivityTimers: Map<string, NodeJS.Timeout> = new Map();
-  private readonly OFFLINE_TIMEOUT = 20000; // ✅ 20 seconds without activity = offline (reduced from 60s)
-
-  // ✅ Heartbeat mechanism
-  private heartbeatInterval: any = null;
-  private readonly HEARTBEAT_INTERVAL = 30000; // Send heartbeat every 30 seconds
+  private readonly OFFLINE_TIMEOUT = 20000; 
 
   // Login Promise control
   private loginResolver: ((v: boolean) => void) | null = null;
@@ -49,31 +45,34 @@ class WebSocketManager {
     return WebSocketManager.instance;
   }
 
+  // ✅ 1. NEW: Safe Send Method to prevent INVALID_STATE_ERR
+  private safeSend(message: string) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(message);
+      } catch (error) {
+        console.error("❌ [WebSocket] Send failed:", error);
+      }
+    } else {
+      console.warn("⚠️ [WebSocket] Cannot send message. Socket not OPEN. State:", this.ws?.readyState);
+    }
+  }
+
   /* ===============================
-     Connect + Login
+       Connect + Login
   =============================== */
   public connect(userId: string): Promise<boolean> {
     console.log('🔌 [WebSocket] connect() called');
-    console.log('  - New userId:', userId);
-    console.log('  - Current userId:', this.userId);
-    console.log('  - isConnected:', this.isConnected);
-
-    // If already connected but userId changed, disconnect first
+    
     if (this.isConnected && this.userId !== userId) {
-      console.warn('⚠️ [WebSocket] UserId changed! Disconnecting old connection...');
       this.disconnect();
     }
 
-    // If already connected with same userId, return
     if (this.isConnected && this.userId === userId) {
-      console.log('✅ [WebSocket] Already connected with same userId');
       return Promise.resolve(true);
     }
 
     this.userId = userId;
-
-    console.log("WebSocket CONNECT User ID:", userId);
-    console.log("WebSocket CONNECT WS URL:", WS_URL);
 
     return new Promise((resolve, reject) => {
       this.loginResolver = resolve;
@@ -86,42 +85,29 @@ class WebSocketManager {
         return;
       }
 
-      /* ---------- OPEN ---------- */
       this.ws.onopen = () => {
         console.log("✅ WebSocket opened");
         this.sendLoginMessage();
 
-        // ⏳ Login timeout - 首次连接成功是静默的（2秒内没收到错误就算成功）
         this.loginTimeoutTimer = setTimeout(() => {
           if (!this.isConnected) {
-            console.log("✅ Login success (silent - no response from server)");
             this.isConnected = true;
             this.reconnectAttempts = 0;
             this.initializeCallService();
-            // this.startHeartbeat(); // ✅ Start heartbeat after successful login - DISABLED
             this.loginResolver?.(true);
             this.cleanupLoginPromise();
           }
         }, 2000);
       };
 
-      /* ---------- MESSAGE ---------- */
       this.ws.onmessage = (event) => {
         this.handleMessage(event);
       };
 
-      /* ---------- CLOSE ---------- */
       this.ws.onclose = (event) => {
-        console.warn("🔌 WebSocket closed");
-        console.warn("Close code:", event.code);
-        console.warn("Close reason:", event.reason || 'No reason provided');
-
         this.isConnected = false;
         this.cleanupLoginPromise();
-
-        // If not a normal closure and user is set, attempt reconnect
         if (event.code !== 1000 && this.userId) {
-          console.warn("Abnormal closure, will attempt reconnect...");
           this.attemptReconnect();
         }
       };
@@ -131,37 +117,31 @@ class WebSocketManager {
   private initializeCallService() {
     if (this.ws && this.userId) {
       this.callService = new WebRTCCallService(this.ws, this.userId);
-      console.log('✅ [CallService] Initialized');
-    } else {
-      console.error('❌ [CallService] Failed to initialize: WebSocket or UserId is not available.');
     }
   }
 
   public startCall(targetUserId: string) {
     if (this.callService) {
       this.callService.startCall(targetUserId);
-    } else {
-      console.error("Cannot start call, CallService is not initialized.");
     }
   }
 
-  /* ===============================
-     Login
-  =============================== */
   private sendLoginMessage() {
     if (!this.ws || !this.userId) return;
+    
+    // Extra check to prevent crash if socket closed immediately
+    if (this.ws.readyState !== WebSocket.OPEN) {
+        console.warn("⚠️ [WebSocket] onopen fired but socket state is not OPEN");
+        return;
+    }
 
-    const payload = {
-      msg: "login",
-      user_id: this.userId,
-    };
-
-    console.log("📤 [WebSocket] Sending login:", payload);
-    this.ws.send(JSON.stringify(payload));
+    const payload = { msg: "login", user_id: this.userId };
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(payload));
   }
 
   /* ===============================
-     Message Handler (根据新文档)
+       Message Handler
   =============================== */
   private handleMessage(event: MessageEvent) {
     try {
@@ -173,52 +153,26 @@ class WebSocketManager {
         if (this.callService) {
           this.callService.handleSignal(data);
         }
+        this.callCallbacks.forEach(cb => cb(data));
         return;
       }
 
-      /* ---------- RECONNECTION SUCCESS ---------- */
       if (data.status === 0 && data.message === "Reconnected") {
-        console.log("✅ Reconnected to WebSocket");
-        if (!this.isConnected) {
-          this.isConnected = true;
-          this.reconnectAttempts = 0;
-          this.initializeCallService();
-          // this.startHeartbeat(); // ✅ Restart heartbeat after reconnection - DISABLED
-          this.loginResolver?.(true);
-          this.cleanupLoginPromise();
-        }
-        return;
-      }
-
-      /* ---------- LOGIN FAILED ---------- */
-      if (data.status === 1 && data.message && data.message.includes("Invalid")) {
-        console.error("❌ Login failed:", data.message);
-        this.loginRejecter?.(new Error(data.message));
+        this.isConnected = true;
+        this.reconnectAttempts = 0;
+        this.initializeCallService();
+        this.loginResolver?.(true);
         this.cleanupLoginPromise();
         return;
       }
 
-      /* ---------- FORWARD/READ_SIGNAL ACK ---------- */
-      if (data.status === 1 && data.message === "Success") {
-        console.log("✅ Operation confirmed (forward/read_signal)");
-        return;
-      }
-
-      /* ---------- INCOMING MESSAGE ---------- */
-      // Format: {status: 1, type: 1, message: "...", chat_id: "...", sender: "..."}
       if (data.status === 1 && data.type && data.message && data.sender) {
-        console.log(`📩 New message from ${data.sender} in chat ${data.chat_id}`);
-        // ✅ Mark sender as online (they just sent a message)
         this.markUserOnline(data.sender);
         this.messageCallbacks.forEach((cb) => cb(data));
         return;
       }
 
-      /* ---------- READ RECEIPT ---------- */
-      // Format: {status: 1, chat_id: "...", reader_id: "..."}
       if (data.status === 1 && data.chat_id && data.reader_id) {
-        console.log(`✔️ User ${data.reader_id} read messages in ${data.chat_id}`);
-        // ✅ Mark reader as online (they just read messages)
         this.markUserOnline(data.reader_id);
         this.readReceiptCallbacks.forEach((cb) =>
           cb({ chatId: data.chat_id, readerId: data.reader_id })
@@ -226,88 +180,25 @@ class WebSocketManager {
         return;
       }
 
-      /* ---------- FALLBACK ---------- */
-      console.log("⚠️ Unhandled message:", data);
       this.messageCallbacks.forEach((cb) => cb(data));
     } catch (err) {
       console.error("❌ WebSocket parse error", err);
     }
   }
 
-  private cleanupLoginPromise() {
-    if (this.loginTimeoutTimer) {
-      clearTimeout(this.loginTimeoutTimer);
-      this.loginTimeoutTimer = null;
-    }
-    this.loginResolver = null;
-    this.loginRejecter = null;
-  }
-
   /* ===============================
-     Send Forward Message (根据新文档)
-  =============================== */
-  public sendForwardMessage(payload: {
-    type: number; // ✅ 改为 number: 1=text, 2=voice, 3=files
-    message: string;
-    message_id: string; // ✅ Required for delivery tracking
-    sender: string;
-    receiver: string[];
-    chat_id: string;
-  }): boolean {
-    if (!this.ws || !this.isConnected) {
-      console.warn("⚠️ WebSocket not connected");
-      return false;
-    }
-
-    const msg = {
-      msg: "forward",
-      user_id: this.userId!, // ✅ 新增：当前用户ID（用于日志）
-      type: payload.type,
-      message: payload.message,
-      sender: payload.sender,
-      receiver: payload.receiver,
-      chat_id: payload.chat_id,
-      message_id: payload.message_id, // ✅ Required
-    };
-
-    console.log("📤 [WebSocket] Sending forward:", msg);
-    this.ws.send(JSON.stringify(msg));
-    return true;
-  }
-
-  /* ===============================
-     Send Read Signal (新增)
-  =============================== */
-  public sendReadSignal(payload: {
-    receiver: string[];
-    chat_id: string;
-  }): boolean {
-    if (!this.ws || !this.isConnected) {
-      console.warn("⚠️ WebSocket not connected");
-      return false;
-    }
-
-    const msg = {
-      msg: "read_signal",
-      user_id: this.userId!,
-      receiver: payload.receiver,
-      chat_id: payload.chat_id,
-    };
-
-    console.log("📤 [WebSocket] Sending read_signal:", msg);
-    this.ws.send(JSON.stringify(msg));
-    return true;
-  }
-
-  /* ===============================
-     Send Call Signal (新增 - WebRTC)
+       Send Call Signal
   =============================== */
   public sendCallSignal(payload: {
-    type: "offer" | "answer" | "candidate" | "reject" | "end";
-    receiver: string[];
-    call_type?: 0 | 1; // 0=Voice, 1=Video
+    type: "JOIN_CALL" | "LEAVE_CALL" | "OFFER" | "ANSWER" | "CANDIDATE" | "offer" | "answer" | "candidate" | "reject" | "end";
+    receiver?: string | string[];
+    chat_id?: string;
+    sender?: string;
+    call_type?: 0 | 1;
     call_id?: string;
-    payload?: any; // SDP or ICE candidate
+    payload?: any;
+    sdp?: any;
+    candidate?: any;
   }): boolean {
     if (!this.ws || !this.isConnected) {
       console.warn("⚠️ WebSocket not connected");
@@ -316,74 +207,27 @@ class WebSocketManager {
 
     const msg = {
       msg: "call_signal",
-      type: payload.type,
       user_id: this.userId!,
-      receiver: payload.receiver,
-      call_type: payload.call_type,
-      call_id: payload.call_id,
-      payload: payload.payload,
+      ...payload
     };
 
-    console.log("📤 [WebSocket] Sending call_signal:", msg);
-    this.ws.send(JSON.stringify(msg));
+    console.log(`📤 [WebSocket] Sending call_signal (${payload.type}):`, JSON.stringify(msg));
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
     return true;
   }
 
   /* ===============================
-     Logout / Disconnect
+       Callbacks
   =============================== */
-  public disconnect() {
-    console.log('🔌 [WebSocket] disconnect() called');
-
-    if (this.ws) {
-      this.ws.close(1000, "Client disconnect");
-      this.ws = null;
-    }
-
-    if (this.callService) {
-      this.callService.cleanup();
-      this.callService = null;
-    }
-
-    this.isConnected = false;
-    this.userId = null;
-    this.reconnectAttempts = 0;
-    
-    // ✅ Stop heartbeat - DISABLED
-    // this.stopHeartbeat();
-    
-    // ✅ Clean up presence tracking
-    this.cleanupPresenceTracking();
-
-    console.log("✅ [WebSocket] Disconnected successfully");
+  public addCallCallback(cb: CallCallback) {
+    this.callCallbacks.push(cb);
   }
 
-  /* ===============================
-     Reconnect
-  =============================== */
-  private attemptReconnect() {
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error("❌ Max reconnect attempts reached");
-      return;
-    }
-
-    this.reconnectAttempts++;
-    const delay = this.reconnectDelay * this.reconnectAttempts;
-
-    console.warn(`🔄 Reconnecting... Attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
-
-    setTimeout(() => {
-      if (this.userId) {
-        this.connect(this.userId).catch((error) => {
-          console.error("Reconnect failed:", error.message);
-        });
-      }
-    }, delay);
+  public removeCallCallback(cb: CallCallback) {
+    this.callCallbacks = this.callCallbacks.filter((x) => x !== cb);
   }
 
-  /* ===============================
-     Callbacks
-  =============================== */
   public addMessageCallback(cb: MessageCallback) {
     this.messageCallbacks.push(cb);
   }
@@ -400,69 +244,113 @@ class WebSocketManager {
     this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb);
   }
 
+  /* ===============================
+       Other Methods
+  =============================== */
+  public sendForwardMessage(payload: {
+    type: number;
+    message: string;
+    message_id: string;
+    sender: string;
+    receiver: string[];
+    chat_id: string;
+  }): boolean {
+    if (!this.ws || !this.isConnected) return false;
+    const msg = {
+      msg: "forward",
+      user_id: this.userId!,
+      ...payload
+    };
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
+    return true;
+  }
+
+  public sendReadSignal(payload: {
+    receiver: string[];
+    chat_id: string;
+  }): boolean {
+    if (!this.ws || !this.isConnected) return false;
+    const msg = {
+      msg: "read_signal",
+      user_id: this.userId!,
+      ...payload
+    };
+    // ✅ Use safeSend
+    this.safeSend(JSON.stringify(msg));
+    return true;
+  }
+
+  public disconnect() {
+    if (this.ws) {
+      this.ws.close(1000, "Client disconnect");
+      this.ws = null;
+    }
+    if (this.callService) {
+      this.callService.cleanup();
+      this.callService = null;
+    }
+    this.isConnected = false;
+    this.userId = null;
+    this.cleanupPresenceTracking();
+  }
+
+  private cleanupLoginPromise() {
+    if (this.loginTimeoutTimer) {
+      clearTimeout(this.loginTimeoutTimer);
+      this.loginTimeoutTimer = null;
+    }
+    this.loginResolver = null;
+    this.loginRejecter = null;
+  }
+
+  private attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) return;
+    this.reconnectAttempts++;
+    const delay = this.reconnectDelay * this.reconnectAttempts;
+    setTimeout(() => {
+      if (this.userId) {
+        this.connect(this.userId).catch(() => {});
+      }
+    }, delay);
+  }
+
   public isWebSocketConnected() {
     return this.isConnected && this.ws?.readyState === WebSocket.OPEN;
   }
 
-  public getCallbackCount() {
-    return {
-      message: this.messageCallbacks.length,
-      readReceipt: this.readReceiptCallbacks.length,
-      presence: this.presenceCallbacks.length,
-    };
+  /* ===============================
+       Online Status Management
+  =============================== */
+  // ✅ 2. NEW: Fixed missing method
+  public isUserOnline(userId: string): boolean {
+    return this.onlineUsers.has(userId);
   }
 
-  /* ===============================
-     Online Status Management
-  =============================== */
   private markUserOnline(userId: string) {
-    if (!userId || userId === this.userId) return; // Don't track self
-
+    if (!userId || userId === this.userId) return;
     const wasOffline = !this.onlineUsers.has(userId);
-    
-    // Add to online users
     this.onlineUsers.add(userId);
-    
-    // Clear existing timeout
     const existingTimer = this.userActivityTimers.get(userId);
-    if (existingTimer) {
-      clearTimeout(existingTimer);
-    }
-    
-    // Set new timeout - mark offline after inactivity
+    if (existingTimer) clearTimeout(existingTimer);
     const timer = setTimeout(() => {
       this.markUserOffline(userId);
     }, this.OFFLINE_TIMEOUT);
-    
     this.userActivityTimers.set(userId, timer);
-    
-    // Notify if user just came online
     if (wasOffline) {
-      console.log(`🟢 User ${userId} is now online`);
       this.notifyPresenceChange(userId, true);
     }
   }
 
   private markUserOffline(userId: string) {
     if (!this.onlineUsers.has(userId)) return;
-    
     this.onlineUsers.delete(userId);
     this.userActivityTimers.delete(userId);
-    
-    console.log(`🔴 User ${userId} is now offline`);
     this.notifyPresenceChange(userId, false);
   }
 
   private notifyPresenceChange(userId: string, isOnline: boolean) {
     this.presenceCallbacks.forEach((cb) => cb({ userId, isOnline }));
-  }
-
-  public isUserOnline(userId: string): boolean {
-    return this.onlineUsers.has(userId);
-  }
-
-  public getOnlineUsers(): string[] {
-    return Array.from(this.onlineUsers);
   }
 
   public addPresenceCallback(cb: PresenceCallback) {
@@ -474,41 +362,9 @@ class WebSocketManager {
   }
 
   private cleanupPresenceTracking() {
-    // Clear all timers
     this.userActivityTimers.forEach((timer) => clearTimeout(timer));
     this.userActivityTimers.clear();
     this.onlineUsers.clear();
-  }
-
-  /* ===============================
-     Heartbeat Mechanism
-  =============================== */
-  private startHeartbeat() {
-    // Stop existing heartbeat if any
-    this.stopHeartbeat();
-    
-    console.log('💓 [WebSocket] Starting heartbeat (every 30s)');
-    
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws && this.isConnected && this.ws.readyState === WebSocket.OPEN) {
-        const heartbeatMsg = {
-          msg: "heartbeat",
-          user_id: this.userId,
-        };
-        console.log('💓 [WebSocket] Sending heartbeat');
-        this.ws.send(JSON.stringify(heartbeatMsg));
-      } else {
-        console.warn('⚠️ [WebSocket] Heartbeat skipped - connection not ready');
-      }
-    }, this.HEARTBEAT_INTERVAL);
-  }
-
-  private stopHeartbeat() {
-    if (this.heartbeatInterval) {
-      console.log('💔 [WebSocket] Stopping heartbeat');
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
-    }
   }
 }
 

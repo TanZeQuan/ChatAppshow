@@ -626,4 +626,3 @@ export const updateGroupImage = async (
     };
   }
 };
-

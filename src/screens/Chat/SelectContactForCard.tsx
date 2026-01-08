@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   FlatList,
@@ -11,9 +12,8 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { ensureFullImageUrl } from '../../api/service';
-import { useContactStore, Contact } from '../../store/contactStore';
+import { Contact, useContactStore } from '../../store/contactStore';
 import { borders, colors, typography } from '../../styles';
 
 type SelectContactForCardRouteProp = {

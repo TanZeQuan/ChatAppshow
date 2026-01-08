@@ -76,6 +76,10 @@ export type ChatStackParamList = {
   SelectContactForCard: {
     onSelectContact: (contact: any) => void;
   };
+  GroupCallScreen: {
+    chatId: string;
+    isHost: boolean;
+  };
 };
 
 /**

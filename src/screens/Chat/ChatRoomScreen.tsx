@@ -34,18 +34,17 @@ const { width, height } = Dimensions.get("window");
 
 // Responsive scaling functions
 const scaleWidth = (size: number) => (width / 375) * size;
-const scaleHeight = (size: number) => (height / 812) * size;
-const scaleFont = (size: number) => (width / 375) * size;
 
 interface DisplayMessage {
   id: string;
   senderId: string;
   senderName: string;
   text: string;
-  type?: number; // 1=text, 2=voice, 3=images, 4=contact card
-  imageUrls?: string[]; // For type 3 messages
-  voiceUrl?: string; // For type 2 messages
-  cardData?: { // For type 4 messages (contact card)
+  type?: number; // 1=text, 2=voice, 3=images, 4=call/card
+  imageUrls?: string[];
+  voiceUrl?: string;
+  // ✅ New: For MessageBubble to identify contact cards
+  cardData?: {
     userId: string;
     userName: string;
     userAvatar?: string;
@@ -59,7 +58,7 @@ interface DisplayMessage {
 interface RouteParams {
   chatId: string;
   chatName: string;
-  searchMode?: boolean;  // ✅ Search mode parameter
+  searchMode?: boolean;
 }
 
 export default function ChatRoomScreen() {
@@ -70,21 +69,20 @@ export default function ChatRoomScreen() {
   const { chatId, chatName } = params;
   console.log('🆔 ChatRoomScreen chatId:', chatId);
 
-
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
   const currentUserId = currentUser?.id || 'me';
+  const currentUserName = currentUser?.name || 'Me';
   const currentUserAvatar = currentUser?.avatar || '';
-  const currentUserName = currentUser?.name || '我';
 
-  const { getChatById, addMessage, clearChat } = useChatStore();
+  const { getChatById, clearChat } = useChatStore();
 
   // Get chat metadata from store
   const chat = getChatById(chatId);
 
   // Use selector to subscribe to messages for this chat (reactive)
   const messagesFromStore = useChatStore((state) => state.chats[chatId]);
-  // Use useMemo to avoid creating new array reference on every render
+
   const storedMessages = useMemo(() => messagesFromStore || [], [messagesFromStore]);
 
   const [inputText, setInputText] = useState('');
@@ -93,8 +91,8 @@ export default function ChatRoomScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
-  const [isNearBottom, setIsNearBottom] = useState(true); // ✅ Track if user is near bottom
-  const [isUploadingImage, setIsUploadingImage] = useState(false); // ✅ Separate state for image upload
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // ✅ Search functionality
   const {
@@ -115,17 +113,34 @@ export default function ChatRoomScreen() {
   // ✅ FlatList ref for scrolling to matched messages
   const flatListRef = useRef<FlatList>(null);
 
-  // ✅ Transform messages - must be declared before using in callbacks
+  // ✅ Transform messages - logic enhanced to parse JSON for cards
   const messages: DisplayMessage[] = useMemo(() => {
-    return storedMessages.map(msg => ({
-      ...msg,
-      sender: msg.senderId === currentUserId ? 'me' : 'other',
-      senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
-      // ✅ Fix: Ensure voiceUrl is a string (handle legacy incorrect data)
-      voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
-        ? String((msg.voiceUrl as any).message)
-        : msg.voiceUrl,
-    }));
+    return storedMessages.map(msg => {
+      let cardData = undefined;
+
+      // Try to parse cardData (if Type 4 and contains userId)
+      if (msg.type === 4 && typeof msg.text === 'string') {
+        try {
+          const parsed = JSON.parse(msg.text);
+          // Simple check: if userId and userName exist, consider it a contact card
+          if (parsed.userId && parsed.userName) {
+            cardData = parsed;
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+      }
+
+      return {
+        ...msg,
+        sender: msg.senderId === currentUserId ? 'me' : 'other',
+        senderName: msg.senderId === currentUserId ? currentUserName : (msg.name || chatName),
+        voiceUrl: msg.voiceUrl && typeof msg.voiceUrl === 'object' && (msg.voiceUrl as any).message
+          ? String((msg.voiceUrl as any).message)
+          : msg.voiceUrl,
+        cardData: cardData, // Pass to Bubble
+      };
+    });
   }, [storedMessages, currentUserId, currentUserName, chatName]);
 
   // 🔧 Initialize chatMembers from store if available
@@ -135,7 +150,6 @@ export default function ChatRoomScreen() {
     }
   }, [chat?.memberIds]);
 
-  // Use ref instead of state for offset to avoid unnecessary re-renders
   const offsetRef = useRef(0);
 
   // ✅ Use voice recorder hook
@@ -154,16 +168,15 @@ export default function ChatRoomScreen() {
     chatId,
     currentUserId,
     chatMembers,
-    onMessageSent: () => loadMessages(false, false), // Reload messages after sending
+    onMessageSent: () => loadMessages(false, false),
   });
 
-  // Wrap loadMessages in useCallback to prevent closure issues
+  // Wrap loadMessages in useCallback
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
     if (!currentUserId) return;
 
-    // Get current user info inside the function to avoid dependency issues
     const user = useUserStore.getState().user;
-    const userName = user?.name || '我';
+    const userName = user?.name || 'Me';
     const userAvatar = user?.avatar || '';
 
     try {
@@ -171,8 +184,6 @@ export default function ChatRoomScreen() {
         setIsLoading(true);
       }
 
-      // ✅ Load more old messages: use current offset
-      // ✅ Refresh/Polling: always use offset 0 to get latest messages
       const currentOffset = loadMore ? offsetRef.current : 0;
 
       const result = await readChatMessages({
@@ -185,162 +196,79 @@ export default function ChatRoomScreen() {
         const apiMessages = result.data.chat || [];
         const groupMembers = result.data.group || [];
 
-        // ✅ Build member info map from group array (includes name, avatar)
         const memberInfoMap: Record<string, { name: string, avatar: string }> = {};
 
         if (groupMembers.length > 0) {
           const memberIds = groupMembers.map((member: any) => member.user_id);
           setChatMembers(prev => prev.length > 0 ? prev : memberIds);
 
-          // Build member info map from group array
           groupMembers.forEach((member: any) => {
             const memberAvatar = member.image || '';
             const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
 
             memberInfoMap[member.user_id] = {
-              name: member.name || '未知',
+              name: member.name || 'Unknown',
               avatar: fullAvatarUrl,
             };
           });
         }
 
         if (apiMessages.length > 0) {
-          // Transform API messages to store format
           const transformedMessages = apiMessages.map((msg: any) => {
             let messageText = '';
-            let messageType = 1; // Default to text
+            let messageType = 1;
             let imageUrls: string[] = [];
             let voiceUrl: string = '';
             let cardData: any = null;
 
             try {
-              // 🔍 Check if msg.message is already an object or a string
               let parsedMessage: any;
 
               if (typeof msg.message === 'string') {
                 try {
                   parsedMessage = JSON.parse(msg.message);
                 } catch {
-                  // If parsing fails, treat as plain text
                   parsedMessage = { message: msg.message };
                 }
               } else if (typeof msg.message === 'object' && msg.message !== null) {
-                parsedMessage = msg.message; // Already an object
+                parsedMessage = msg.message;
               } else {
                 parsedMessage = { message: String(msg.message || '') };
               }
 
-              // console.log('📦 [Message Parse] msg.type:', msg.type, 'parsedMessage:', parsedMessage);
-
-              // Extract type: try msg.type first, then parsedMessage.type
               if (msg.type) {
                 messageType = msg.type;
               } else if (parsedMessage.type) {
-                messageType = parsedMessage.type; // ✅ 从 parsedMessage 获取类型
+                messageType = parsedMessage.type;
               }
 
-              // ✅ Smart detection: Check if message is a contact card
-              // If parsedMessage.message is a JSON string with userId/userName/userAvatar, it's a contact card
-              if (parsedMessage.message && typeof parsedMessage.message === 'string') {
-                try {
-                  const possibleCardData = JSON.parse(parsedMessage.message);
-                  if (possibleCardData.userId && possibleCardData.userName) {
-                    messageType = 4; // Override to contact card type
-                  }
-                } catch (e) {
-                  // Not a contact card, continue with current messageType
-                }
-              }
-
-              // For type 3 (images/files), extract image URLs
               if (messageType === 3) {
-                // console.log('🖼️ [Image Message] Detected type 3, parsedMessage:', parsedMessage);
-
-                // Check if parsedMessage is an array (direct image URLs)
                 if (Array.isArray(parsedMessage)) {
-                  // console.log('🖼️ [Image Message] parsedMessage is array:', parsedMessage);
-                  imageUrls = parsedMessage.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage.map((url: string) => ensureFullImageUrl(url));
                 }
-                // Check if parsedMessage.message is an array
                 else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is array:', parsedMessage.message);
-                  imageUrls = parsedMessage.message.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = parsedMessage.message.map((url: string) => ensureFullImageUrl(url));
                 }
-                // Check if parsedMessage.message is a comma-separated string
                 else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
-                  // console.log('🖼️ [Image Message] parsedMessage.message is string:', parsedMessage.message);
                   const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
-                  imageUrls = urls.map((url: string) => {
-                    const fullUrl = ensureFullImageUrl(url);
-                    // console.log(`🖼️ [Image Message] ${url} → ${fullUrl}`);
-                    return fullUrl;
-                  });
+                  imageUrls = urls.map((url: string) => ensureFullImageUrl(url));
                 }
-
-                // console.log('🖼️ [Image Message] Final imageUrls:', imageUrls);
-                messageText = `[${imageUrls.length}张图片]`; // Display text
+                messageText = `[${imageUrls.length} images]`;
               }
-              // For type 2 (voice), ensure full URL
               else if (messageType === 2) {
-                // console.log('🎤 [Voice Parse] parsedMessage:', parsedMessage);
-                // console.log('🎤 [Voice Parse] parsedMessage.message type:', typeof parsedMessage.message);
-                // console.log('🎤 [Voice Parse] parsedMessage.message value:', parsedMessage.message);
-
                 if (typeof parsedMessage === 'string') {
                   voiceUrl = ensureFullImageUrl(parsedMessage);
-                  messageText = '[语音消息]';
+                  messageText = '[Voice Message]';
                 } else if (parsedMessage.message) {
-                  // ✅ Check if it's an error object from backend
-                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.error === true) {
-                    // console.log('⚠️ [Voice Parse] Backend error - Invalid file format, skipping');
-                    voiceUrl = ''; // Empty URL to skip this message
-                    messageText = '[语音上传失败]';
-                  }
-                  // Check if parsedMessage.message is an object with uri property
-                  else if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
+                  if (typeof parsedMessage.message === 'object' && parsedMessage.message.uri) {
                     voiceUrl = ensureFullImageUrl(parsedMessage.message.uri);
-                    messageText = '[语音消息]';
-                  }
-                  // Normal string path
-                  else if (typeof parsedMessage.message === 'string') {
-                    voiceUrl = ensureFullImageUrl(parsedMessage.message);
-                    messageText = '[语音消息]';
-                  }
-                }
-
-                // console.log('🎤 [Voice Parse] Final voiceUrl:', voiceUrl);
-              }
-              // For type 4 (contact card), extract card data
-              else if (messageType === 4) {
-                try {
-                  if (typeof parsedMessage === 'string') {
-                    cardData = JSON.parse(parsedMessage);
-                  } else if (parsedMessage.message) {
-                    cardData = typeof parsedMessage.message === 'string' 
-                      ? JSON.parse(parsedMessage.message) 
-                      : parsedMessage.message;
+                    messageText = '[Voice Message]';
                   } else {
-                    cardData = parsedMessage;
+                    voiceUrl = ensureFullImageUrl(String(parsedMessage.message));
+                    messageText = '[Voice Message]';
                   }
-                  // Ensure avatar URL is full
-                  if (cardData && cardData.userAvatar) {
-                    cardData.userAvatar = ensureFullImageUrl(cardData.userAvatar);
-                  }
-                  messageText = `[个人名片: ${cardData.userName}]`;
-                } catch (e) {
-                  console.error('Failed to parse contact card:', e);
-                  messageText = '[个人名片]';
                 }
               }
-              // For type 1 (text), extract text content
               else {
                 if (typeof parsedMessage === 'string') {
                   messageText = parsedMessage;
@@ -351,14 +279,11 @@ export default function ChatRoomScreen() {
                 }
               }
             } catch (e) {
-              // console.error('Failed to parse message:', msg.message, 'Error:', e);
-              // Fallback: convert to string safely
               messageText = typeof msg.message === 'string'
                 ? msg.message
                 : JSON.stringify(msg.message);
             }
 
-            // ✅ Get sender info from memberInfoMap
             const senderInfo = memberInfoMap[msg.sender] || {
               name: msg.sender === currentUserId ? userName : undefined,
               avatar: msg.sender === currentUserId ? userAvatar : undefined,
@@ -366,11 +291,10 @@ export default function ChatRoomScreen() {
 
             return {
               id: msg.message_id,
-              text: messageText, // ✅ Always a string
-              type: messageType, // ✅ Save message type
-              imageUrls: imageUrls, // ✅ Save image URLs with full domain
-              voiceUrl: voiceUrl, // ✅ Save voice URL with full domain
-              cardData: cardData, // ✅ Save contact card data
+              text: messageText,
+              type: messageType,
+              imageUrls: imageUrls,
+              voiceUrl: voiceUrl,
               createdAt: msg.created_at,
               senderId: msg.sender,
               name: senderInfo.name,
@@ -378,45 +302,26 @@ export default function ChatRoomScreen() {
             };
           });
 
-          // Store messages in chatStore with deduplication
           const { setMessages } = useChatStore.getState();
           const existingMessages = useChatStore.getState().chats[chatId] || [];
 
           if (loadMore) {
-            // ✅ Loading more OLD messages - append to END of array (visual TOP)
             const allMessages = [...existingMessages, ...transformedMessages];
             const uniqueMessages = Array.from(
               new Map(allMessages.map((m: any) => [m.id, m])).values()
             ) as any[];
             setMessages(chatId, uniqueMessages);
-            offsetRef.current += apiMessages.length; // Increase offset
+            offsetRef.current += apiMessages.length;
           } else {
-            // ✅ Polling/Refresh - only keep NEW messages (newer than current newest)
-            if (existingMessages.length === 0) {
-              // First load - use all messages
-              const uniqueMessages = Array.from(
-                new Map(transformedMessages.map((m: any) => [m.id, m])).values()
-              ) as any[];
-              setMessages(chatId, uniqueMessages);
-              offsetRef.current = uniqueMessages.length;
-            } else {
-              // Filter out messages that are truly new (not already in store)
-              const existingIds = new Set(existingMessages.map(m => m.id));
-              const newMessages = transformedMessages.filter(
-                (msg: any) => !existingIds.has(msg.id)
-              );
-
-              if (newMessages.length > 0) {
-                // Insert new messages at START of array (visual BOTTOM)
-                const allMessages = [...newMessages, ...existingMessages];
-                const uniqueMessages = Array.from(
-                  new Map(allMessages.map((m: any) => [m.id, m])).values()
-                ) as any[];
-                setMessages(chatId, uniqueMessages);
-                // Don't change offsetRef for polling - keep history
-              }
-              // If no new messages, don't update anything - keep existing messages
+            const existingIds = new Set(existingMessages.map(m => m.id));
+            const newMessages = transformedMessages.filter(
+              (msg: any) => !existingIds.has(msg.id)
+            );
+            if (newMessages.length > 0 || existingMessages.length === 0) {
+              const allMessages = [...newMessages, ...existingMessages];
+              setMessages(chatId, allMessages);
             }
+            offsetRef.current = Math.max(offsetRef.current, apiMessages.length);
           }
         }
       }
@@ -434,10 +339,9 @@ export default function ChatRoomScreen() {
 
   // Load messages on mount
   useEffect(() => {
-    offsetRef.current = 0; // Reset offset when entering new chat
+    offsetRef.current = 0;
     loadMessages();
 
-    // Periodic WebSocket connection check (every 10 seconds)
     const connectionCheckInterval = setInterval(() => {
       const connected = WebSocketManager.isWebSocketConnected();
       if (!connected) {
@@ -445,182 +349,115 @@ export default function ChatRoomScreen() {
       }
     }, 10000);
 
+    const pollingInterval = setInterval(() => {
+      loadMessages(false, false);
+    }, 3000);
+
     return () => {
       clearInterval(connectionCheckInterval);
     };
   }, [loadMessages]);
 
-  // ✅ Send read signal when entering chat room (without reloading messages)
+  // ✅ Listen for WebSocket read receipts, update unreadCount in real-time
+  useEffect(() => {
+    const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
+      if (data.chatId !== chatId) return;
+      const chatList = useChatStore.getState().chatList;
+      const updatedChatList = chatList.map(c => {
+        if (c.id === chatId) {
+          return { ...c, unreadCount: 0 };
+        }
+        return c;
+      });
+      useChatStore.getState().setChats(updatedChatList);
+    };
+
+    WebSocketManager.addReadReceiptCallback(handleReadReceipt);
+    return () => {
+      WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
+    };
+  }, [chatId]);
+
+  // ✅ Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      console.log('📨 [ChatRoom] Screen focused, sending read signal...');
-      
-      // ✅ Send read signal when entering chat room
-      if (chatMembers.length > 0) {
-        const receivers = chatMembers.filter(id => id !== currentUserId);
-        if (receivers.length > 0) {
-          console.log('📨 [ChatRoom] Sending read signal to:', receivers);
+      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      loadMessages(false, false);
+
+      if (chatMembers && chatMembers.length > 0) {
+        const otherMembers = chatMembers.filter(id => id !== currentUserId);
+        if (otherMembers.length > 0) {
           WebSocketManager.sendReadSignal({
-            receiver: receivers,
-            chat_id: chatId,
+            receiver: otherMembers,
+            chat_id: chatId
           });
         }
       }
-    }, [chatMembers, currentUserId, chatId])
+    }, [loadMessages, chatId, chatMembers, currentUserId])
   );
 
-  // ✅ Auto-enable search mode if navigated from settings
+  // ✅ Auto-enable search mode if navigated from settings (ONCE)
+  const searchModeInitialized = useRef(false);
   useEffect(() => {
-    if (params.searchMode === true) {
+    if (params.searchMode === true && !searchModeInitialized.current) {
       enableSearch();
+      searchModeInitialized.current = true;
     }
   }, [params.searchMode, enableSearch]);
 
-  // ✅ Scroll to matched message by ID
   const scrollToMatch = useCallback((messageId: string) => {
     if (!messageId || !flatListRef.current) return;
-
-    // Find the index of the message with this ID
     const messageIndex = messages.findIndex(msg => msg.id === messageId);
     if (messageIndex >= 0) {
-      try {
-        flatListRef.current.scrollToIndex({
-          index: messageIndex,
-          animated: true,
-          viewPosition: 0.5, // Center the item
-        });
-      } catch (error) {
-        console.log('Failed to scroll to match:', error);
-      }
+      flatListRef.current.scrollToIndex({ index: messageIndex, animated: true, viewPosition: 0.5 });
     }
   }, [messages]);
 
-  // ✅ Handle next match navigation
   const handleNextMatch = useCallback(() => {
     const nextMessageId = goToNextMatch(messages);
-    if (nextMessageId) {
-      scrollToMatch(nextMessageId);
-    }
+    if (nextMessageId) scrollToMatch(nextMessageId);
   }, [goToNextMatch, scrollToMatch, messages]);
 
-  // ✅ Handle previous match navigation
   const handlePrevMatch = useCallback(() => {
     const prevMessageId = goToPrevMatch(messages);
-    if (prevMessageId) {
-      scrollToMatch(prevMessageId);
-    }
+    if (prevMessageId) scrollToMatch(prevMessageId);
   }, [goToPrevMatch, scrollToMatch, messages]);
 
-  // ✅ Auto-scroll to first match when search query changes (not when polling refreshes)
-  const prevSearchQueryRef = useRef('');
-  useEffect(() => {
-    if (searchMode && searchQuery.trim() && searchQuery !== prevSearchQueryRef.current) {
-      // Search query changed - scroll to first match
-      if (matchedMessageIds.length > 0) {
-        scrollToMatch(matchedMessageIds[0]);
-      }
-      prevSearchQueryRef.current = searchQuery;
-    } else if (!searchMode || !searchQuery.trim()) {
-      // Reset when exiting search mode
-      prevSearchQueryRef.current = '';
-    }
-  }, [searchMode, searchQuery, matchedMessageIds, scrollToMatch]);
-
-  // ✅ Handle scroll to detect if user is near bottom
-  const handleScroll = useCallback((event: any) => {
-    const { contentOffset } = event.nativeEvent;
-    // FlatList is inverted, so contentOffset.y near 0 means at bottom (newest messages)
-    const distanceFromTop = contentOffset.y;
-    const nearBottom = distanceFromTop < 100; // Within 100 pixels of bottom
-    setIsNearBottom(nearBottom);
-  }, []);
-
-  // ✅ Auto-scroll to bottom when new messages arrive (only if user is near bottom)
-  const prevMessageCountRef = useRef(messages.length);
-  useEffect(() => {
-    // Only scroll if messages increased (new message arrived)
-    if (messages.length > prevMessageCountRef.current && isNearBottom && messages.length > 0) {
-      // Small delay to ensure FlatList has rendered the new message
-      setTimeout(() => {
-        flatListRef.current?.scrollToIndex({
-          index: 0,
-          animated: true,
-          viewPosition: 0
-        });
-      }, 100);
-    }
-    prevMessageCountRef.current = messages.length;
-  }, [messages.length, isNearBottom]);
-
-  // Use refs to store stable references for WebSocket callback
+  // Use refs for WebSocket callback
   const chatIdRef = useRef(chatId);
   const loadMessagesRef = useRef(loadMessages);
 
-  // Update refs when values change
   useEffect(() => {
     chatIdRef.current = chatId;
     loadMessagesRef.current = loadMessages;
   }, [chatId, loadMessages]);
 
-  // Listen for WebSocket message notifications (registered only once)
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
       if (data.type && data.message) {
-        // If chat_id is not provided by backend, refresh anyway (safer approach)
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
-          loadMessagesRef.current(false, false); // Silent refresh, no loading animation
+          loadMessagesRef.current(false, false);
         }
       }
     };
-
-    // ✅ Handle read receipt
-    const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
-      console.log('✔️ [ChatRoom] Read receipt received:', data);
-      
-      // Only update if it's for this chat
-      if (data.chatId === chatIdRef.current) {
-        // Mark all messages in this chat as read by this user
-        const currentMessages = useChatStore.getState().chats[chatIdRef.current] || [];
-        const updatedMessages = currentMessages.map(msg => {
-          // Only update messages sent by current user (not received messages)
-          if (msg.senderId === currentUserId) {
-            const readBy = msg.readBy || [];
-            // Add readerId if not already in the list
-            if (!readBy.includes(data.readerId)) {
-              return { ...msg, readBy: [...readBy, data.readerId] };
-            }
-          }
-          return msg;
-        });
-        
-        useChatStore.getState().setMessages(chatIdRef.current, updatedMessages);
-      }
-    };
-
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
-    WebSocketManager.addReadReceiptCallback(handleReadReceipt);
-
     return () => {
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
-      WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
     };
-  }, [currentUserId]);
+  }, []);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await loadMessages(false, false); // No loading spinner, just refresh control
+    await loadMessages(false, false);
     setRefreshing(false);
   };
 
-  // ✅ Handle loading more old messages when scrolling to top
   const handleLoadMore = () => {
     if (!isLoading) {
-      loadMessages(true, true); // loadMore=true, showLoading=true
+      loadMessages(true, true);
     }
   };
 
-
-  // ✅ Calculate search matches separately in useEffect
   useEffect(() => {
     if (searchMode && searchQuery.trim()) {
       filterMessages(messages);
@@ -629,27 +466,22 @@ export default function ChatRoomScreen() {
 
   useLayoutEffect(() => {
     const parent = navigation.getParent();
-
-    // Hide TabBar
     parent?.setOptions({ tabBarStyle: { display: "none" } });
-
     return () => {
-      // Restore TabBar
       parent?.setOptions({
         tabBarStyle: getOriginalTabBarStyle(insets),
       });
     };
   }, [insets, navigation]);
 
+  // Handle Send Text
   const handleSend = async () => {
     if (!inputText.trim()) return;
-
     const messageText = inputText.trim();
     setInputText('');
 
     try {
       const receiver = chatMembers.filter(id => id !== currentUserId);
-
       const result = await sendChatMessage({
         sender: currentUserId,
         isreceive: receiver,
@@ -672,29 +504,27 @@ export default function ChatRoomScreen() {
             chat_id: chatId
           });
         }
-
-        await loadMessages(false, false); // Silent refresh after sending
+        await loadMessages(false, false);
       } else {
-        console.error("Failed to send message:", result.message);
-        Alert.alert('发送失败', result.message || '消息发送失败，请重试');
+        Alert.alert('Send Failed', result.message || 'Message failed to send, please retry');
         setInputText(messageText);
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      Alert.alert('发送失败', '网络错误，请重试');
+      Alert.alert('Send Failed', 'Network error, please retry');
       setInputText(messageText);
     }
   };
 
   const handleClearChat = () => {
-    Alert.alert('清除聊天记录', '确定要清除与 ' + chatName + ' 的所有聊天记录吗？', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert('Clear Chat History', 'Are you sure you want to clear all chat history with ' + chatName + '?', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        text: '清除',
+        text: 'Clear',
         style: 'destructive',
         onPress: () => {
           clearChat(chatId);
-          Alert.alert('成功', '聊天记录已清除');
+          Alert.alert('Success', 'Chat history cleared');
         }
       }
     ]);
@@ -711,13 +541,28 @@ export default function ChatRoomScreen() {
         memberIds: chat.memberIds || [],
       });
     } else {
-      // For private chats, find the other user's ID
-      const otherUserId = chatMembers.find(id => id !== currentUserId);
+      // 1. 尝试从当前页面状态获取
+      let targetId = chatMembers.find(id => id !== currentUserId);
+
+      // 2. 如果没找到，尝试从 Store 的聊天元数据里找
+      if (!targetId && chat?.memberIds) {
+        targetId = chat.memberIds.find((id: string) => id !== currentUserId);
+      }
+
+      // 3. 如果还是没有 (极少数情况)，做个防护
+      if (!targetId) {
+        console.warn('⚠️ 无法找到对方 ID，无法打开设置页');
+        Alert.alert('提示', '数据加载中，请稍后再试');
+        return;
+      }
+
+      console.log('⚙️ Opening ChatSettings for:', targetId);
+
       navigation.navigate('ChatSettingScreen', {
         chatId: chatId,
         chatName: chatName,
         avatar: chat?.avatar || '',
-        otherUserId: otherUserId, // Pass the other user's ID
+        otherUserId: targetId, // ✅ 确保这里有值
       });
     }
   };
@@ -726,7 +571,7 @@ export default function ChatRoomScreen() {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
+        Alert.alert('Permission Denied', 'Gallery permission is required to select images');
         return;
       }
 
@@ -740,79 +585,134 @@ export default function ChatRoomScreen() {
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
         try {
-            // console.log('📤 [Pick Image] Selected assets:', result.assets.length);
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+          const files = result.assets.map(asset => {
+            const fileName = asset.fileName || 'image.jpg';
+            const extension = fileName.split('.').pop()?.toLowerCase();
+            let mimeType = 'image/jpeg';
+            if (extension === 'png') mimeType = 'image/png';
+            else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
+            else if (extension === 'gif') mimeType = 'image/gif';
+            else if (extension === 'webp') mimeType = 'image/webp';
+            return { uri: asset.uri, name: fileName, type: mimeType };
+          });
 
-            const receiver = chatMembers.filter(id => id !== currentUserId);
-            const files = result.assets.map(asset => {
-                // ✅ Get proper MIME type based on file extension
-                const fileName = asset.fileName || 'image.jpg';
-                const extension = fileName.split('.').pop()?.toLowerCase();
+          const apiResult = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            files: files
+          });
 
-                let mimeType = 'image/jpeg'; // default
-                if (extension === 'png') mimeType = 'image/png';
-                else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-                else if (extension === 'gif') mimeType = 'image/gif';
-                else if (extension === 'webp') mimeType = 'image/webp';
+          if (apiResult.success && apiResult.data) {
+            const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+              ? apiResult.data.isreceive : receiver;
 
-                // console.log(`📤 [File Type] ${fileName} → ${mimeType}`);
-
-                return {
-                    uri: asset.uri,
-                    name: fileName,
-                    type: mimeType
-                };
-            });
-
-            // console.log('📤 [Pick Image] Files to send:', files);
-            // console.log('📤 [Pick Image] Receiver:', receiver);
-            // console.log('📤 [Pick Image] Calling sendChatMessage...');
-
-            const apiResult = await sendChatMessage({
+            if (actualReceivers.length > 0) {
+              WebSocketManager.sendForwardMessage({
+                type: apiResult.data.type,
+                message: apiResult.data.message,
+                message_id: apiResult.data.message_id,
                 sender: currentUserId,
-                isreceive: receiver,
-                chat_id: chatId,
-                files: files
-            });
-// 
-            // console.log('📤 [Pick Image] API Result:', apiResult);
-
-            if (apiResult.success && apiResult.data) {
-                // console.log('✅ [Pick Image] Success! Data:', apiResult.data);
-
-                const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
-                    ? apiResult.data.isreceive
-                    : receiver;
-
-                if (actualReceivers.length > 0) {
-                    // console.log('📨 [Pick Image] Sending WebSocket forward...');
-                    WebSocketManager.sendForwardMessage({
-                        type: apiResult.data.type,
-                        message: apiResult.data.message, // This should be the URLs of the images
-                        message_id: apiResult.data.message_id,
-                        sender: currentUserId,
-                        receiver: actualReceivers,
-                        chat_id: chatId
-                    });
-                }
-
-                console.log('🔄 [Pick Image] Refreshing messages...');
-                await loadMessages(false, false); // Silent refresh after sending
-            } else {
-                console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
-                Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
             }
-        } catch(error: any) {
-            console.error('Failed to send image', error);
-            Alert.alert('发送失败', error.message || '网络错误，请重试');
+            await loadMessages(false, false);
+          } else {
+            Alert.alert('Send Failed', apiResult.message || 'Image failed to send, please retry');
+          }
+        } catch (error: any) {
+          Alert.alert('Send Failed', error.message || 'Network error, please retry');
         } finally {
-            setIsUploadingImage(false);
+          setIsUploadingImage(false);
         }
       }
     } catch (error) {
-      console.error('选择图片错误:', error);
-      Alert.alert('选择失败', '选择图片时出错');
+      Alert.alert('Selection Failed', 'Error selecting image');
     }
   };
+
+  // ✅ Handle start call
+  const handleStartCall = useCallback(async () => {
+    if (chat?.isGroup) {
+      const callInviteData = JSON.stringify({
+        type: 'GROUP_VIDEO_CALL',
+        roomId: chatId,
+        hostName: currentUserName,
+        startTime: new Date().toISOString()
+      });
+
+      const result = await sendChatMessage({
+        sender: currentUserId,
+        isreceive: chatMembers.filter(id => id !== currentUserId),
+        chat_id: chatId,
+        message: callInviteData,
+        type: 4,
+      });
+
+      if (result.success) {
+        navigation.navigate('GroupCallScreen', { chatId, isHost: true });
+      }
+    } else {
+      const otherUserId = chatMembers.find(id => id !== currentUserId);
+      if (otherUserId) {
+        WebSocketManager.startCall(otherUserId);
+      }
+    }
+  }, [chat?.isGroup, chatId, currentUserName, currentUserId, chatMembers, navigation]);
+
+  // ✅ Core Addition: Send Contact Card Logic
+  const handleSendContactCard = useCallback(() => {
+    // Assuming you have a contact selection screen, ensure 'SelectContactForCard' route exists
+    (navigation as any).navigate('SelectContactForCard', {
+      onSelectContact: async (contact: any) => {
+        try {
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+
+          // Construct contact card JSON data
+          const cardData = {
+            userId: contact.id,
+            userName: contact.name,
+            userAvatar: contact.avatar,
+          };
+
+          // Send message Type 4 (shared with call card, distinguished by content)
+          const result = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            message: JSON.stringify(cardData),
+            type: 4,
+          });
+
+          if (result.success && result.data) {
+            const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
+              ? result.data.isreceive
+              : receiver;
+
+            if (actualReceivers.length > 0) {
+              WebSocketManager.sendForwardMessage({
+                type: 4,
+                message: JSON.stringify(cardData),
+                message_id: result.data.message_id,
+                sender: currentUserId,
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
+            }
+
+            await loadMessages(false, false);
+          } else {
+            Alert.alert('Send Failed', result.message || 'Contact card failed to send, please retry');
+          }
+        } catch (error) {
+          console.error('Error sending contact card:', error);
+          Alert.alert('Send Failed', 'Network error, please retry');
+        }
+      },
+    });
+  }, [chatMembers, currentUserId, chatId, navigation, loadMessages]);
 
   const toggleToolbar = () => {
     setShowToolbar(!showToolbar);
@@ -843,98 +743,57 @@ export default function ChatRoomScreen() {
       currentMatchId={currentMatchId}
       currentUserAvatar={currentUserAvatar}
       roomStyles={roomStyles}
-      showSenderName={false} // Private chat, no sender names
-      totalMembers={chatMembers.length} // Pass total members for read status calculation
+      showSenderName={true}
+      chatUnreadCount={chat?.unreadCount || 0}
     />
   );
 
-  // Handle start call
-  const handleStartCall = useCallback(() => {
-    if (chat?.isGroup) {
-      Alert.alert("提示", "群聊暂不支持通话功能");
-      return;
-    }
+  const handleGoBack = useCallback(() => {
+    const state = navigation.getState();
+    const currentRouteName = state.routes[state.index].name;
+    const currentIndex = state.index;
 
-    const otherUserId = chatMembers.find(id => id !== currentUserId);
-    if (otherUserId) {
-      WebSocketManager.startCall(otherUserId);
+    if (currentIndex > 0) {
+      const previousRoute = state.routes[currentIndex - 1];
+      if (previousRoute.name === currentRouteName) {
+        navigation.pop(2);
+      } else {
+        navigation.pop();
+      }
     } else {
-      Alert.alert("错误", "无法找到通话对象");
+      navigation.navigate('ChatList');
     }
-  }, [chat?.isGroup, chatMembers, currentUserId]);
+  }, [navigation]);
 
-  // Handle send contact card
-  const handleSendContactCard = useCallback(() => {
-    (navigation as any).navigate('SelectContactForCard', {
-      onSelectContact: async (contact: any) => {
-        try {
-          const receiver = chatMembers.filter(id => id !== currentUserId);
-          
-          // Create contact card message data
-          const cardData = {
-            userId: contact.id,
-            userName: contact.name,
-            userAvatar: contact.avatar,
-          };
+  const handleDisableSearch = useCallback(() => {
+    disableSearch();
+    setSearchQuery('');
+  }, [disableSearch, setSearchQuery]);
 
-          const result = await sendChatMessage({
-            sender: currentUserId,
-            isreceive: receiver,
-            chat_id: chatId,
-            message: JSON.stringify(cardData),
-            type: 4, // Type 4 for contact card
-          });
-
-          if (result.success && result.data) {
-            const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
-              ? result.data.isreceive
-              : receiver;
-
-            if (actualReceivers.length > 0) {
-              WebSocketManager.sendForwardMessage({
-                type: 4,
-                message: JSON.stringify(cardData),
-                message_id: result.data.message_id,
-                sender: currentUserId,
-                receiver: actualReceivers,
-                chat_id: chatId
-              });
-            }
-
-            await loadMessages(false, false);
-          } else {
-            Alert.alert('发送失败', result.message || '名片发送失败，请重试');
-          }
-        } catch (error) {
-          console.error('Error sending contact card:', error);
-          Alert.alert('发送失败', '网络错误，请重试');
-        }
-      },
-    });
-  }, [chatMembers, currentUserId, chatId, navigation, loadMessages]);
-
-  // Toolbar buttons configuration
+  // ✅ Updated Toolbar configuration
   const toolbarButtons = {
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
       { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'videocam-outline', label: '视频通话' },
+      { icon: 'videocam-outline', label: '视频通话', onPress: handleStartCall },
     ],
     row2: [
       { icon: 'document-outline', label: '文件' },
+      // ✅ Added Contact Card Button
       { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
       { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
       { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
     ],
   };
 
+  // Loading screen
   if (isLoading && messages.length === 0) {
     return (
       <LinearGradient colors={['#FFF9E6', '#FFFBF0']} style={roomStyles.safeArea}>
         <SafeAreaView style={{ flex: 1 }}>
           <View style={roomStyles.header}>
-            <TouchableOpacity style={roomStyles.backButton} onPress={() => navigation.goBack()}>
+            <TouchableOpacity style={roomStyles.backButton} onPress={handleGoBack}>
               <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
             <Text style={roomStyles.headerTitle}>{chatName}</Text>
@@ -954,18 +813,17 @@ export default function ChatRoomScreen() {
   return (
     <LinearGradient colors={['#FFEFB0', '#FFF9E5']} style={roomStyles.safeArea}>
       <SafeAreaView style={{ flex: 1 }}>
-        {/* Dynamic Header: Search mode vs Normal mode */}
         <SearchHeader
           searchMode={searchMode}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
-          disableSearch={disableSearch}
+          disableSearch={handleDisableSearch}
           totalMatches={totalMatches}
           currentMatchNumber={currentMatchNumber}
           handlePrevMatch={handlePrevMatch}
           handleNextMatch={handleNextMatch}
           chatName={chatName}
-          onBack={() => navigation.goBack()}
+          onBack={handleGoBack}
           onOpenSettings={handleOpenSettings}
           roomStyles={roomStyles}
         />
@@ -981,24 +839,12 @@ export default function ChatRoomScreen() {
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
             inverted
-            maintainVisibleContentPosition={{
-              minIndexForVisible: 0,
-            }}
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.5}
-            onScroll={handleScroll} // ✅ Track scroll position
-            scrollEventThrottle={16} // ✅ Smooth scroll tracking
-            onScrollToIndexFailed={(info) => {
-              // Handle scroll failure by waiting and retrying
-              setTimeout(() => {
-                if (flatListRef.current) {
-                  flatListRef.current.scrollToIndex({
-                    index: info.index,
-                    animated: true,
-                    viewPosition: 0.5,
-                  });
-                }
-              }, 100);
+            onScroll={(e) => {
+              const { contentOffset } = e.nativeEvent;
+              setIsNearBottom(contentOffset.y < 100);
             }}
             refreshControl={
               <RefreshControl
@@ -1040,5 +886,4 @@ export default function ChatRoomScreen() {
   );
 }
 
-// Use shared room styles with ChatRoom-specific styles
 const roomStyles = createRoomStyles(chatRoomSpecificStyles);

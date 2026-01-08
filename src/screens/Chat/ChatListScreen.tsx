@@ -83,33 +83,6 @@ export default function ChatListScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Listen for presence changes (online/offline status)
-  useEffect(() => {
-    const handlePresenceChange = ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
-      console.log(`👤 [ChatList] User ${userId} is now ${isOnline ? 'online' : 'offline'}`);
-      
-      // Update chat list with new online status
-      const updatedChatList = chatList.map(chat => {
-        // Only update private chats that include this user
-        if (!chat.isGroup && chat.memberIds?.includes(userId)) {
-          return { ...chat, online: isOnline };
-        }
-        return chat;
-      });
-      
-      // Only update if something changed
-      if (JSON.stringify(updatedChatList) !== JSON.stringify(chatList)) {
-        setChats(updatedChatList);
-      }
-    };
-
-    WebSocketManager.addPresenceCallback(handlePresenceChange);
-
-    return () => {
-      WebSocketManager.removePresenceCallback(handlePresenceChange);
-    };
-  }, [chatList, setChats]);
-
   // ✅ chatList is already sorted by timestamp in chatStore.setChats()
   // Just filter based on search query
   const filteredChats = chatList.filter(chat =>
@@ -232,7 +205,7 @@ export default function ChatListScreen() {
 
           // ✅ Get real online status from WebSocketManager (for private chats only)
           const otherUserId = !isGroup && finalMemberIds.length > 0 
-            ? finalMemberIds.find((id: string) => id !== currentUserId) 
+            ? finalMemberIds.find((id: number | string) => id !== currentUserId) 
             : undefined;
           const isUserOnline = otherUserId ? WebSocketManager.isUserOnline(otherUserId) : false;
 
@@ -246,7 +219,7 @@ export default function ChatListScreen() {
             lastMessage: formatLastMessagePreview(lastMessageText, lastMessageType),
             timestamp: finalTimestamp, // ✅ Use preserved timestamp
             unreadCount: chat.unread || chat.unread_count || 0,
-            online: isGroup ? false : isUserOnline, // ✅ Use real online status from WebSocket
+            online: false,
             rawData: chat,
           };
         });
