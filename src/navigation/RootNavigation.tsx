@@ -6,6 +6,9 @@ import LoginScreen from "../screens/Auth/LoginScreen";
 import RegisterScreen from "../screens/Auth/RegisterScreen";
 import ForgetPassword from "../screens/Auth/ForgetPassword";
 
+// ✅ 1. 引入 CallScreen
+import CallScreen from "../screens/Chat/CallScreen";
+
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
@@ -14,7 +17,21 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {isLoggedIn ? (
-        <Stack.Screen name="MainTabs" component={MainTabs} />
+        // ✅ 2. 登录状态：加载 MainTabs 和全局 CallScreen
+        <Stack.Group>
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          
+          {/* 🔥🔥🔥 核心修复：在这里注册 SingleCallScreen 🔥🔥🔥 */}
+          <Stack.Screen 
+            name="SingleCallScreen" 
+            component={CallScreen} 
+            options={{
+              presentation: 'fullScreenModal', // 全屏模式，像真实来电一样覆盖
+              gestureEnabled: false,           // 禁止手势划走
+              headerShown: false
+            }}
+          />
+        </Stack.Group>
       ) : (
         <Stack.Screen name="Auth" component={AuthNavigator} />
       )}

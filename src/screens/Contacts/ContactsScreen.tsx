@@ -22,12 +22,11 @@ import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
-import WebSocketManager from '../../services/WebSocketManager'; // ✅ 1. 引入 WebSocket
+import WebSocketManager from '../../services/WebSocketManager';
 import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
 
-// Responsive scaling functions
 const scaleWidth = (size: number) => (width / 375) * size;
 const scaleHeight = (size: number) => (height / 812) * size;
 const scaleFont = (size: number) => (width / 375) * size;
@@ -45,23 +44,21 @@ export default function ContactsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   
-  // ✅ 2. 新增：本地维护一个在线状态表 { userId: true/false }
+  // ✅ 状态表：存储 { user_id: true/false }
   const [onlineStatusMap, setOnlineStatusMap] = useState<Record<string, boolean>>({});
 
   const sectionListRef = React.useRef<SectionList>(null);
 
-  // Get data from Zustand stores
   const { contacts, setContacts } = useContactStore();
   const { token, user } = useUserStore();
   const { addChat } = useChatStore();
-  
   const { requests, setRequests } = useFriendRequestStore();
 
   const receivedPendingCount = requests.filter(
     (req: any) => req.type === "received"
   ).length;
 
-  // 🔥 自动轮询好友请求
+  // 1. 自动轮询好友请求 (保持不变)
   useEffect(() => {
     const fetchRequests = async () => {
       if (!token) return;
@@ -87,7 +84,7 @@ export default function ContactsScreen() {
           setRequests(storeData);
         }
       } catch (error) {
-        console.log("Polling failed silently:", error);
+        // quiet fail
       }
     };
     fetchRequests();
@@ -95,27 +92,24 @@ export default function ContactsScreen() {
     return () => clearInterval(intervalId);
   }, [token, setRequests]);
 
-  // ✅ 3. 新增：WebSocket 实时监听在线状态
+  // ✅ 2. 核心修复：完全参考 ChatSettingScreen 的 WebSocket 逻辑
   useEffect(() => {
-    const handleWebSocketMessage = (data: any) => {
-      // 监听 'presence' 或 'user_status' (根据你的后端协议)
-      if (data.type === 'presence' || data.type === 'user_status') {
-        const userId = data.user_id || data.userId || data.sender;
-        // 判断是否在线 (兼容布尔值或数字状态)
-        const isOnline = data.status === 'online' || data.online === true || data.state === 1;
-
-        if (userId) {
-          setOnlineStatusMap(prev => {
-            if (prev[userId] === isOnline) return prev; // 状态没变就不更新
-            return { ...prev, [userId]: isOnline };
-          });
-        }
-      }
+    // 定义处理函数：结构是 { userId, isOnline }
+    const handlePresenceChange = ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
+      console.log(`📡 [Contacts] User ${userId} is now ${isOnline ? 'Online' : 'Offline'}`);
+      
+      setOnlineStatusMap(prev => {
+        // 如果状态没变，就不更新，减少渲染
+        if (prev[userId] === isOnline) return prev;
+        return { ...prev, [userId]: isOnline };
+      });
     };
 
-    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+    // 使用 addPresenceCallback (这是你成功的关键)
+    WebSocketManager.addPresenceCallback(handlePresenceChange);
+
     return () => {
-      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+      WebSocketManager.removePresenceCallback(handlePresenceChange);
     };
   }, []);
 
@@ -138,7 +132,6 @@ export default function ContactsScreen() {
           ...(result.data.approve || [])
         ];
 
-        // ✅ 4. 临时 Map，用于初始化在线状态
         const initialStatusMap: Record<string, boolean> = {};
 
         const formattedContacts = allFriends.map((friend: any) => {
@@ -146,15 +139,16 @@ export default function ContactsScreen() {
           const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
           const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
           
-          // 获取 API 返回的初始状态
-          const isOnline = friend.online || friend.is_online || false;
+          // ✅ 3. 参考 ChatSetting：使用 WebSocketManager.isUserOnline 获取初始实时状态
+          // 如果 Manager 里没记录，才用 API 的 fallback
+          const isOnline = WebSocketManager.isUserOnline(userId) || friend.online || false;
           initialStatusMap[userId] = isOnline;
 
           return {
             id: userId,
             name: userName,
             avatar: userAvatar,
-            online: isOnline, 
+            online: isOnline,
             listId: friend.list_id || friend.listId || 0,
             isFriend: true,
             rawData: friend,
@@ -166,7 +160,7 @@ export default function ContactsScreen() {
         );
 
         setContacts(uniqueContacts);
-        // ✅ 5. 更新状态 Map
+        // 更新 Map
         setOnlineStatusMap(prev => ({ ...initialStatusMap, ...prev }));
 
       } else {
@@ -240,6 +234,8 @@ export default function ContactsScreen() {
   };
 
   const handleContactPress = async (contact: any) => {
+    // ... 原有逻辑 (为了节省篇幅，这里隐藏，实际代码请保留你原来的 handleContactPress) ...
+    // ... (Use your original handleContactPress logic exactly as it was) ...
     const parentNavigation = navigation.getParent();
     if (!parentNavigation) return;
     const currentUserId = user?.id;
@@ -248,7 +244,6 @@ export default function ContactsScreen() {
       return;
     }
     try {
-      console.log('🔍 Searching for existing chat with contact:', contact.name);
       const chatsResult = await readUserChats(currentUserId);
       if (chatsResult.success && chatsResult.data) {
         const allChats = chatsResult.data;
@@ -441,6 +436,8 @@ export default function ContactsScreen() {
           sections={sections}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          // ✅ 确保列表更新：当状态 Map 变化时，重新渲染
+          extraData={onlineStatusMap}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -468,23 +465,28 @@ export default function ContactsScreen() {
             </View>
           )}
           renderItem={({ item }) => {
-            // ✅ 6. 核心：优先从实时 Map 获取状态，没有则用 API 初始状态
-            const isOnline = onlineStatusMap[item.id] ?? item.online;
+            // ✅ 获取实时状态 (与 ChatSettingScreen 逻辑一致)
+            const isOnline = onlineStatusMap[item.id] ?? item.online ?? false;
 
             return (
               <TouchableOpacity style={styles.contactItem} onPress={() => handleContactPress(item)}>
                 <View style={styles.avatarContainer}>
-                  {/* ✅ 这里完全保留了你之前的图片判断逻辑，一个字都没改 */}
+                  {/* ✅ 4. 完全保留你的头像逻辑 (ngrok 判断) */}
                   <Image
                     source={
-                      !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                      !item.avatar || 
+                      item.avatar.trim() === '' || 
+                      item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
                         ? require('../../assets/images/personal.png')
                         : { uri: item.avatar }
                     }
                     style={styles.avatarImage}
                   />
-                  {/* ✅ 7. 只有 isOnline 为 true 时才显示绿点 */}
-                  {isOnline && <View style={styles.onlineDot} />}
+                  {/* ✅ 5. 状态灯 (保留位置，颜色动态) */}
+                  <View style={[
+                    styles.statusDot, 
+                    { backgroundColor: isOnline ? colors.functional.greenSuccess : '#B0B0B0' }
+                  ]} />
                 </View>
                 <View style={styles.contactInfo}>
                   <Text style={styles.contactName}>{item.name.replace(/^用户/, '')}</Text>
@@ -541,14 +543,13 @@ const styles = StyleSheet.create({
   avatarContainer: { position: 'relative', marginRight: scaleWidth(12) },
   avatarImage: { width: scaleWidth(40), height: scaleWidth(40), borderRadius: borders.radius4, backgroundColor: colors.background.gray },
   
-  // ✅ 优化后的在线指示灯样式
-  onlineDot: { 
+  // ✅ 状态圆点：颜色由代码控制
+  statusDot: { 
     position: 'absolute', 
     bottom: 0, 
     right: 0, 
     width: scaleWidth(12), 
     height: scaleWidth(12), 
-    backgroundColor: colors.functional.greenSuccess, 
     borderRadius: scaleWidth(6), 
     borderWidth: 2, 
     borderColor: colors.background.white 
