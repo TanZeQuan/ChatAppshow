@@ -8,6 +8,7 @@ type MessageCallback = (data: any) => void;
 type ReadReceiptCallback = (data: { chatId: string; readerId: string }) => void;
 type PresenceCallback = (data: { userId: string; isOnline: boolean }) => void;
 type CallCallback = (data: any) => void;
+type TypingIndicatorCallback = (data: { chatId: string; userId: string; isTyping: boolean }) => void;
 
 class WebSocketManager {
   private static instance: WebSocketManager;
@@ -25,6 +26,7 @@ class WebSocketManager {
   private readReceiptCallbacks: ReadReceiptCallback[] = [];
   private presenceCallbacks: PresenceCallback[] = [];
   private callCallbacks: CallCallback[] = [];
+  private typingIndicatorCallbacks: TypingIndicatorCallback[] = [];
 
   // 在线状态追踪
   private onlineUsers: Set<string> = new Set();
@@ -212,6 +214,17 @@ class WebSocketManager {
         return;
       }
 
+      if (data.status === 1 && data.type === 'typing_signal' && data.chat_id && data.sender_id) {
+        this.typingIndicatorCallbacks.forEach((cb) =>
+          cb({
+            chatId: data.chat_id,
+            userId: data.sender_id,
+            isTyping: data.is_typing,
+          })
+        );
+        return;
+      }
+
       if (data.status === 1 && data.chat_id && data.reader_id) {
         this.markUserOnline(data.reader_id);
         this.readReceiptCallbacks.forEach((cb) =>
@@ -271,6 +284,13 @@ class WebSocketManager {
   public sendReadSignal(payload: any): boolean {
     if (!this.ws) return false;
     const msg = { msg: "read_signal", user_id: this.userId!, ...payload };
+    this.safeSend(JSON.stringify(msg));
+    return true;
+  }
+
+  public sendTypingSignal(payload: { chat_id: string; receiver: string[]; is_typing: boolean }): boolean {
+    if (!this.ws) return false;
+    const msg = { msg: "typing_signal", user_id: this.userId!, ...payload };
     this.safeSend(JSON.stringify(msg));
     return true;
   }
@@ -341,6 +361,8 @@ class WebSocketManager {
   public removeMessageCallback(cb: MessageCallback) { this.messageCallbacks = this.messageCallbacks.filter((x) => x !== cb); }
   public addReadReceiptCallback(cb: ReadReceiptCallback) { this.readReceiptCallbacks.push(cb); }
   public removeReadReceiptCallback(cb: ReadReceiptCallback) { this.readReceiptCallbacks = this.readReceiptCallbacks.filter((x) => x !== cb); }
+  public addTypingIndicatorCallback(cb: TypingIndicatorCallback) { this.typingIndicatorCallbacks.push(cb); }
+  public removeTypingIndicatorCallback(cb: TypingIndicatorCallback) { this.typingIndicatorCallbacks = this.typingIndicatorCallbacks.filter((x) => x !== cb); }
   public isUserOnline(userId: string): boolean { return this.onlineUsers.has(userId); }
 
   private markUserOnline(userId: string) {

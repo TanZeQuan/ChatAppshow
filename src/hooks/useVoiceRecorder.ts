@@ -129,7 +129,7 @@ export const useVoiceRecorder = ({
       if (uri) {
         console.log('🎤 [Voice] Recording stopped, URI:', uri);
 
-        const receiver = chatMembers.filter(id => id !== currentUserId);
+        const receiver = (chatMembers || []).filter(id => id !== currentUserId);
 
         // Force Opus filename and MIME type
         const originalFilename = uri.split('/').pop() || 'voice.opus';

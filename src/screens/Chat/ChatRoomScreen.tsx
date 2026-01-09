@@ -94,10 +94,13 @@ export default function ChatRoomScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [chatMembers, setChatMembers] = useState<string[]>([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<Record<string, boolean>>({});
+
 
   // ✅ 优化 1: 添加滚动控制 Ref 和 状态
   const flatListRef = useRef<FlatList>(null);
   const [isNearBottom, setIsNearBottom] = useState(true); // 默认在底部
+  const lastMessageIdRef = useRef<string | null>(null); // 记录最后一条消息ID，防止重复滚动
 
   // ✅ Search functionality
   const {
@@ -154,34 +157,45 @@ export default function ChatRoomScreen() {
 
   const offsetRef = useRef(0);
 
-  // ✅ 优化 2: 滚动到底部辅助函数
-  // Inverted 模式下，offset 0 就是视觉上的底部
-  const scrollToBottom = (animated = true) => {
-    if (flatListRef.current && messages.length > 0) {
-      flatListRef.current.scrollToOffset({ offset: 0, animated });
-    }
-  };
+  // ✅ 优化 2: 改进的滚动到底部函数
+  // 使用 setTimeout 确保消息已渲染到 DOM 后再滚动
+  const scrollToBottom = useCallback((animated = true, delay = 0) => {
+    setTimeout(() => {
+      if (flatListRef.current && messages.length > 0) {
+        flatListRef.current.scrollToOffset({ offset: 0, animated });
+      }
+    }, delay);
+  }, [messages.length]);
 
-  // ✅ 优化 3: 监听消息列表变化，智能滚动
+  // ✅ 优化 3: 更智能的消息监听和滚动逻辑
   useEffect(() => {
     if (messages.length === 0) return;
 
-    // 获取最新的一条消息
     const latestMessage = messages[0];
+    const latestMessageId = latestMessage.id;
 
-    // 情况 A: 我自己发的消息 -> 必须强制滚到底部
+    // 防止重复滚动：如果是同一条消息，不处理
+    if (lastMessageIdRef.current === latestMessageId) {
+      return;
+    }
+
+    // 更新最后一条消息 ID
+    lastMessageIdRef.current = latestMessageId;
+
+    // 情况 A: 我自己发的消息 -> 必须强制滚到底部（立即滚动，带动画）
     if (latestMessage.senderId === currentUserId) {
-      scrollToBottom(true);
+      scrollToBottom(true, 50); // 50ms 延迟确保消息已渲染
       return;
     }
 
     // 情况 B: 收到别人发的消息
-    // 逻辑：如果我当前就在底部（isNearBottom），说明我在等消息，直接滚下去显示
+    // 逻辑：如果我当前就在底部（isNearBottom），说明我在等消息，自动滚动显示
     // 如果我在看上面的历史记录（isNearBottom = false），就不滚，避免打断阅读
     if (isNearBottom) {
-      scrollToBottom(true);
+      scrollToBottom(true, 100); // 收到消息时稍长延迟，让动画更平滑
     }
-  }, [messages.length, messages[0]?.id]);
+    // 如果不在底部，可以考虑显示"新消息"提示（未实现）
+  }, [messages.length, currentUserId, isNearBottom, scrollToBottom, messages]);
 
 
   // ✅ Use voice recorder hook
@@ -202,8 +216,8 @@ export default function ChatRoomScreen() {
     chatMembers,
     onMessageSent: () => {
       loadMessages(false, false);
-      // ✅ 语音发送成功后，强制滚到底部
-      scrollToBottom(true);
+      // ✅ 语音发送成功后，延迟滚动确保消息已渲染
+      scrollToBottom(true, 100);
     },
   });
 
@@ -431,6 +445,28 @@ export default function ChatRoomScreen() {
     };
   }, [chatId, currentUserId]);
 
+  // Listen for WebSocket typing indicators
+  useEffect(() => {
+    const handleTypingIndicator = (data: { chatId: string; userId: string; isTyping: boolean }) => {
+      if (data.chatId !== chatId) return;
+
+      setTypingUsers(prev => {
+        const newTypingUsers = { ...prev };
+        if (data.isTyping) {
+          newTypingUsers[data.userId] = true;
+        } else {
+          delete newTypingUsers[data.userId];
+        }
+        return newTypingUsers;
+      });
+    };
+
+    WebSocketManager.addTypingIndicatorCallback(handleTypingIndicator);
+    return () => {
+      WebSocketManager.removeTypingIndicatorCallback(handleTypingIndicator);
+    };
+  }, [chatId]);
+
   // Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
@@ -457,6 +493,34 @@ export default function ChatRoomScreen() {
       searchModeInitialized.current = true;
     }
   }, [params.searchMode, enableSearch]);
+
+  const typingIndicatorText = useMemo(() => {
+    const usersTyping = Object.keys(typingUsers).filter(userId => typingUsers[userId] && userId !== currentUserId);
+    if (usersTyping.length === 0) {
+      return null;
+    }
+
+    // For 1-on-1 chat
+    if (!chat?.isGroup) {
+      return `${chatName} is typing...`;
+    }
+
+    // For group chat, we need to get names
+    const memberNameMap = new Map<string, string>();
+    if (chat?.members) {
+      chat.members.forEach((m: any) => memberNameMap.set(m.user_id, m.name));
+    }
+
+    const typingNames = usersTyping.map(userId => memberNameMap.get(userId) || 'Someone');
+
+    if (typingNames.length === 1) {
+      return `${typingNames[0]} is typing...`;
+    }
+    if (typingNames.length === 2) {
+      return `${typingNames[0]} and ${typingNames[1]} are typing...`;
+    }
+    return 'Several people are typing...';
+  }, [typingUsers, chat, chatName, currentUserId]);
 
   const scrollToMatch = useCallback((messageId: string) => {
     // ✅ 优化 4: 使用 ref 滚动
@@ -488,10 +552,32 @@ export default function ChatRoomScreen() {
 
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
-      if (data.type && data.message) {
+      // Ensure the message is for the current chat and is a valid message object
+      if (data && data.message_id && data.chat_id === chatIdRef.current) {
+        // --- Start of Optimization ---
+        const { addMessage } = useChatStore.getState();
+
+        // Construct the new message object from the WebSocket payload
+        // Assumption: Backend includes sender_name, sender_avatar, and created_at
+        const receivedMessage = {
+          id: data.message_id,
+          text: data.message,
+          createdAt: data.created_at || new Date().toISOString(), // Use server time
+          senderId: data.sender,
+          type: data.type || 1,
+          name: data.sender_name || 'Unknown User', // Use sender info from payload
+          avatar: data.sender_avatar || '',
+          readBy: [],
+        };
+
+        // Add the message to the store, UI will update automatically
+        addMessage({ chatId: data.chat_id, ...receivedMessage });
+        // --- End of Optimization ---
+      } else if (data.type && data.message) {
+        // Fallback for older message formats or system messages that still use reload
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
+          console.log("Fallback to loadMessages for message:", data);
           loadMessagesRef.current(false, false);
-          // 注意：滚动逻辑已统一交给上面的 messages useEffect 监听
         }
       }
     };
@@ -535,8 +621,11 @@ export default function ChatRoomScreen() {
     const messageText = inputText.trim();
     setInputText('');
 
-    // ✅ 优化 5: 发送时立即强制滚动到底部
-    scrollToBottom(true);
+    // ✅ 发送前先滚动，提升响应速度
+    scrollToBottom(true, 0);
+
+    // Get a reference to the store's addMessage function
+    const { addMessage } = useChatStore.getState();
 
     try {
       const receiver = chatMembers.filter(id => id !== currentUserId);
@@ -547,46 +636,93 @@ export default function ChatRoomScreen() {
         message: messageText,
       });
 
-      if (result.success && result.data) {
-        const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
-          ? result.data.isreceive
+      if (result.success && result.data && result.data.message_id) {
+        // --- Start of Optimization ---
+        // The backend now returns the full message object, let's call it `sentMessage`.
+        // We'll construct a message object for our local store.
+        const sentMessage = result.data; // Assuming result.data is the new message object
+
+        const newMessageForStore = {
+          id: sentMessage.message_id,
+          text: messageText, // The text is from our input
+          createdAt: sentMessage.created_at || new Date().toISOString(), // Use server time, fallback to local
+          senderId: currentUserId,
+          type: sentMessage.type || 1,
+          name: currentUserName, // Add sender's name
+          avatar: currentUserAvatar, // Add sender's avatar
+          readBy: [], // Initially, no one has read it
+        };
+
+        // Add the new message to the store, which will update the UI reactively
+        addMessage({ chatId, ...newMessageForStore });
+        // --- End of Optimization ---
+
+        // The WebSocket forwarding logic remains the same
+        const actualReceivers = (sentMessage.isreceive && sentMessage.isreceive.length > 0)
+          ? sentMessage.isreceive
           : receiver;
 
         if (actualReceivers.length > 0) {
           WebSocketManager.sendForwardMessage({
-            type: result.data.type,
+            type: sentMessage.type,
             message: messageText,
-            message_id: result.data.message_id,
+            message_id: sentMessage.message_id,
             sender: currentUserId,
             receiver: actualReceivers,
             chat_id: chatId
           });
         }
-        await loadMessages(false, false);
+
+        // No longer need to reload all messages
+        // await loadMessages(false, false); 
       } else {
         Alert.alert('Send Failed', result.message || 'Message failed to send, please retry');
-        setInputText(messageText);
+        setInputText(messageText); // Restore text on failure
       }
     } catch (error) {
       console.error("Error sending message:", error);
-      Alert.alert('Send Failed', 'Network error, please retry');
-      setInputText(messageText);
+      Alert.alert('Send Failed', 'An unexpected error occurred. Please retry.');
+      setInputText(messageText); // Restore text on failure
     }
   };
 
-  const handleClearChat = () => {
-    Alert.alert('Clear Chat History', 'Are you sure you want to clear all chat history with ' + chatName + '?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: () => {
-          clearChat(chatId);
-          Alert.alert('Success', 'Chat history cleared');
+  const handleClearChat = useCallback(() => {
+    Alert.alert(
+      '清空聊天记录', // Title
+      '确定要清空此聊天记录吗？此操作仅删除您设备上的记录。', // Message (明确告知只删自己的)
+      [
+        { text: '取消', style: 'cancel' },
+        {
+          text: '清空',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setIsLoading(true);
+
+              // 1. 清除本地 Store (这是最快反应)
+              clearChat(chatId);
+
+              // 2. (可选) 如果有后端接口，在这里调用
+              // 比如: await api.clearHistory(chatId); 
+
+              // 3. 刷新 UI
+              setRefreshing(true);
+              // 模拟刷新一下空列表，或者直接清空当前 messages
+              // 由于 clearChat 已经清空了 store，这里的 storedMessages 会自动更新变为空
+
+              Alert.alert('成功', '聊天记录已清空');
+            } catch (error) {
+              console.error('Clear chat error:', error);
+              Alert.alert('错误', '清空失败，请重试');
+            } finally {
+              setIsLoading(false);
+              setRefreshing(false);
+            }
+          }
         }
-      }
-    ]);
-  };
+      ]
+    );
+  }, [chatId, clearChat]);
 
   const handleOpenSettings = () => {
     const chat = getChatById(chatId);
@@ -652,8 +788,8 @@ export default function ChatRoomScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
-        // ✅ 优化 6: 发送图片时也滚动
-        scrollToBottom(true);
+        // ✅ 发送图片时也滚动（稍长延迟等待上传）
+        scrollToBottom(true, 0);
 
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
@@ -802,8 +938,8 @@ export default function ChatRoomScreen() {
             type: 4,
           });
 
-          // ✅ 优化 7: 发送名片也滚动
-          scrollToBottom(true);
+          // ✅ 发送名片后滚动
+          scrollToBottom(true, 100);
 
           if (result.success && result.data) {
             const actualReceivers = (result.data.isreceive && result.data.isreceive.length > 0)
@@ -952,7 +1088,9 @@ export default function ChatRoomScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-          {/* ✅ 优化 8: FlatList 配置 Ref 和 onScroll */}
+          {typingIndicatorText && (
+            <Text style={roomStyles.typingIndicator}>{typingIndicatorText}</Text>
+          )}
           <FlatList
             ref={flatListRef}
             data={[...messages]}
@@ -962,11 +1100,12 @@ export default function ChatRoomScreen() {
             inverted
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
 
-            // 核心：监听滚动位置，更新状态
+            // ✅ 核心：监听滚动位置，更新状态
             onScroll={(e) => {
               const { contentOffset } = e.nativeEvent;
-              // Inverted 模式下，y=0 是视觉底部，<50 视为接近底部
-              setIsNearBottom(contentOffset.y < 50);
+              // Inverted 模式下，y=0 是视觉底部，<100 视为接近底部
+              // 增加阈值让"底部判定"更宽松，避免轻微滚动就判定离开底部
+              setIsNearBottom(contentOffset.y < 100);
             }}
             scrollEventThrottle={16} // 提高滚动帧率
 
@@ -996,6 +1135,8 @@ export default function ChatRoomScreen() {
             handleSend={handleSend}
             toolbarButtons={toolbarButtons}
             roomStyles={roomStyles}
+            chatId={chatId}
+            chatMembers={chatMembers}
           />
         </KeyboardAvoidingView>
 

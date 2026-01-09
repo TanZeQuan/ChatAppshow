@@ -102,7 +102,7 @@ export const useChatStore = create<ChatStore>()(
         set({
           chats: {
             ...get().chats,
-            [chatId]: [...current, newMessage],
+            [chatId]: [newMessage, ...current],
           },
         });
 

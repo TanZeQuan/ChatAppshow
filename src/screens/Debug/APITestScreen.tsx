@@ -14,8 +14,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button, StyleSheet, Alert } from 'react-native';
-import { testAPIConnection } from '../api/TestConnection';
-import { API_BASE_URL } from '../api/service';
+import { testAPIConnection } from '../../api/TestConnection';
+import { API_BASE_URL } from '../../api/service';
 
 export const APITestScreen = () => {
   const [testResult, setTestResult] = useState<any>(null);

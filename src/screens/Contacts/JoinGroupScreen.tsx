@@ -16,12 +16,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 
 export default function JoinGroupScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>(); // Added <any> for TS flexibility or use specific type
   const [searchText, setSearchText] = useState("");
   const insets = useSafeAreaInsets();
 
   const handleScanGroupCard = () => {
-    // Navigate to QR scanner for group
+    // ✅ Navigate to QR Scanner Screen
+    // Ensure 'QRCodeScreen' is registered in your Navigation Stack
+   navigation.navigate('ScanGroupScreen');
   };
 
   useFocusEffect(

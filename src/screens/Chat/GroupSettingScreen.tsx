@@ -50,8 +50,8 @@ export default function GroupSettingScreen() {
     const { chatId } = params;
 
     const { removeChat, getChatById, addChat, clearChat } = useChatStore();
-    const currentUserId = useUserStore((state) => state.user?.id) || 'me';
-    const currentUser = useUserStore((state) => state.user);
+    const { user: currentUser, onlineUsers } = useUserStore();
+    const currentUserId = currentUser?.id || 'me';
 
     const groupChat = getChatById(chatId);
     const chatName = groupChat?.name || params.chatName || '';
@@ -967,6 +967,7 @@ export default function GroupSettingScreen() {
         const isKicking = kickingMemberId === member.id;
         const permission = checkKickPermission(member.id);
         const showKickBadge = permission.hasPermission && !isCurrentUser;
+        const isOnline = onlineUsers.includes(member.id);
 
         // ✅ Correctly check if member is a friend
         const isFriend = friendsList.some(f => {
@@ -996,6 +997,7 @@ export default function GroupSettingScreen() {
                                 />
                             );
                         })()}
+                        {isOnline && !isCurrentUser && <View style={styles.onlineIndicator} />}
                         {isFriend && !isCurrentUser && (
                             <View style={styles.friendBadge}>
                                 <Ionicons name="heart" size={10} color="#FF3B30" />
@@ -1028,7 +1030,7 @@ export default function GroupSettingScreen() {
                 )}
             </View>
         );
-    }, [currentUserId, kickingMemberId, checkKickPermission, friendsList, groupChat, handleViewMemberProfile, handleKickMember]);
+    }, [currentUserId, kickingMemberId, checkKickPermission, friendsList, groupChat, handleViewMemberProfile, handleKickMember, onlineUsers]);
 
     // Render add member button
     const renderAddMemberButton = useCallback(() => (
@@ -1454,6 +1456,18 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: borders.radius16,
+    },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 2,
+        right: 2,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: colors.functional.green,
+        borderWidth: 2,
+        borderColor: colors.background.white,
+        zIndex: 2,
     },
     memberAvatarKicking: { opacity: 0.5 },
     currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },

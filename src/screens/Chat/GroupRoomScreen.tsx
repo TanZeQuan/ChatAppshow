@@ -969,8 +969,7 @@ export default function ChatRoomScreen() {
             toggleToolbar={toggleToolbar}
             handleSend={handleSend}
             toolbarButtons={toolbarButtons}
-            roomStyles={roomStyles}
-          />
+            roomStyles={roomStyles} chatId={''} chatMembers={[]}          />
         </KeyboardAvoidingView>
 
         <EmojiPicker

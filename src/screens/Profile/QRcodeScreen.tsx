@@ -68,54 +68,54 @@ END:VCARD`;
         };
     }, [insets, navigation]);
 
-    // const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
-    //     setScanned(true);
+    const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
+        setScanned(true);
 
-    //     // Check if it's a vCard (contact info)
-    //     if (data.startsWith('BEGIN:VCARD')) {
-    //         // Parse vCard data
-    //         const nameMatch = data.match(/FN:(.*)/);
-    //         const phoneMatch = data.match(/TEL:(.*)/);
-    //         const emailMatch = data.match(/EMAIL:(.*)/);
+        // Check if it's a vCard (contact info)
+        if (data.startsWith('BEGIN:VCARD')) {
+            // Parse vCard data
+            const nameMatch = data.match(/FN:(.*)/);
+            const phoneMatch = data.match(/TEL:(.*)/);
+            const emailMatch = data.match(/EMAIL:(.*)/);
 
-    //         const contactName = nameMatch ? nameMatch[1] : 'Unknown';
-    //         const contactPhone = phoneMatch ? phoneMatch[1] : '';
-    //         const contactEmail = emailMatch ? emailMatch[1] : '';
+            const contactName = nameMatch ? nameMatch[1] : 'Unknown';
+            const contactPhone = phoneMatch ? phoneMatch[1] : '';
+            const contactEmail = emailMatch ? emailMatch[1] : '';
 
-    //         Alert.alert(
-    //             '扫描到联系人',
-    //             `姓名: ${contactName}\n电话: ${contactPhone}\n邮箱: ${contactEmail}`,
-    //             [
-    //                 {
-    //                     text: '取消',
-    //                     style: 'cancel',
-    //                     onPress: () => setScanned(false)
-    //                 },
-    //                 {
-    //                     text: '添加到通讯录',
-    //                     onPress: () => {
-    //                         // Here you would implement the logic to add contact
-    //                         // For now, just show success message
-    //                         Alert.alert(
-    //                             '成功',
-    //                             '联系人已添加到通讯录',
-    //                             [{ text: '确定', onPress: () => setScanned(false) }]
-    //                         );
-    //                     }
-    //                 }
-    //             ]
-    //         );
-    //     } else {
-    //         // Regular QR code
-    //         Alert.alert(
-    //             '扫码成功',
-    //             `类型: ${type}\n数据: ${data}`,
-    //             [
-    //                 { text: '确定', onPress: () => setScanned(false) }
-    //             ]
-    //         );
-    //     }
-    // };
+            Alert.alert(
+                '扫描到联系人',
+                `姓名: ${contactName}\n电话: ${contactPhone}\n邮箱: ${contactEmail}`,
+                [
+                    {
+                        text: '取消',
+                        style: 'cancel',
+                        onPress: () => setScanned(false) // Allow scanning again if cancelled
+                    },
+                    {
+                        text: '添加到通讯录',
+                        onPress: () => {
+                            // Here you would implement the logic to add contact
+                            // For now, just show success message
+                            Alert.alert(
+                                '成功',
+                                '联系人已添加到通讯录',
+                                [{ text: '确定', onPress: () => setScanned(false) }]
+                            );
+                        }
+                    }
+                ]
+            );
+        } else {
+            // Regular QR code
+            Alert.alert(
+                '扫码成功',
+                `类型: ${type}\n数据: ${data}`,
+                [
+                    { text: '确定', onPress: () => setScanned(false) }
+                ]
+            );
+        }
+    };
 
     const pickImageForScan = async () => {
         try {
@@ -133,9 +133,12 @@ END:VCARD`;
 
             if (result.canceled) return;
 
+            // Note: Scanning from an image file usually requires a separate library 
+            // like 'expo-barcode-scanner' (deprecated) or a native module wrapper
+            // because CameraView only scans live feeds.
             Alert.alert(
                 '图片已选择',
-                '从图片中扫描二维码功能需要重新编译应用。\n\n请运行以下命令：\nnpx expo run:android\n或\nnpx expo run:ios\n\n编译后即可使用相册扫码功能。',
+                '目前仅支持相机扫码，从相册识别二维码需要额外配置。',
                 [{ text: '知道了' }]
             );
 
@@ -144,6 +147,12 @@ END:VCARD`;
             console.error('选择图片错误:', error);
             Alert.alert('选择失败', '选择图片时出错');
         }
+    };
+
+    // ✅ Handle opening the scanner
+    const handleOpenScanner = () => {
+        setScanned(false); // Reset scanned state
+        setShowScanner(true);
     };
 
     if (showScanner) {
@@ -159,11 +168,12 @@ END:VCARD`;
 
         if (!permission.granted) {
             return (
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#2d3748' }]}>
                     <Text style={{ color: 'white', textAlign: 'center', marginBottom: 20 }}>
                         需要相机权限才能扫描二维码
                     </Text>
                     <Button onPress={requestPermission} title="授予权限" />
+                    <Button onPress={() => setShowScanner(false)} title="返回" color="#ff5555" />
                 </View>
             );
         }
@@ -187,13 +197,14 @@ END:VCARD`;
                     </View>
 
                     <View style={styles.scannerContent}>
+                        {/* ✅ Enabled Barcode Scanning */}
                         <CameraView
                             style={StyleSheet.absoluteFillObject}
                             facing="back"
-                            // onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-                            // barcodeScannerSettings={{
-                            //     barcodeTypes: ["qr", "ean13", "ean8", "code128"],
-                            // }}
+                            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+                            barcodeScannerSettings={{
+                                barcodeTypes: ["qr", "ean13", "ean8", "code128"],
+                            }}
                         />
 
                         <View style={styles.scannerFrameContainer}>
@@ -291,9 +302,10 @@ END:VCARD`;
                 </View>
 
                 <View style={styles.actions}>
+                    {/* ✅ Activated Scan Button */}
                     <TouchableOpacity
                         style={styles.actionButton}
-                        onPress={() => Alert.alert("功能已禁用", "二维码扫描功能已暂时禁用，以解决构建问题。")}
+                        onPress={handleOpenScanner}
                     >
                         <View style={styles.actionIconContainer}>
                             <Ionicons name="scan-outline" size={24} color="white" />

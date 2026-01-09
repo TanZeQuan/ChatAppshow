@@ -95,6 +95,13 @@ export const baseRoomStyles = RNStyleSheet.create({
     fontSize: scaleFont(14),
     color: colors.text.grayDark,
   },
+  typingIndicator: {
+    paddingHorizontal: scaleWidth(12),
+    paddingVertical: scaleHeight(4),
+    fontSize: scaleFont(12),
+    color: colors.text.grayDark,
+    fontStyle: 'italic',
+  },
 
   // Keyboard
   keyboardAvoidingView: {

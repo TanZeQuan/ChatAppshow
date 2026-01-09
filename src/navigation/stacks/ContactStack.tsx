@@ -7,6 +7,7 @@ import AddFriendScreen from "../../screens/Contacts/AddFriendScreen";
 import AddGroupScreen from "../../screens/Contacts/AddGroupScreen";
 import JoinGroupScreen from "../../screens/Contacts/JoinGroupScreen";
 import FriendRequest from "../../screens/Contacts/FriendRequest";
+import ScanGroup from "../../screens/Contacts/ScanGroup";
 
 const Stack = createNativeStackNavigator<ContactsStackParamList>();
 
@@ -18,6 +19,7 @@ export default function ContactsStack() {
       <Stack.Screen name="AddGroup" component={AddGroupScreen} options={{ title: "Add Group" }} />
       <Stack.Screen name="JoinGroup" component={JoinGroupScreen} options={{ title: "Join Group" }} />
       <Stack.Screen name="FriendRequest" component={FriendRequest} options={{ title: "FriendRequest" }} />
+      <Stack.Screen name="ScanGroup" component={ScanGroup} options={{ title: "ScanGroup" }} />
     </Stack.Navigator>
   );
 }

@@ -94,6 +94,7 @@ export type ContactsStackParamList = {
   AddGroup: undefined;
   JoinGroup: undefined;
   FriendRequest: undefined;
+  ScanGroup: undefined;
 };
 
 /**

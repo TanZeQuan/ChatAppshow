@@ -8,7 +8,7 @@ import ForgetPassword from "../screens/Auth/ForgetPassword";
 
 // ✅ 1. 引入 CallScreen
 import CallScreen from "../screens/Chat/CallScreen";
-
+import ScanGroupScreen from '../screens/Contacts/ScanGroup';
 const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
@@ -30,6 +30,14 @@ export default function RootNavigator() {
               gestureEnabled: false,           // 禁止手势划走
               headerShown: false
             }}
+          />
+          <Stack.Screen 
+            name="ScanGroupScreen" 
+            component={ScanGroupScreen}
+            options={{ 
+              presentation: 'fullScreenModal', // 建议：从底部弹起或全屏覆盖
+              headerShown: false 
+            }} 
           />
         </Stack.Group>
       ) : (

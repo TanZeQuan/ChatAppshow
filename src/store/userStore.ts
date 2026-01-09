@@ -19,17 +19,21 @@ type UserStore = {
   user: User | null;
   token: string | null;
   isLoggedIn: boolean;
+  onlineUsers: string[];
 
   setUser: (user: User, token: string) => void;
-  logout: () => Promise<void>; // ⭐ Changed to async
+  logout: () => Promise<void>;
+  setOnlineUsers: (userIds: string[]) => void;
+  updateUserOnlineStatus: (userId: string, isOnline: boolean) => void;
 };
 
 export const useUserStore = create<UserStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       token: null,
       isLoggedIn: false,
+      onlineUsers: [],
 
       setUser: (user, token) => {
         set({
@@ -37,6 +41,19 @@ export const useUserStore = create<UserStore>()(
           token,
           isLoggedIn: true,
         });
+      },
+
+      setOnlineUsers: (userIds) => set({ onlineUsers: userIds }),
+
+      updateUserOnlineStatus: (userId, isOnline) => {
+        const { onlineUsers } = get();
+        const userExists = onlineUsers.includes(userId);
+
+        if (isOnline && !userExists) {
+          set({ onlineUsers: [...onlineUsers, userId] });
+        } else if (!isOnline && userExists) {
+          set({ onlineUsers: onlineUsers.filter(id => id !== userId) });
+        }
       },
 
       logout: async () => {
@@ -50,6 +67,7 @@ export const useUserStore = create<UserStore>()(
           user: null,
           token: null,
           isLoggedIn: false,
+          onlineUsers: [], // Clear online users on logout
         });
 
         // Clear chat store

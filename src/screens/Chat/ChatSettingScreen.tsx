@@ -39,7 +39,7 @@ export default function ChatSettingScreen() {
 
   const { clearChat, getChatById, addChat } = useChatStore();
   const { getContactById, removeContact } = useContactStore();
-  const { user: currentUser } = useUserStore(); // Get current user
+  const { user: currentUser, onlineUsers } = useUserStore(); // Get current user
 
   const [pushNotification, setPushNotification] = useState(false);
   const [topNotification, setTopNotification] = useState(false);
@@ -47,34 +47,13 @@ export default function ChatSettingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [contactInfo, setContactInfo] = useState<any>(null);
   const [friendListId, setFriendListId] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(false); // ✅ Track online status
+
+  const isOnline = otherUserId ? onlineUsers.includes(otherUserId) : false;
 
   useEffect(() => {
     loadChatSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId, otherUserId]);
-
-  // ✅ Monitor online status via WebSocket
-  useEffect(() => {
-    if (!otherUserId) return;
-
-    // Check initial online status
-    setIsOnline(WebSocketManager.isUserOnline(otherUserId));
-
-    // Listen for presence changes
-    const handlePresenceChange = ({ userId, isOnline: online }: { userId: string; isOnline: boolean }) => {
-      if (userId === otherUserId) {
-        console.log(`👤 [ChatSetting] User ${userId} is now ${online ? 'online' : 'offline'}`);
-        setIsOnline(online);
-      }
-    };
-
-    WebSocketManager.addPresenceCallback(handlePresenceChange);
-
-    return () => {
-      WebSocketManager.removePresenceCallback(handlePresenceChange);
-    };
-  }, [otherUserId]);
 
   const loadChatSettings = async () => {
     try {

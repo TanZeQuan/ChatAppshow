@@ -1,6 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { ActivityIndicator, Dimensions, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import WebSocketManager from '../services/WebSocketManager';
+import { useUserStore } from '../store/userStore';
 
 const { width } = Dimensions.get("window");
 const scaleWidth = (size: number) => (width / 375) * size;
@@ -41,6 +43,10 @@ interface ChatInputBarProps {
 
   // Styles
   roomStyles: any;
+
+  // Typing indicator props
+  chatId: string;
+  chatMembers: string[];
 }
 
 const ToolbarButton: React.FC<ToolbarButtonProps & { roomStyles: any }> = ({
@@ -71,7 +77,65 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   handleSend,
   toolbarButtons,
   roomStyles,
+  chatId,
+  chatMembers,
 }) => {
+  const currentUser = useUserStore((state) => state.user);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const sendTypingSignal = useCallback((isTyping: boolean) => {
+    if (!currentUser) return;
+    const receiver = chatMembers.filter(id => id !== currentUser.id);
+    if (receiver.length > 0) {
+      WebSocketManager.sendTypingSignal({
+        chat_id: chatId,
+        receiver: receiver,
+        is_typing: isTyping,
+      });
+    }
+  }, [chatId, chatMembers, currentUser]);
+
+  useEffect(() => {
+    // Clear any existing timer
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+
+    if (inputText.trim().length > 0) {
+      // User is typing
+      sendTypingSignal(true);
+
+      // Set a timer to send "stopped typing" signal
+      typingTimeoutRef.current = setTimeout(() => {
+        sendTypingSignal(false);
+      }, 3000); // 3 seconds timeout
+    } else {
+      // Input is empty, so user has stopped typing
+      sendTypingSignal(false);
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      // Also send a final "stopped typing" signal on unmount if user was typing
+      if (inputText.trim().length > 0) {
+        sendTypingSignal(false);
+      }
+    };
+  }, [inputText, sendTypingSignal]);
+
+  const onSend = () => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    sendTypingSignal(false);
+    handleSend();
+  }
+
   return (
     <View style={roomStyles.inputSection}>
       <View style={roomStyles.inputContainer}>
@@ -105,7 +169,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         </TouchableOpacity>
 
         {inputText.trim() ? (
-          <TouchableOpacity style={roomStyles.iconButton} onPress={handleSend}>
+          <TouchableOpacity style={roomStyles.iconButton} onPress={onSend}>
             <Ionicons name="send" size={scaleWidth(22)} color="#333" />
           </TouchableOpacity>
         ) : (

@@ -57,6 +57,24 @@ export default function App() {
     };
   }, [user, isLoggedIn]);
 
+  // Global presence subscriber
+  useEffect(() => {
+    if (!isLoggedIn) return;
+
+    const { updateUserOnlineStatus } = useUserStore.getState();
+
+    const handlePresenceChange = (data: { userId: string; isOnline: boolean }) => {
+      console.log(`[App.tsx] Presence Change: ${data.userId} is ${data.isOnline ? 'Online' : 'Offline'}`);
+      updateUserOnlineStatus(data.userId, data.isOnline);
+    };
+
+    WebSocketManager.addPresenceCallback(handlePresenceChange);
+
+    return () => {
+      WebSocketManager.removePresenceCallback(handlePresenceChange);
+    };
+  }, [isLoggedIn]);
+
   return (
     <View style={{ flex: 1 }}>
       <NavigationContainer ref={navigationRef}>

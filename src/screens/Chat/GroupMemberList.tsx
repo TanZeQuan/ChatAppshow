@@ -37,6 +37,7 @@ export default function GroupMemberList() {
 
     const { getChatById, addChat } = useChatStore();
     const currentUserId = useUserStore((state) => state.user?.id);
+    const { onlineUsers } = useUserStore();
 
     const [groupChat, setGroupChat] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -264,6 +265,7 @@ export default function GroupMemberList() {
         const isKicking = kickingMemberId === member.id;
         const permission = checkKickPermission(member.id);
         const showKickBadge = permission.hasPermission && !isCurrentUser;
+        const isOnline = onlineUsers.includes(member.id);
 
         return (
             <View style={styles.memberItemWrapper}>
@@ -281,6 +283,7 @@ export default function GroupMemberList() {
                             }
                             style={[styles.memberAvatar, isKicking && styles.memberAvatarKicking]}
                         />
+                        {isOnline && !isCurrentUser && <View style={styles.onlineIndicator} />}
                         {isKicking && (
                             <View style={styles.kickingOverlay}>
                                 <ActivityIndicator size="small" color="#FF3B30" />
@@ -347,6 +350,7 @@ export default function GroupMemberList() {
                 renderItem={renderMemberItem}
                 keyExtractor={(item) => item.id}
                 contentContainerStyle={styles.listContentContainer}
+                extraData={onlineUsers}
                 ListHeaderComponent={() => (
                     <View style={styles.sectionTitleContainer}>
                         <Text style={styles.sectionTitle}>全部成员 ({allMembers.length}人)</Text>
@@ -438,6 +442,18 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: borders.radius8,
+    },
+    onlineIndicator: {
+        position: 'absolute',
+        bottom: 0,
+        right: 0,
+        width: 12,
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: colors.functional.green,
+        borderWidth: 2,
+        borderColor: colors.background.white,
+        zIndex: 2,
     },
     memberAvatarKicking: {
         opacity: 0.5
