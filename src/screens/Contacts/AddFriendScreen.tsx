@@ -49,7 +49,7 @@ export default function AddFriendScreen() {
 
   // Prevent memory leaks
   const isMounted = useRef(true);
-
+  
   useFocusEffect(
     React.useCallback(() => {
       // Hide tab bar when screen is focused
@@ -138,11 +138,12 @@ export default function AddFriendScreen() {
       if (!isMounted.current) return;
 
       if (result.success) {
-        // Add to friend request store with correct field mapping
+        // ✅ 标记为 'sent' (我发出的请求)，这样就不会计入红点
         addRequest({
           id: searchResult.user_id,
           name: searchResult.name,
           avatar: searchResult.image,
+          type: 'sent', 
         });
 
         setRequestSent(true);
@@ -151,7 +152,6 @@ export default function AddFriendScreen() {
             text: "确定",
             onPress: () => {
               // Optionally navigate to FriendRequest screen
-              // navigation.navigate("FriendRequest" as never);
             }
           }
         ]);
@@ -183,8 +183,6 @@ export default function AddFriendScreen() {
   };
 
   const handleScanQR = () => {
-    // TODO: Implement QR scanner navigation
-    // navigation.navigate("QRScanner" as never);
     Alert.alert("提示", "扫描功能即将推出");
   };
 
@@ -199,15 +197,11 @@ export default function AddFriendScreen() {
   const getButtonStatus = () => {
     if (!searchResult) return { type: 'add', disabled: true };
 
-    // isstatus: 0 = not friends, 1 = pending request, 2 = already friends (accepted)
     if (searchResult.isstatus === 2) {
-      // Already friends (request was accepted)
       return { type: 'friend', disabled: true };
     } else if (searchResult.isstatus === 1 || requestSent) {
-      // Pending request (waiting for acceptance)
       return { type: 'sent', disabled: true };
     } else {
-      // Not friends yet, can send request
       return { type: 'add', disabled: false };
     }
   };
@@ -274,10 +268,9 @@ export default function AddFriendScreen() {
             )}
           </TouchableOpacity>
 
-          {/* Search Result - Compact Horizontal Card */}
+          {/* Search Result */}
           {hasSearched && searchResult && (
             <View style={styles.resultCard}>
-              {/* Left: Avatar */}
               {searchResult.image && searchResult.image !== invalidAvatarUrl && searchResult.image !== `${invalidAvatarUrl}/` ? (
                 <Image
                   source={{ uri: ensureFullImageUrl(searchResult.image) }}
@@ -290,7 +283,6 @@ export default function AddFriendScreen() {
                 />
               )}
 
-              {/* Middle: User Info */}
               <View style={styles.resultInfo}>
                 <Text style={styles.resultName} numberOfLines={1}>
                   {searchResult.name}
@@ -356,7 +348,6 @@ export default function AddFriendScreen() {
 
           {/* Action Items */}
           <View style={styles.actionsContainer}>
-            {/* Scan QR Code */}
             <TouchableOpacity
               style={styles.actionItem}
               onPress={handleScanQR}
@@ -370,8 +361,6 @@ export default function AddFriendScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
             </TouchableOpacity>
-
-            {/* Removed "Friend Request" button here */}
           </View>
         </ScrollView>
       </SafeAreaView>
@@ -380,233 +369,38 @@ export default function AddFriendScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 20,
-    marginTop: 10,
-    position: "relative",
-  },
-  backButton: {
-    position: "absolute",
-    left: 0,
-    width: 36,
-    height: 36,
-    backgroundColor: colors.background.transparentWhite50,
-    borderRadius: borders.radius18,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  title: {
-    fontSize: typography.fontSize18,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.black,
-  },
-  searchContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 10,
-    shadowColor: colors.shadow.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: typography.fontSize14,
-    color: colors.text.dark,
-  },
-  searchButton: {
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius12,
-    paddingVertical: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 12,
-    marginBottom: 20,
-    shadowColor: colors.shadow.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  searchButtonDisabled: {
-    opacity: 0.6,
-  },
-  searchButtonText: {
-    fontSize: typography.fontSize15,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.dark,
-  },
-  resultCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius12,
-    padding: 12,
-    marginBottom: 12,
-    shadowColor: colors.shadow.black,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  resultAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: borders.radius28,
-    backgroundColor: colors.background.grayPale,
-    marginRight: 12,
-  },
-  resultInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  resultName: {
-    fontSize: typography.fontSize16,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.dark,
-    marginBottom: 4,
-  },
-  resultId: {
-    fontSize: typography.fontSize13,
-    color: colors.text.gray,
-    marginBottom: 2,
-  },
-  resultPhone: {
-    fontSize: typography.fontSize12,
-    color: colors.text.grayLight,
-  },
-  addIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borders.radius24,
-    backgroundColor: colors.background.yellowLight,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  addIconButtonDisabled: {
-    opacity: 0.6,
-  },
-  addedIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borders.radius24,
-    backgroundColor: colors.background.yellowPale,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  friendIconButton: {
-    width: 48,
-    height: 48,
-    borderRadius: borders.radius24,
-    backgroundColor: colors.functional.greenLight,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 8,
-  },
-  friendBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.functional.greenLight,
-    borderRadius: borders.radius8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 20,
-    gap: 6,
-  },
-  friendBadgeText: {
-    fontSize: typography.fontSize13,
-    fontWeight: typography.fontWeight600,
-    color: colors.text.white,
-  },
-  pendingBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background.yellowPale,
-    borderRadius: borders.radius8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 20,
-    gap: 6,
-  },
-  pendingBadgeText: {
-    fontSize: typography.fontSize13,
-    fontWeight: typography.fontWeight600,
-    color: colors.functional.redMedium,
-  },
-  noResultContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 40,
-    marginBottom: 20,
-  },
-  noResultText: {
-    fontSize: typography.fontSize14,
-    color: colors.text.grayLight,
-    marginTop: 12,
-    fontWeight: typography.fontWeight500,
-  },
-  noResultSubtext: {
-    fontSize: typography.fontSize12,
-    color: colors.text.gray,
-    marginTop: 4,
-  },
-  actionsContainer: {
-    gap: 16,
-  },
-  actionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.background.white,
-    borderRadius: borders.radius12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    shadowColor: colors.shadow.black,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
-  },
-  actionLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: borders.radius20,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionLabel: {
-    fontSize: typography.fontSize15,
-    fontWeight: typography.fontWeight500,
-    color: colors.text.dark,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 20 },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 20, marginTop: 10, position: "relative" },
+  backButton: { position: "absolute", left: 0, width: 36, height: 36, backgroundColor: colors.background.transparentWhite50, borderRadius: borders.radius18, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: typography.fontSize18, fontWeight: typography.fontWeight600, color: colors.text.black },
+  searchContainer: { flexDirection: "row", alignItems: "center", backgroundColor: colors.background.white, borderRadius: borders.radius12, paddingHorizontal: 16, paddingVertical: 12, marginTop: 10, shadowColor: colors.shadow.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  searchIcon: { marginRight: 10 },
+  searchInput: { flex: 1, fontSize: typography.fontSize14, color: colors.text.dark },
+  searchButton: { backgroundColor: colors.background.white, borderRadius: borders.radius12, paddingVertical: 14, alignItems: "center", justifyContent: "center", marginTop: 12, marginBottom: 20, shadowColor: colors.shadow.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  searchButtonDisabled: { opacity: 0.6 },
+  searchButtonText: { fontSize: typography.fontSize15, fontWeight: typography.fontWeight600, color: colors.text.dark },
+  resultCard: { flexDirection: "row", alignItems: "center", backgroundColor: colors.background.white, borderRadius: borders.radius12, padding: 12, marginBottom: 12, shadowColor: colors.shadow.black, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  resultAvatar: { width: 56, height: 56, borderRadius: borders.radius28, backgroundColor: colors.background.grayPale, marginRight: 12 },
+  resultInfo: { flex: 1, justifyContent: "center" },
+  resultName: { fontSize: typography.fontSize16, fontWeight: typography.fontWeight600, color: colors.text.dark, marginBottom: 4 },
+  resultId: { fontSize: typography.fontSize13, color: colors.text.gray, marginBottom: 2 },
+  resultPhone: { fontSize: typography.fontSize12, color: colors.text.grayLight },
+  addIconButton: { width: 48, height: 48, borderRadius: borders.radius24, backgroundColor: colors.background.yellowLight, alignItems: "center", justifyContent: "center", marginLeft: 8 },
+  addIconButtonDisabled: { opacity: 0.6 },
+  addedIconButton: { width: 48, height: 48, borderRadius: borders.radius24, backgroundColor: colors.background.yellowPale, alignItems: "center", justifyContent: "center", marginLeft: 8 },
+  friendIconButton: { width: 48, height: 48, borderRadius: borders.radius24, backgroundColor: colors.functional.greenLight, alignItems: "center", justifyContent: "center", marginLeft: 8 },
+  friendBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.functional.greenLight, borderRadius: borders.radius8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 20, gap: 6 },
+  friendBadgeText: { fontSize: typography.fontSize13, fontWeight: typography.fontWeight600, color: colors.text.white },
+  pendingBadge: { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: colors.background.yellowPale, borderRadius: borders.radius8, paddingVertical: 8, paddingHorizontal: 12, marginBottom: 20, gap: 6 },
+  pendingBadgeText: { fontSize: typography.fontSize13, fontWeight: typography.fontWeight600, color: colors.functional.redMedium },
+  noResultContainer: { alignItems: "center", justifyContent: "center", paddingVertical: 40, marginBottom: 20 },
+  noResultText: { fontSize: typography.fontSize14, color: colors.text.grayLight, marginTop: 12, fontWeight: typography.fontWeight500 },
+  noResultSubtext: { fontSize: typography.fontSize12, color: colors.text.gray, marginTop: 4 },
+  actionsContainer: { gap: 16 },
+  actionItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: colors.background.white, borderRadius: borders.radius12, paddingHorizontal: 16, paddingVertical: 14, shadowColor: colors.shadow.black, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 3, elevation: 2 },
+  actionLeft: { flexDirection: "row", alignItems: "center", gap: 12 },
+  iconContainer: { width: 40, height: 40, borderRadius: borders.radius20, alignItems: "center", justifyContent: "center" },
+  actionLabel: { fontSize: typography.fontSize15, fontWeight: typography.fontWeight500, color: colors.text.dark },
 });

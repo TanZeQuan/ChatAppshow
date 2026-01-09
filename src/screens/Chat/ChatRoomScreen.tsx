@@ -162,7 +162,7 @@ export default function ChatRoomScreen() {
   // ✅ 优化 3: 监听消息列表变化，智能滚动
   useEffect(() => {
     if (messages.length === 0) return;
-    
+
     // 获取最新的一条消息
     const latestMessage = messages[0];
 
@@ -198,9 +198,9 @@ export default function ChatRoomScreen() {
     currentUserId,
     chatMembers,
     onMessageSent: () => {
-        loadMessages(false, false);
-        // ✅ 语音发送成功后，强制滚到底部
-        scrollToBottom(true);
+      loadMessages(false, false);
+      // ✅ 语音发送成功后，强制滚到底部
+      scrollToBottom(true);
     },
   });
 
@@ -930,7 +930,7 @@ export default function ChatRoomScreen() {
             contentContainerStyle={roomStyles.chatList}
             inverted
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            
+
             // 核心：监听滚动位置，更新状态
             onScroll={(e) => {
               const { contentOffset } = e.nativeEvent;
