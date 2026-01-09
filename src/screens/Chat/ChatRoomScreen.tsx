@@ -343,20 +343,19 @@ export default function ChatRoomScreen() {
 
           if (loadMore) {
             const allMessages = [...existingMessages, ...transformedMessages];
+            // ✅ 去重：使用 Map 确保 key 唯一
             const uniqueMessages = Array.from(
               new Map(allMessages.map((m: any) => [m.id, m])).values()
             ) as any[];
             setMessages(chatId, uniqueMessages);
             offsetRef.current += apiMessages.length;
           } else {
-            const existingIds = new Set(existingMessages.map(m => m.id));
-            const newMessages = transformedMessages.filter(
-              (msg: any) => !existingIds.has(msg.id)
-            );
-            if (newMessages.length > 0 || existingMessages.length === 0) {
-              const allMessages = [...newMessages, ...existingMessages];
-              setMessages(chatId, allMessages);
-            }
+            // ✅ 合并新旧消息并去重
+            const allMessages = [...transformedMessages, ...existingMessages];
+            const uniqueMessages = Array.from(
+              new Map(allMessages.map((m: any) => [m.id, m])).values()
+            ) as any[];
+            setMessages(chatId, uniqueMessages);
             offsetRef.current = Math.max(offsetRef.current, apiMessages.length);
           }
         }
@@ -394,6 +393,23 @@ export default function ChatRoomScreen() {
   useEffect(() => {
     const handleReadReceipt = (data: { chatId: string; readerId: string }) => {
       if (data.chatId !== chatId) return;
+      
+      // ✅ 1. 更新消息的 readBy 字段，让 MessageBubble 显示双勾
+      const existingMessages = useChatStore.getState().chats[chatId] || [];
+      const updatedMessages = existingMessages.map(msg => {
+        // 只更新「我发的消息」的 readBy 字段
+        if (msg.senderId === currentUserId) {
+          const currentReadBy = msg.readBy || [];
+          // 如果对方还没在 readBy 列表中，添加进去
+          if (!currentReadBy.includes(data.readerId)) {
+            return { ...msg, readBy: [...currentReadBy, data.readerId] };
+          }
+        }
+        return msg;
+      });
+      useChatStore.getState().setMessages(chatId, updatedMessages);
+      
+      // ✅ 2. 同时更新 chatList 的状态（可选，用于聊天列表显示）
       const chatList = useChatStore.getState().chatList;
       const updatedChatList = chatList.map(c => {
         if (c.id === chatId) {
@@ -408,7 +424,7 @@ export default function ChatRoomScreen() {
     return () => {
       WebSocketManager.removeReadReceiptCallback(handleReadReceipt);
     };
-  }, [chatId]);
+  }, [chatId, currentUserId]);
 
   // Reload data when screen gains focus
   useFocusEffect(

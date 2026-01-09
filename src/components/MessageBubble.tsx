@@ -130,11 +130,16 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   const getReadStatus = () => {
     if (item.sender !== 'me') return null;
     const readBy = item.readBy || [];
+    
+    // 群聊：检查是否所有其他成员都已读
     if (totalMembers && totalMembers > 2) {
       const isReadByAll = readBy.length >= (totalMembers - 1);
       return isReadByAll ? 'double' : 'single';
-    } else {
-      if (!item.readBy) return chatUnreadCount === 0 ? 'double' : 'single';
+    } 
+    // 单聊：检查 readBy 数组是否有对方
+    else {
+      // 只有当 readBy 数组有值时才显示双勾（对方已读）
+      // 不再使用 chatUnreadCount，因为那是「我的未读数」，不是「对方的未读数」
       return readBy.length > 0 ? 'double' : 'single';
     }
   };
@@ -393,7 +398,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 <Ionicons
                   name={readStatus === 'double' ? "checkmark-done" : "checkmark"}
                   size={16}
-                  color={readStatus === 'double' ? "#4facfe" : "#CCC"}
+                  color={readStatus === 'double' ? "#4facfe" : "#666"}
                   style={{ marginLeft: 4 }}
                 />
               )}
