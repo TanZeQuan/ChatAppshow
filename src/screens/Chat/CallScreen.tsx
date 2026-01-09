@@ -232,7 +232,15 @@ export default function CallScreen() {
       stopTimer();
       setStatus('Ended');
       setTimeout(() => {
-        if (navigation.canGoBack()) navigation.goBack();
+        // ✅ 对方挂断后返回聊天室，而不是 goBack
+        if (activeChatIdRef.current) {
+          navigation.replace('ChatRoom', {
+            chatId: activeChatIdRef.current,
+            chatName: displayName,
+          });
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
       }, 800);
     };
 
@@ -286,7 +294,15 @@ export default function CallScreen() {
       await sendCallRecord('ended', '通话结束', '00:00');
       
       setTimeout(() => {
-        if (navigation.canGoBack()) navigation.goBack();
+        // ✅ 拒接后返回聊天室，而不是 goBack
+        if (activeChatIdRef.current) {
+          navigation.replace('ChatRoom', {
+            chatId: activeChatIdRef.current,
+            chatName: displayName,
+          });
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
       }, 500);
     } catch (e) {
       console.warn(e);
@@ -338,7 +354,15 @@ export default function CallScreen() {
       WebSocketManager.callService?.cleanup();
       
       setTimeout(() => {
-        if (navigation.canGoBack()) navigation.goBack();
+        // ✅ 挂断后返回聊天室，而不是 goBack
+        if (activeChatIdRef.current) {
+          navigation.replace('ChatRoom', {
+            chatId: activeChatIdRef.current,
+            chatName: displayName,
+          });
+        } else if (navigation.canGoBack()) {
+          navigation.goBack();
+        }
       }, 500);
     } catch (e) {
       console.warn(e);

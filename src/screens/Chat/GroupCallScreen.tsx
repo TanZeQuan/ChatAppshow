@@ -252,7 +252,11 @@ export default function GroupCallScreen() {
         });
     }
 
-    navigation.goBack();
+    // ✅ 挂断后返回聊天室，而不是 goBack
+    navigation.replace('GroupRoom' as never, {
+      chatId: chatId,
+      chatName: route.params?.chatName || '群聊',
+    } as never);
   };
 
   // ✅ Render Single Participant
