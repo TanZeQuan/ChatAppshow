@@ -17,7 +17,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readChatMessages, updateGroup, updateGroupImage, updateGroupName } from '../../api/Chat';
+import { readChatMessages, updateGroup, updateGroupImage, updateGroupName, createPrivateChat} from '../../api/Chat';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
 import WebSocketManager from '../../services/WebSocketManager';
@@ -526,18 +526,71 @@ export default function GroupSettingScreen() {
             { text: '取消', style: 'cancel' },
             {
                 text: '查看资料',
-                onPress: () => navigation.navigate('UserProfile', {
-                    userId: member.id,
-                    userName: member.name,
+                // ✅ 修复：跳转到个人资料页 (ContactInfo)，并传递 contactId
+                onPress: () => navigation.navigate('ChatSettingScreen', {
+                    contactId: member.id, // 这里对应 ContactInfo 接收的参数
+                    name: member.name,
+                    avatar: member.avatar
                 }),
             },
-            {
+           {
                 text: '发送消息',
-                onPress: () => navigation.navigate('ChatRoom', {
-                    chatId: member.id,
-                    chatName: member.name,
-                    avatar: member.avatar,
-                }),
+                onPress: async () => {
+                    let targetChatId = null;
+
+                    // 1. 尝试从本地 Store 查找
+                    const allChats = useChatStore.getState().chatList || [];
+                    const existingChat = allChats.find(c => 
+                        (c.type === 1 || c.isGroup === false) && 
+                        c.memberIds?.includes(member.id)
+                    );
+
+                    if (existingChat) {
+                        console.log('✅ 本地找到已有聊天:', existingChat.id);
+                        targetChatId = existingChat.id;
+                    }
+
+                    // 2. 如果本地没找到，调用 API 获取/创建
+                    if (!targetChatId) {
+                        try {
+                            setIsLoading(true); 
+                            const result = await createPrivateChat({
+                                user_id: currentUserId,
+                                chat_with: member.id,
+                                name: member.name
+                            });
+
+                            if (result.success && result.data?.response) {
+                                targetChatId = result.data.response;
+                            } else {
+                                targetChatId = member.id;
+                            }
+                        } catch (error) {
+                            console.error('创建聊天失败:', error);
+                            targetChatId = member.id;
+                        } finally {
+                            setIsLoading(false);
+                        }
+                    }
+
+                    // 3. ✅ 使用 reset 跳转，确保返回直接回主页
+                    navigation.reset({
+                        index: 1,
+                        routes: [
+                            { name: 'ChatList' }, // 确保这里是你主页/列表页的路由名称
+                            { 
+                                name: 'ChatRoom', 
+                                params: {
+                                    chatId: targetChatId, 
+                                    chatName: member.name,
+                                    avatar: member.avatar,
+                                    isGroup: false,
+                                    otherUserId: member.id 
+                                }
+                            },
+                        ],
+                    });
+                },
             },
         ];
 
@@ -1533,7 +1586,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         padding: 20,
-        paddingTop:8,
+        paddingTop: 8,
         borderBottomWidth: borders.width1,
         borderBottomColor: colors.border.light,
     },

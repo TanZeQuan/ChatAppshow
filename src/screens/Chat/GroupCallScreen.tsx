@@ -252,8 +252,8 @@ export default function GroupCallScreen() {
         });
     }
 
-    // ✅ 挂断后返回聊天室，而不是 goBack
-    navigation.replace('GroupRoom' as never, {
+    // ✅ 挂断后返回聊天室
+    (navigation as any).replace('GroupRoom', {
       chatId: chatId,
       chatName: route.params?.chatName || '群聊',
     } as never);

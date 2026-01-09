@@ -74,7 +74,11 @@ export default function ChatStack() {
       <Stack.Screen
         name="SingleCallScreen"
         component={SingleCallScreen}
-        options={{ title: "Personal Call" }}
+        options={{
+          headerShown: false,
+          presentation: 'fullScreenModal', // 这样弹出时更有打电话的感觉
+          gestureEnabled: false // 禁止手势划走
+        }}
       />
       <Stack.Screen
         name="GroupCallScreen"

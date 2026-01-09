@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import { useChatStore } from "../../store/chatStore";
 import { useContactStore } from "../../store/contactStore";
 import { useUserStore } from "../../store/userStore";
 import { useFriendRequestStore } from "../../store/friendRequestStore";
+import WebSocketManager from '../../services/WebSocketManager'; // ✅ 1. 引入 WebSocket
 import { borders, colors, typography } from "../../styles";
 
 const { width, height } = Dimensions.get("window");
@@ -43,6 +44,10 @@ export default function ContactsScreen() {
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // ✅ 2. 新增：本地维护一个在线状态表 { userId: true/false }
+  const [onlineStatusMap, setOnlineStatusMap] = useState<Record<string, boolean>>({});
+
   const sectionListRef = React.useRef<SectionList>(null);
 
   // Get data from Zustand stores
@@ -50,67 +55,82 @@ export default function ContactsScreen() {
   const { token, user } = useUserStore();
   const { addChat } = useChatStore();
   
-  // 获取 store 方法
   const { requests, setRequests } = useFriendRequestStore();
 
-  // ✅ 核心修复逻辑：严格统计“收到的请求” (Received Only)
   const receivedPendingCount = requests.filter(
     (req: any) => req.type === "received"
   ).length;
 
-  // 🔥 自动轮询：每10秒检查一次
+  // 🔥 自动轮询好友请求
   useEffect(() => {
     const fetchRequests = async () => {
       if (!token) return;
       try {
-        const result = await readFriends(1); // status 1 代表待处理列表
-
+        const result = await readFriends(1);
         if (result.success && result.data) {
           const incoming = result.data.approve || [];
           const outgoing = result.data.request || [];
-
           const storeData = [
             ...incoming.map((item: any) => ({
               id: item.user_id,
               name: item.name,
               avatar: item.image,
-              type: "received", // 别人发给我的
+              type: "received",
             })),
             ...outgoing.map((item: any) => ({
               id: item.user_id,
               name: item.name,
               avatar: item.image,
-              type: "sent", // 我发出的
+              type: "sent",
             })),
           ];
           setRequests(storeData);
         }
       } catch (error) {
-        // 静默失败，避免频繁打扰用户
-        console.log("Polling for friend requests failed silently:", error);
+        console.log("Polling failed silently:", error);
+      }
+    };
+    fetchRequests();
+    const intervalId = setInterval(fetchRequests, 10000);
+    return () => clearInterval(intervalId);
+  }, [token, setRequests]);
+
+  // ✅ 3. 新增：WebSocket 实时监听在线状态
+  useEffect(() => {
+    const handleWebSocketMessage = (data: any) => {
+      // 监听 'presence' 或 'user_status' (根据你的后端协议)
+      if (data.type === 'presence' || data.type === 'user_status') {
+        const userId = data.user_id || data.userId || data.sender;
+        // 判断是否在线 (兼容布尔值或数字状态)
+        const isOnline = data.status === 'online' || data.online === true || data.state === 1;
+
+        if (userId) {
+          setOnlineStatusMap(prev => {
+            if (prev[userId] === isOnline) return prev; // 状态没变就不更新
+            return { ...prev, [userId]: isOnline };
+          });
+        }
       }
     };
 
-    fetchRequests(); // 进页面查一次
-    const intervalId = setInterval(fetchRequests, 10000); // 之后每10秒查一次
+    WebSocketManager.addMessageCallback(handleWebSocketMessage);
+    return () => {
+      WebSocketManager.removeMessageCallback(handleWebSocketMessage);
+    };
+  }, []);
 
-    return () => clearInterval(intervalId); // 离开页面清除
-  }, [token, setRequests]);
-
-  // Fetch contacts when screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
       if (token) {
         loadContacts();
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [token])
   );
 
   const loadContacts = async () => {
     try {
       setIsLoading(true);
-      const result = await readFriends(2); // 获取已添加的好友列表
+      const result = await readFriends(2);
 
       if (result.success && result.data) {
         const allFriends = [
@@ -118,16 +138,23 @@ export default function ContactsScreen() {
           ...(result.data.approve || [])
         ];
 
+        // ✅ 4. 临时 Map，用于初始化在线状态
+        const initialStatusMap: Record<string, boolean> = {};
+
         const formattedContacts = allFriends.map((friend: any) => {
           const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
           const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
           const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
+          
+          // 获取 API 返回的初始状态
+          const isOnline = friend.online || friend.is_online || false;
+          initialStatusMap[userId] = isOnline;
 
           return {
             id: userId,
             name: userName,
             avatar: userAvatar,
-            online: friend.online || friend.is_online || false,
+            online: isOnline, 
             listId: friend.list_id || friend.listId || 0,
             isFriend: true,
             rawData: friend,
@@ -139,12 +166,14 @@ export default function ContactsScreen() {
         );
 
         setContacts(uniqueContacts);
+        // ✅ 5. 更新状态 Map
+        setOnlineStatusMap(prev => ({ ...initialStatusMap, ...prev }));
+
       } else {
         if (contacts.length === 0) {
           Alert.alert("加载失败", result.message || "无法加载联系人列表");
         }
       }
-
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading contacts:", error);
@@ -244,7 +273,8 @@ export default function ContactsScreen() {
             lastMessage: existingChat.last_message || '',
             timestamp: existingChat.last_message_time || existingChat.timestamp || new Date().toISOString(),
             unreadCount: existingChat.unread_count || existingChat.unread || 0,
-            online: false
+            online: false,
+            type: 0
           });
           parentNavigation.navigate("ChatStack", {
             screen: "ChatRoom",
@@ -276,6 +306,7 @@ export default function ContactsScreen() {
           timestamp: new Date().toISOString(),
           unreadCount: 0,
           online: contact.online || false,
+          type: 0
         });
         parentNavigation.navigate("ChatStack", {
           screen: "ChatRoom",
@@ -308,7 +339,8 @@ export default function ContactsScreen() {
                lastMessage: foundChat.last_message || '',
                timestamp: foundChat.last_message_time || foundChat.timestamp || new Date().toISOString(),
                unreadCount: foundChat.unread_count || foundChat.unread || 0,
-               online: false
+               online: false,
+               type: 0
              });
              parentNavigation.navigate("ChatStack", {screen: "ChatRoom", params: {chatId, chatName, isGroup: false}});
            } else {
@@ -371,18 +403,13 @@ export default function ContactsScreen() {
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Action Buttons */}
       <View style={styles.actionButtons}>
-        
-        {/* ✅ 好友请求按钮 - 只显示别人发给你的待处理请求 */}
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => navigation.navigate("FriendRequest")}
         >
           <View style={styles.actionIcon}>
             <Ionicons name="mail-unread-outline" size={22} color="#666" />
-            
-            {/* 🔴 红点通知逻辑：只有收到待处理请求 > 0 时才显示 */}
             {receivedPendingCount > 0 && (
               <View style={styles.badgeContainer}>
                 <Text style={styles.badgeText}>{receivedPendingCount}</Text>
@@ -440,24 +467,31 @@ export default function ContactsScreen() {
               <Text style={styles.sectionHeaderText}>{section.title}</Text>
             </View>
           )}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.contactItem} onPress={() => handleContactPress(item)}>
-              <View style={styles.avatarContainer}>
-                <Image
-                  source={
-                    !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
-                      ? require('../../assets/images/personal.png')
-                      : { uri: item.avatar }
-                  }
-                  style={styles.avatarImage}
-                />
-                {item.online && <View style={styles.onlineDot} />}
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{item.name.replace(/^用户/, '')}</Text>
-              </View>
-            </TouchableOpacity>
-          )}
+          renderItem={({ item }) => {
+            // ✅ 6. 核心：优先从实时 Map 获取状态，没有则用 API 初始状态
+            const isOnline = onlineStatusMap[item.id] ?? item.online;
+
+            return (
+              <TouchableOpacity style={styles.contactItem} onPress={() => handleContactPress(item)}>
+                <View style={styles.avatarContainer}>
+                  {/* ✅ 这里完全保留了你之前的图片判断逻辑，一个字都没改 */}
+                  <Image
+                    source={
+                      !item.avatar || item.avatar.trim() === '' || item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                        ? require('../../assets/images/personal.png')
+                        : { uri: item.avatar }
+                    }
+                    style={styles.avatarImage}
+                  />
+                  {/* ✅ 7. 只有 isOnline 为 true 时才显示绿点 */}
+                  {isOnline && <View style={styles.onlineDot} />}
+                </View>
+                <View style={styles.contactInfo}>
+                  <Text style={styles.contactName}>{item.name.replace(/^用户/, '')}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
         {sections.length > 0 && (
           <View style={styles.alphabetIndex}>
@@ -506,7 +540,20 @@ const styles = StyleSheet.create({
   contactItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16), paddingVertical: scaleHeight(12), backgroundColor: colors.background.white, borderBottomWidth: borders.width05, borderBottomColor: colors.border.grayLight },
   avatarContainer: { position: 'relative', marginRight: scaleWidth(12) },
   avatarImage: { width: scaleWidth(40), height: scaleWidth(40), borderRadius: borders.radius4, backgroundColor: colors.background.gray },
-  onlineDot: { position: 'absolute', bottom: 0, right: 0, width: scaleWidth(10), height: scaleWidth(10), backgroundColor: colors.functional.greenSuccess, borderRadius: borders.radius50 / 5, borderWidth: borders.width1, borderColor: colors.background.white },
+  
+  // ✅ 优化后的在线指示灯样式
+  onlineDot: { 
+    position: 'absolute', 
+    bottom: 0, 
+    right: 0, 
+    width: scaleWidth(12), 
+    height: scaleWidth(12), 
+    backgroundColor: colors.functional.greenSuccess, 
+    borderRadius: scaleWidth(6), 
+    borderWidth: 2, 
+    borderColor: colors.background.white 
+  },
+  
   contactInfo: { flex: 1, justifyContent: 'center' },
   contactName: { fontSize: typography.fontSize16, color: colors.text.black, fontWeight: typography.fontWeight400 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: scaleHeight(80) },

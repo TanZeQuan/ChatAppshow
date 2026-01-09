@@ -27,6 +27,7 @@ type MemberInfo = {
 };
 
 export type ChatListItem = {
+  type: number;
   id: string;
   name: string;
   avatar: string | null;
