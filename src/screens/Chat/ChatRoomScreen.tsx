@@ -162,7 +162,7 @@ export default function ChatRoomScreen() {
   const scrollToBottom = useCallback((animated = true, delay = 0) => {
     setTimeout(() => {
       if (flatListRef.current && messages.length > 0) {
-        flatListRef.current.scrollToOffset({ offset: 0, animated });
+        flatListRef.current?.scrollToEnd({ animated });
       }
     }, delay);
   }, [messages.length]);
@@ -1097,7 +1097,7 @@ export default function ChatRoomScreen() {
             renderItem={renderItem}
             keyExtractor={(item) => item.id}
             contentContainerStyle={roomStyles.chatList}
-            inverted
+            inverted={true}
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
 
             // ✅ 核心：监听滚动位置，更新状态

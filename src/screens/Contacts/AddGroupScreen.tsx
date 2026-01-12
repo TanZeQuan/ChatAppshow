@@ -461,7 +461,6 @@ export default function AddGroupScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,

@@ -33,7 +33,8 @@ interface SearchResult {
 }
 
 export default function AddFriendScreen() {
-  const navigation = useNavigation();
+  // ✅ 修改: 添加 <any> 类型以允许 navigate 跳转到任意路由
+  const navigation = useNavigation<any>();
   const [searchText, setSearchText] = useState("");
   const [searchResult, setSearchResult] = useState<SearchResult | null>(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -182,8 +183,9 @@ export default function AddFriendScreen() {
     }
   };
 
+  // ✅ 修改: 点击扫描名片跳转到 QRcode 页面
   const handleScanQR = () => {
-    Alert.alert("提示", "扫描功能即将推出");
+    navigation.navigate('ScanGroupScreen' as never);
   };
 
   const handleClearSearch = () => {

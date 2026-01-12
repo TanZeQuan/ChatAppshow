@@ -10,17 +10,18 @@ import {
     TouchableOpacity,
     View,
     Alert,
-    Button,
-    Image
+    Button
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { getOriginalTabBarStyle } from '../../components/tabstyle';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
+
+// ✅ Imported consistent components and styles
 import { useUserStore } from '../../store/userStore';
-import { ensureFullImageUrl } from '../../api/service';
+import { getOriginalTabBarStyle } from '../../components/tabstyle';
 import { colors, typography } from '../../styles';
+import { Avatar } from '../../components/Avatar'; 
 
 const { width } = Dimensions.get('window');
 
@@ -31,11 +32,12 @@ export default function QRCodeScreen() {
     const [permission, requestPermission] = useCameraPermissions();
     const [scanned, setScanned] = useState(false);
 
-    // Get user from Zustand store
-    const user = useUserStore((state) => state.user);
+    // ✅ Use store format like ProfileScreen
+    const { user } = useUserStore();
+    
+    // Fallback data if user is not loaded
     const userId = user?.id || 'GUEST';
     const userName = user?.name || 'Guest User';
-    const userAvatar = user?.avatar;
     const userPhone = user?.phone || '';
     const userEmail = user?.email || '';
     const userAbout = user?.about || '';
@@ -56,24 +58,15 @@ END:VCARD`;
 
     useLayoutEffect(() => {
         const parent = navigation.getParent();
-
-        parent?.setOptions({
-            tabBarStyle: { display: "none" }
-        });
-
+        parent?.setOptions({ tabBarStyle: { display: "none" } });
         return () => {
-            parent?.setOptions({
-                tabBarStyle: getOriginalTabBarStyle(insets),
-            });
+            parent?.setOptions({ tabBarStyle: getOriginalTabBarStyle(insets) });
         };
     }, [insets, navigation]);
 
     const handleBarcodeScanned = ({ type, data }: { type: string; data: string }) => {
         setScanned(true);
-
-        // Check if it's a vCard (contact info)
         if (data.startsWith('BEGIN:VCARD')) {
-            // Parse vCard data
             const nameMatch = data.match(/FN:(.*)/);
             const phoneMatch = data.match(/TEL:(.*)/);
             const emailMatch = data.match(/EMAIL:(.*)/);
@@ -86,33 +79,20 @@ END:VCARD`;
                 '扫描到联系人',
                 `姓名: ${contactName}\n电话: ${contactPhone}\n邮箱: ${contactEmail}`,
                 [
-                    {
-                        text: '取消',
-                        style: 'cancel',
-                        onPress: () => setScanned(false) // Allow scanning again if cancelled
-                    },
-                    {
-                        text: '添加到通讯录',
+                    { text: '取消', style: 'cancel', onPress: () => setScanned(false) },
+                    { 
+                        text: '添加到通讯录', 
                         onPress: () => {
-                            // Here you would implement the logic to add contact
-                            // For now, just show success message
-                            Alert.alert(
-                                '成功',
-                                '联系人已添加到通讯录',
-                                [{ text: '确定', onPress: () => setScanned(false) }]
-                            );
-                        }
+                            Alert.alert('成功', '联系人已添加到通讯录', [{ text: '确定', onPress: () => setScanned(false) }]);
+                        } 
                     }
                 ]
             );
         } else {
-            // Regular QR code
             Alert.alert(
                 '扫码成功',
                 `类型: ${type}\n数据: ${data}`,
-                [
-                    { text: '确定', onPress: () => setScanned(false) }
-                ]
+                [{ text: '确定', onPress: () => setScanned(false) }]
             );
         }
     };
@@ -120,10 +100,7 @@ END:VCARD`;
     const pickImageForScan = async () => {
         try {
             const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (status !== 'granted') {
-                Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
-                return;
-            }
+            if (status !== 'granted') return Alert.alert('权限被拒绝', '需要相册权限才能选择图片');
 
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ['images'],
@@ -133,45 +110,25 @@ END:VCARD`;
 
             if (result.canceled) return;
 
-            // Note: Scanning from an image file usually requires a separate library 
-            // like 'expo-barcode-scanner' (deprecated) or a native module wrapper
-            // because CameraView only scans live feeds.
-            Alert.alert(
-                '图片已选择',
-                '目前仅支持相机扫码，从相册识别二维码需要额外配置。',
-                [{ text: '知道了' }]
-            );
-
-            console.log('Selected image for scan:', result.assets[0].uri);
+            Alert.alert('图片已选择', '目前仅支持相机扫码，从相册识别二维码需要额外配置。', [{ text: '知道了' }]);
         } catch (error) {
             console.error('选择图片错误:', error);
             Alert.alert('选择失败', '选择图片时出错');
         }
     };
 
-    // ✅ Handle opening the scanner
     const handleOpenScanner = () => {
-        setScanned(false); // Reset scanned state
+        setScanned(false);
         setShowScanner(true);
     };
 
+    // --- Scanner View ---
     if (showScanner) {
-        if (!permission) {
-            return (
-                <View style={styles.container}>
-                    <Text style={{ color: 'white', textAlign: 'center', margin: 20 }}>
-                        正在请求相机权限...
-                    </Text>
-                </View>
-            );
-        }
-
+        if (!permission) return <View style={styles.container}><Text style={styles.loadingText}>正在请求相机权限...</Text></View>;
         if (!permission.granted) {
             return (
-                <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#2d3748' }]}>
-                    <Text style={{ color: 'white', textAlign: 'center', marginBottom: 20 }}>
-                        需要相机权限才能扫描二维码
-                    </Text>
+                <View style={[styles.container, styles.permissionContainer]}>
+                    <Text style={styles.permissionText}>需要相机权限才能扫描二维码</Text>
                     <Button onPress={requestPermission} title="授予权限" />
                     <Button onPress={() => setShowScanner(false)} title="返回" color="#ff5555" />
                 </View>
@@ -179,17 +136,11 @@ END:VCARD`;
         }
 
         return (
-            <LinearGradient
-                colors={['#4a5568', '#2d3748']}
-                style={styles.container}
-            >
+            <LinearGradient colors={['#4a5568', '#2d3748']} style={styles.container}>
                 <StatusBar barStyle="light-content" />
                 <SafeAreaView style={styles.safeArea}>
                     <View style={styles.header}>
-                        <TouchableOpacity
-                            style={styles.backButton}
-                            onPress={() => setShowScanner(false)}
-                        >
+                        <TouchableOpacity style={styles.backButton} onPress={() => setShowScanner(false)}>
                             <Ionicons name="arrow-back" size={24} color="white" />
                         </TouchableOpacity>
                         <Text style={styles.title}>扫码二维码</Text>
@@ -197,41 +148,29 @@ END:VCARD`;
                     </View>
 
                     <View style={styles.scannerContent}>
-                        {/* ✅ Enabled Barcode Scanning */}
                         <CameraView
                             style={StyleSheet.absoluteFillObject}
                             facing="back"
                             onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-                            barcodeScannerSettings={{
-                                barcodeTypes: ["qr", "ean13", "ean8", "code128"],
-                            }}
+                            barcodeScannerSettings={{ barcodeTypes: ["qr", "ean13", "ean8", "code128"] }}
                         />
-
                         <View style={styles.scannerFrameContainer}>
                             <View style={[styles.scannerCorner, styles.topLeft]} />
                             <View style={[styles.scannerCorner, styles.topRight]} />
                             <View style={[styles.scannerCorner, styles.bottomLeft]} />
                             <View style={[styles.scannerCorner, styles.bottomRight]} />
                         </View>
-
                         <Text style={styles.scannerText}>将扫二维码放入框内即可扫码</Text>
                     </View>
 
                     <View style={styles.scannerActions}>
-                        <TouchableOpacity
-                            style={styles.scannerActionButton}
-                            onPress={pickImageForScan}
-                        >
+                        <TouchableOpacity style={styles.scannerActionButton} onPress={pickImageForScan}>
                             <View style={styles.scannerActionIconContainer}>
                                 <Ionicons name="albums-outline" size={28} color="white" />
                             </View>
                             <Text style={styles.scannerActionText}>相册扫码</Text>
                         </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={styles.scannerActionButton}
-                            onPress={() => setShowScanner(false)}
-                        >
+                        <TouchableOpacity style={styles.scannerActionButton} onPress={() => setShowScanner(false)}>
                             <View style={styles.scannerActionIconContainer}>
                                 <Ionicons name="qr-code-outline" size={28} color="white" />
                             </View>
@@ -243,18 +182,13 @@ END:VCARD`;
         );
     }
 
+    // --- Main QR Card View ---
     return (
-        <LinearGradient
-            colors={['#4a5568', '#2d3748']}
-            style={styles.container}
-        >
+        <LinearGradient colors={['#4a5568', '#2d3748']} style={styles.container}>
             <StatusBar barStyle="light-content" />
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.header}>
-                    <TouchableOpacity
-                        style={styles.backButton}
-                        onPress={() => navigation.goBack()}
-                    >
+                    <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
                         <Ionicons name="arrow-back" size={24} color="white" />
                     </TouchableOpacity>
                     <Text style={styles.title}>我的二维码</Text>
@@ -262,30 +196,21 @@ END:VCARD`;
                 </View>
 
                 <View style={styles.content}>
-                    <LinearGradient
-                        colors={['#fcd34d', '#fbbf24']}
-                        style={styles.qrCard}
-                    >
-                        {/* Avatar Circle */}
+                    <LinearGradient colors={['#fcd34d', '#fbbf24']} style={styles.qrCard}>
+                        
+                        {/* ✅ Updated Avatar Circle using your custom Component */}
                         <View style={styles.avatarContainer}>
-                            <LinearGradient
-                                colors={['#d1d5db', '#9ca3af']}
-                                style={styles.avatarOuter}
-                            >
-                                {userAvatar ? (
-                                    <Image
-                                        source={{ uri: ensureFullImageUrl(userAvatar) }}
-                                        style={styles.avatarImage}
-                                    />
-                                ) : (
-                                    <View style={styles.avatarInner}>
-                                        <Ionicons name="person" size={32} color="#9ca3af" />
-                                    </View>
-                                )}
+                            <LinearGradient colors={['#d1d5db', '#9ca3af']} style={styles.avatarOuter}>
+                                <Avatar 
+                                    uri={user?.avatar} 
+                                    size={88} 
+                                    borderRadius={44}
+                                    // The Avatar component handles the default image internally 
+                                    // based on your ProfileScreen logic.
+                                />
                             </LinearGradient>
                         </View>
 
-                        {/* Real QR Code with User ID */}
                         <View style={styles.qrContainer}>
                             <QRCode
                                 value={qrValue}
@@ -295,18 +220,13 @@ END:VCARD`;
                             />
                         </View>
 
-                        {/* Optional: Display User ID */}
                         <Text style={styles.userIdText}>{userName}</Text>
                         <Text style={styles.userIdSubText}>ID: {userId}</Text>
                     </LinearGradient>
                 </View>
 
                 <View style={styles.actions}>
-                    {/* ✅ Activated Scan Button */}
-                    <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={handleOpenScanner}
-                    >
+                    <TouchableOpacity style={styles.actionButton} onPress={handleOpenScanner}>
                         <View style={styles.actionIconContainer}>
                             <Ionicons name="scan-outline" size={24} color="white" />
                         </View>
@@ -326,12 +246,8 @@ END:VCARD`;
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    safeArea: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+    safeArea: { flex: 1 },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -348,13 +264,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     title: {
-        color: colors.text.black,
+        color: colors.text.black, // Used standard color
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
     },
-    placeholder: {
-        width: 40,
-    },
+    placeholder: { width: 40 },
     content: {
         flex: 1,
         alignItems: 'center',
@@ -386,19 +300,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         overflow: 'hidden',
     },
-    avatarImage: {
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-    },
-    avatarInner: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: 'white',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     qrContainer: {
         backgroundColor: 'white',
         padding: 24,
@@ -427,9 +328,7 @@ const styles = StyleSheet.create({
         paddingBottom: 32,
         paddingHorizontal: 24,
     },
-    actionButton: {
-        alignItems: 'center',
-    },
+    actionButton: { alignItems: 'center' },
     actionIconContainer: {
         width: 56,
         height: 56,
@@ -443,6 +342,7 @@ const styles = StyleSheet.create({
         color: 'white',
         fontSize: 13,
     },
+    // Scanner Styles
     scannerContent: {
         flex: 1,
         alignItems: 'center',
@@ -462,30 +362,10 @@ const styles = StyleSheet.create({
         borderColor: 'white',
         borderWidth: 4,
     },
-    topLeft: {
-        top: 0,
-        left: 0,
-        borderRightWidth: 0,
-        borderBottomWidth: 0,
-    },
-    topRight: {
-        top: 0,
-        right: 0,
-        borderLeftWidth: 0,
-        borderBottomWidth: 0,
-    },
-    bottomLeft: {
-        bottom: 0,
-        left: 0,
-        borderRightWidth: 0,
-        borderTopWidth: 0,
-    },
-    bottomRight: {
-        bottom: 0,
-        right: 0,
-        borderLeftWidth: 0,
-        borderTopWidth: 0,
-    },
+    topLeft: { top: 0, left: 0, borderRightWidth: 0, borderBottomWidth: 0 },
+    topRight: { top: 0, right: 0, borderLeftWidth: 0, borderBottomWidth: 0 },
+    bottomLeft: { bottom: 0, left: 0, borderRightWidth: 0, borderTopWidth: 0 },
+    bottomRight: { bottom: 0, right: 0, borderLeftWidth: 0, borderTopWidth: 0 },
     scannerText: {
         color: 'white',
         fontSize: 14,
@@ -498,9 +378,7 @@ const styles = StyleSheet.create({
         paddingBottom: 48,
         paddingHorizontal: 24,
     },
-    scannerActionButton: {
-        alignItems: 'center',
-    },
+    scannerActionButton: { alignItems: 'center' },
     scannerActionIconContainer: {
         width: 60,
         height: 60,
@@ -510,8 +388,13 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 8,
     },
-    scannerActionText: {
-        color: 'white',
-        fontSize: 13,
+    scannerActionText: { color: 'white', fontSize: 13 },
+    loadingText: { color: 'white', textAlign: 'center', margin: 20 },
+    permissionContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+        backgroundColor: '#2d3748'
     },
+    permissionText: { color: 'white', textAlign: 'center', marginBottom: 20 },
 });
