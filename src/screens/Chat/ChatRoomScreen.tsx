@@ -28,6 +28,7 @@ import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
+import { readFriends } from '../../api/Friend';
 import { chatRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
 
 const { width, height } = Dimensions.get("window");
@@ -70,6 +71,8 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
+  const [isFriendDeleted, setIsFriendDeleted] = useState(false);
+  const [isCheckingFriendStatus, setIsCheckingFriendStatus] = useState(false);
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -117,6 +120,106 @@ export default function ChatRoomScreen() {
     goToNextMatch,
     goToPrevMatch
   } = useSearchChatHistory();
+
+  const otherUserId = useMemo(() => {
+    // 群聊不需要检测
+    if (chat?.isGroup) return null;
+
+    // 优先级1: 从路由参数获取（最准确）
+    if (params.otherUserId) {
+      console.log('✅ Found otherUserId from params:', params.otherUserId);
+      return params.otherUserId;
+    }
+
+    // 优先级2: 从成员列表中找
+    const foundInMembers = chatMembers.find(id => id !== currentUserId);
+    if (foundInMembers) {
+      console.log('✅ Found otherUserId from chatMembers:', foundInMembers);
+      return foundInMembers;
+    }
+
+    // 优先级3: 从 chat.memberIds 找
+    if (chat?.memberIds) {
+      const foundInChatMemberIds = chat.memberIds.find((id: string) => id !== currentUserId);
+      if (foundInChatMemberIds) {
+        console.log('✅ Found otherUserId from chat.memberIds:', foundInChatMemberIds);
+        return foundInChatMemberIds;
+      }
+    }
+
+    console.warn('⚠️ Could not find otherUserId');
+    return null;
+  }, [chat, chatMembers, currentUserId, params.otherUserId]);
+
+  // 新增：检查好友状态函数
+  const checkFriendStatus = useCallback(async () => {
+    // 群聊或没有对方ID，跳过检测
+    if (!otherUserId || chat?.isGroup) {
+      setIsFriendDeleted(false);
+      return;
+    }
+
+    try {
+      setIsCheckingFriendStatus(true);
+
+      console.log('🔍 [ChatRoom] 检查好友状态，对方ID:', otherUserId);
+
+      // 获取已接受的好友列表 (isstatus = 2)
+      const result = await readFriends(2);
+
+      if (result.success && result.data) {
+        const allFriends = [
+          ...(result.data.request || []),
+          ...(result.data.approve || [])
+        ];
+
+        console.log('📋 [ChatRoom] 当前好友列表:', allFriends.map(f => f.user_id));
+
+        // 检查对方是否还在好友列表中
+        const friendExists = allFriends.some(
+          (friend: any) => friend.user_id === otherUserId
+        );
+
+        setIsFriendDeleted(!friendExists);
+
+        if (!friendExists) {
+          console.log('⚠️ [ChatRoom] 对方已删除好友关系');
+        } else {
+          console.log('✅ [ChatRoom] 好友关系正常');
+        }
+      }
+    } catch (error) {
+      console.error('❌ [ChatRoom] 检查好友状态失败:', error);
+      // 出错时保守处理，允许继续聊天
+      setIsFriendDeleted(false);
+    } finally {
+      setIsCheckingFriendStatus(false);
+    }
+  }, [otherUserId, chat?.isGroup]);
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      loadMessages(false, false);
+
+      // ✅ 同时检查好友状态
+      if (otherUserId && !chat?.isGroup) {
+        console.log('🔍 [ChatRoom] 聚焦时重新检查好友状态');
+        checkFriendStatus();
+      }
+
+      if (chatMembers && chatMembers.length > 0) {
+        const otherMembers = chatMembers.filter(id => id !== currentUserId);
+        if (otherMembers.length > 0) {
+          WebSocketManager.sendReadSignal({
+            receiver: otherMembers,
+            chat_id: chatId
+          });
+        }
+      }
+    }, [otherUserId, chat?.isGroup, chatMembers, checkFriendStatus, currentUserId, chatId])
+  );
+
 
   // ✅ Transform messages - logic enhanced to parse JSON for cards
   const messages: DisplayMessage[] = useMemo(() => {
@@ -216,9 +319,9 @@ export default function ChatRoomScreen() {
     chatMembers,
     onMessageSent: () => {
       loadMessages(false, false);
-      // ✅ 语音发送成功后，延迟滚动确保消息已渲染
       scrollToBottom(true, 100);
     },
+    // ✅ 传入好友删除状态
   });
 
   // Wrap loadMessages in useCallback
@@ -618,13 +721,18 @@ export default function ChatRoomScreen() {
   // Handle Send Text
   const handleSend = async () => {
     if (!inputText.trim()) return;
+
+    // ✅ 如果对方已删除好友，阻止发送
+    if (isFriendDeleted) {
+      Alert.alert('无法发送', '对方已删除好友关系，无法发送消息');
+      return;
+    }
+
     const messageText = inputText.trim();
     setInputText('');
 
-    // ✅ 发送前先滚动，提升响应速度
     scrollToBottom(true, 0);
 
-    // Get a reference to the store's addMessage function
     const { addMessage } = useChatStore.getState();
 
     try {
@@ -637,27 +745,21 @@ export default function ChatRoomScreen() {
       });
 
       if (result.success && result.data && result.data.message_id) {
-        // --- Start of Optimization ---
-        // The backend now returns the full message object, let's call it `sentMessage`.
-        // We'll construct a message object for our local store.
-        const sentMessage = result.data; // Assuming result.data is the new message object
+        const sentMessage = result.data;
 
         const newMessageForStore = {
           id: sentMessage.message_id,
-          text: messageText, // The text is from our input
-          createdAt: sentMessage.created_at || new Date().toISOString(), // Use server time, fallback to local
+          text: messageText,
+          createdAt: sentMessage.created_at || new Date().toISOString(),
           senderId: currentUserId,
           type: sentMessage.type || 1,
-          name: currentUserName, // Add sender's name
-          avatar: currentUserAvatar, // Add sender's avatar
-          readBy: [], // Initially, no one has read it
+          name: currentUserName,
+          avatar: currentUserAvatar,
+          readBy: [],
         };
 
-        // Add the new message to the store, which will update the UI reactively
         addMessage({ chatId, ...newMessageForStore });
-        // --- End of Optimization ---
 
-        // The WebSocket forwarding logic remains the same
         const actualReceivers = (sentMessage.isreceive && sentMessage.isreceive.length > 0)
           ? sentMessage.isreceive
           : receiver;
@@ -672,17 +774,36 @@ export default function ChatRoomScreen() {
             chat_id: chatId
           });
         }
-
-        // No longer need to reload all messages
-        // await loadMessages(false, false); 
       } else {
-        Alert.alert('Send Failed', result.message || 'Message failed to send, please retry');
-        setInputText(messageText); // Restore text on failure
+        // ✅ 检测后端返回的错误信息
+        const errorMessage = result.message || '';
+        if (errorMessage.includes('好友') ||
+          errorMessage.includes('关系不存在') ||
+          errorMessage.includes('Friend') ||
+          errorMessage.includes('deleted')) {
+          setIsFriendDeleted(true);
+          Alert.alert('无法发送', '对方已删除好友关系');
+          return;
+        }
+
+        Alert.alert('发送失败', result.message || '消息发送失败，请重试');
+        setInputText(messageText);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error);
-      Alert.alert('Send Failed', 'An unexpected error occurred. Please retry.');
-      setInputText(messageText); // Restore text on failure
+
+      // ✅ 检测异常中的错误信息
+      const errorMessage = error.response?.data?.message || error.message || '';
+      if (errorMessage.includes('好友') ||
+        errorMessage.includes('关系不存在') ||
+        errorMessage.includes('Friend')) {
+        setIsFriendDeleted(true);
+        Alert.alert('无法发送', '对方已删除好友关系');
+        return;
+      }
+
+      Alert.alert('发送失败', '网络错误，请重试');
+      setInputText(messageText);
     }
   };
 
@@ -772,6 +893,10 @@ export default function ChatRoomScreen() {
   };
 
   const pickImage = async () => {
+    if (isFriendDeleted) {
+      Alert.alert('无法发送', '对方已删除好友关系，无法发送图片');
+      return;
+    }
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -908,6 +1033,10 @@ export default function ChatRoomScreen() {
   // ✅ Core Addition: Send Contact Card Logic
   // ✅ 发送名片逻辑 (已修复头像为空的情况)
   const handleSendContactCard = useCallback(() => {
+    if (isFriendDeleted) {
+      Alert.alert('无法发送', '对方已删除好友关系，无法发送名片');
+      return;
+    }
     // 跳转到联系人选择页
     (navigation as any).navigate('SelectContactForCard', {
       onSelectContact: async (contact: any) => {
@@ -1031,15 +1160,17 @@ export default function ChatRoomScreen() {
       { icon: 'image-outline', label: '图片', onPress: pickImage },
       { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'videocam-outline', label: '视频通话', onPress: handleStartCall },
-    ],
-    row2: [
-      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('Coming Soon', 'File sharing is not yet implemented.') },
+      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
       // ✅ Added Contact Card Button
       { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
-      { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
-      { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
     ],
+    // row2: [
+    //   { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('Coming Soon', 'File sharing is not yet implemented.') },
+    //   // ✅ Added Contact Card Button
+    //   { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
+    //   // { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
+    //   // { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
+    // ],
   };
 
   // Loading screen
@@ -1121,23 +1252,34 @@ export default function ChatRoomScreen() {
             }
           />
 
-          <ChatInputBar
-            inputText={inputText}
-            setInputText={setInputText}
-            isRecording={isRecording}
-            isUploading={isUploading}
-            startRecording={startRecording}
-            stopRecording={stopRecording}
-            isEmojiPickerOpen={isEmojiPickerOpen}
-            toggleEmojiPicker={toggleEmojiPicker}
-            showToolbar={showToolbar}
-            toggleToolbar={toggleToolbar}
-            handleSend={handleSend}
-            toolbarButtons={toolbarButtons}
-            roomStyles={roomStyles}
-            chatId={chatId}
-            chatMembers={chatMembers}
-          />
+         {isFriendDeleted && !chat?.isGroup ? (
+            // 显示禁用状态的输入栏
+            <View style={roomStyles.disabledInputContainer}>
+              <Ionicons name="lock-closed-outline" size={20} color="#999" />
+              <Text style={roomStyles.disabledInputText}>
+                对方已删除好友关系，无法发送消息
+              </Text>
+            </View>
+          ) : (
+            // 正常的输入栏
+            <ChatInputBar
+              inputText={inputText}
+              setInputText={setInputText}
+              isRecording={isRecording}
+              isUploading={isUploading}
+              startRecording={startRecording}
+              stopRecording={stopRecording}
+              isEmojiPickerOpen={isEmojiPickerOpen}
+              toggleEmojiPicker={toggleEmojiPicker}
+              showToolbar={showToolbar}
+              toggleToolbar={toggleToolbar}
+              handleSend={handleSend}
+              toolbarButtons={toolbarButtons}
+              roomStyles={roomStyles}
+              chatId={chatId}
+              chatMembers={chatMembers}
+            />
+          )}
         </KeyboardAvoidingView>
 
         <EmojiPicker

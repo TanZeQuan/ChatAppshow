@@ -38,7 +38,7 @@ interface ChatInputBarProps {
   // Toolbar buttons configuration
   toolbarButtons: {
     row1: ToolbarButtonProps[];
-    row2: ToolbarButtonProps[];
+    // row2: ToolbarButtonProps[];
   };
 
   // Styles
@@ -194,7 +194,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
               />
             ))}
           </View>
-          <View style={roomStyles.toolbarRow}>
+          {/* <View style={roomStyles.toolbarRow}>
             {toolbarButtons.row2.map((button, index) => (
               <ToolbarButton
                 key={index}
@@ -202,7 +202,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
                 roomStyles={roomStyles}
               />
             ))}
-          </View>
+          </View> */}
         </View>
       )}
     </View>

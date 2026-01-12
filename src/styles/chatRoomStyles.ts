@@ -44,7 +44,51 @@ export const baseRoomStyles = RNStyleSheet.create({
   iconButton: {
     padding: scaleWidth(4),
   },
-
+ friendDeletedWarning: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: '#FFF3F3',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FFE0E0',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#FF3B30',
+    marginLeft: 8,
+    marginRight: 12,
+  },
+  reAddButton: {
+    backgroundColor: '#FFD966',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  reAddButtonText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#333',
+  },
+  
+  // ✅ 禁用的输入栏
+  disabledInputContainer: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    backgroundColor: '#F5F5F5',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
+  },
+  disabledInputText: {
+    fontSize: 14,
+    color: '#999',
+    marginLeft: 8,
+  },
   // Search header
   searchInput: {
     flex: 1,

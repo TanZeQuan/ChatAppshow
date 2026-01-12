@@ -862,14 +862,15 @@ export default function ChatRoomScreen() {
       { icon: 'image-outline', label: '图片', onPress: pickImage },
       { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'call-outline', label: '通话', onPress: handleStartCall },
+       { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
+       { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
     ],
-    row2: [
-      { icon: 'document-outline', label: '文件' },
-      { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
-      { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
-      { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
-    ],
+    // row2: [
+    //   { icon: 'document-outline', label: '文件' },
+    //   { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
+    //   { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
+    //   { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
+    // ],
   };
 
   // Loading screen
