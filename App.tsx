@@ -80,7 +80,7 @@ export default function App() {
       console.log('App.tsx: User is not logged in or user ID/token missing, disconnecting WebSocket');
       WebSocketManager.disconnect();
     }
-  }, [isLoggedIn, user, token]);
+  }, [isLoggedIn, user?.id,, token]);
 
 
   // ✅ 全局信令监听
@@ -139,6 +139,6 @@ export default function App() {
       <NavigationContainer ref={navigationRef}>
         <RootNavigator />
       </NavigationContainer>
-    </View>.
+    </View>
   );
 }

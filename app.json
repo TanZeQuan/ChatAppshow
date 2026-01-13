@@ -16,6 +16,7 @@
       "bitcode": false
     },
     "android": {
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/images/sentalk-logo.png",
         "backgroundColor": "#E6F4FE"
