@@ -31,13 +31,14 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
     // I will use a generic placeholder and add a comment for the user to update it.
     try {
       const expoPushToken = await Notifications.getExpoPushTokenAsync({
-        projectId: 'd6a9e508-d2dd-4b92-a6eb-28c653e9100f', // <<< IMPORTANT: Update with your actual Expo Project ID
+        projectId: 'd6a9e508-d2dd-4b92-a6eb-28c653e9100f',
       });
       token = expoPushToken.data;
       console.log('Expo Push Token:', token);
-    } catch (e) {
+    } catch (e: any) {
       console.error('Error getting Expo Push Token:', e);
-      alert('Error getting Expo Push Token. Make sure you have configured your app.json with a valid projectId.');
+      const errorMessage = e.message || 'An unknown error occurred.';
+      alert(`Error getting Expo Push Token: ${errorMessage}`);
       return null;
     }
   } else {
