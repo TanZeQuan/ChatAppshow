@@ -6,29 +6,14 @@ export async function registerForPushNotificationsAsync(userId: string): Promise
   let token: string | null = null;
 
   if (Device.isDevice) {
-    const { status: existingStatus } = await Notifications.getPermissionsAsync();
-    let finalStatus = existingStatus;
-
-    if (existingStatus !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-
-    if (finalStatus !== 'granted') {
-      console.log('Failed to get push token for push notification!');
-      alert('Failed to get push token for push notification!');
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== 'granted') {
+      // This should not happen if the permission is requested before calling this function
+      // but as a fallback, we can alert the user.
+      alert('You need to enable push notifications to receive updates.');
       return null;
     }
 
-    // This projectId should ideally come from your app.json or be passed dynamically
-    // For now, I'll use a placeholder. You might need to update this.
-    // The user's prompt mentioned 'your-project-id'. I will use a generic one, assuming it's available in the project config.
-    // If it's not available, this might need to be retrieved from `app.json` or `eas.json`.
-    // Let's try to read app.json to get the projectId.
-    // However, for the purpose of this isolated utility, I will use a placeholder
-    // as directly reading app.json from here might not be straightforward without further investigation.
-    // The user's prompt specifies `projectId: 'your-project-id'`, implying it should be known.
-    // I will use a generic placeholder and add a comment for the user to update it.
     try {
       const expoPushToken = await Notifications.getExpoPushTokenAsync({
         projectId: 'd6a9e508-d2dd-4b92-a6eb-28c653e9100f',
