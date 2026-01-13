@@ -1,17 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Dimensions,
   FlatList,
   Image,
+  LayoutAnimation,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+
+// ✅ 启用 Android 的 LayoutAnimation 支持
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readChatMessages, readUserChats } from '../../api/Chat';
 import { readFriends } from '../../api/Friend'; // ✅ 引入 API
@@ -314,6 +322,22 @@ export default function ChatListScreen() {
           // 🔥 修复 TS 错误：明确告诉 TS 过滤后的数组里只有 ChatListItem
           .filter((item: ChatListItem | null): item is ChatListItem => item !== null);
 
+        // ✅ 使用 LayoutAnimation 实现平滑的列表更新动画
+        LayoutAnimation.configureNext({
+          duration: 300,
+          create: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+          update: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+          },
+          delete: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+        });
+        
         setChats(formattedChats);
         loadGroupMembersForAllChats(formattedChats);
       }

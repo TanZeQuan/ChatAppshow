@@ -18,19 +18,71 @@ const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Profile" component={ProfileScreen} options={{ title: "My Profile" }} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} options={{ title: "Edit Profile" }} />
-      <Stack.Screen name="ChangePassword" component={ForgetPassword} options={{ title: "Change Password" }} />
-      <Stack.Screen name="SettingScreen" component={SettingScreen} options={{ title: "Setting" }} />
-      <Stack.Screen name="EditName" component={ResetProfileScreen} options={{ title: "Reset Profile" }} />
-      <Stack.Screen name="MeetingScreen" component={MeetingScreen} options={{ title: "Meeting" }} />
-      <Stack.Screen name="JoinMeeting" component={JoinMeeting} options={{ title: "Join Meeting" }} />
-      <Stack.Screen name="CreateMeeting" component={CreateMeeting} options={{ title: "Create Meeting" }} />
-      <Stack.Screen name="QRcode" component={QRcodeScreen} options={{ title: "QRcode" }} />
-      <Stack.Screen name="EditEmail" component={EditEmail} options={{ title: "Edit Email" }} />
-      <Stack.Screen name="Notification" component={Notification} options={{ title: "Notification" }} />
-
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        // ✅ 全局平滑转场动画配置
+        animation: 'slide_from_right',
+        animationDuration: 250,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+      }}
+    >
+      <Stack.Screen 
+        name="Profile" 
+        component={ProfileScreen} 
+        options={{ title: "My Profile", animation: 'fade' }} 
+      />
+      <Stack.Screen 
+        name="EditProfile" 
+        component={EditProfileScreen} 
+        options={{ title: "Edit Profile", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="ChangePassword" 
+        component={ForgetPassword} 
+        options={{ title: "Change Password", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="SettingScreen" 
+        component={SettingScreen} 
+        options={{ title: "Setting", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="EditName" 
+        component={ResetProfileScreen} 
+        options={{ title: "Reset Profile", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="MeetingScreen" 
+        component={MeetingScreen} 
+        options={{ title: "Meeting", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="JoinMeeting" 
+        component={JoinMeeting} 
+        options={{ title: "Join Meeting", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="CreateMeeting" 
+        component={CreateMeeting} 
+        options={{ title: "Create Meeting", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="QRcode" 
+        component={QRcodeScreen} 
+        options={{ title: "QRcode", animation: 'fade' }} 
+      />
+      <Stack.Screen 
+        name="EditEmail" 
+        component={EditEmail} 
+        options={{ title: "Edit Email", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="Notification" 
+        component={Notification} 
+        options={{ title: "Notification", animation: 'slide_from_right' }} 
+      />
     </Stack.Navigator>
   );
 }
