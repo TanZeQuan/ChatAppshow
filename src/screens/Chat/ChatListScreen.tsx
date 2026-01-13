@@ -110,39 +110,22 @@ export default function ChatListScreen() {
     }, [currentUserId, isInitialLoad])
   );
 
-  // WebSocket 实时消息处理
+  // WebSocket 实时消息处理 - 收到新消息时静默刷新 API 获取最新数据
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
       if (!data.type || !data.chat_id) return;
       
-      console.log('⚡️ [ChatList] 收到实时消息:', { chatId: data.chat_id });
+      console.log('⚡️ [ChatList] 收到实时消息，触发静默刷新:', { chatId: data.chat_id });
       
-      const existingChat = getChatById(data.chat_id);
-      const chatName = existingChat?.name || data.sender || '新消息';
-      
-      const updatedChat: ChatListItem = {
-        id: data.chat_id,
-        name: chatName,
-        avatar: existingChat?.avatar || null,
-        isGroup: existingChat?.isGroup || false,
-        members: existingChat?.members || [],
-        memberIds: existingChat?.memberIds || [],
-        lastMessage: formatLastMessagePreview(data.message, data.type),
-        timestamp: new Date().toISOString(),
-        unreadCount: (existingChat?.unreadCount || 0) + 1,
-        rawData: existingChat?.rawData || {},
-        type: 0,
-        online: false
-      };
-
-      addChat(updatedChat);
+      // ✅ 完全依赖 API：收到 WebSocket 消息时，静默刷新列表获取最新数据
+      refreshData(false);
     };
 
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
     return () => {
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
-  }, [addChat, getChatById]);
+  }, []);
 
   // 排序和搜索逻辑
   const sortedAndFilteredChats = useMemo(() => {
@@ -273,15 +256,9 @@ export default function ChatListScreen() {
             const lastMessageText = lastMsgObj?.message || chat.last_message || '';
             const lastMessageType = lastMsgObj?.type || chat.last_message_type;
 
-            // ✅ 优先使用 message 对象中的 created_at 时间
+            // ✅ 完全依赖 API 返回的时间，优先使用 message.created_at
             const messageTimestamp = lastMsgObj?.created_at;
-            const backendTimestamp = messageTimestamp || chat.last_message_time || chat.timestamp || new Date().toISOString();
-            const localTimestamp = existingChat?.timestamp;
-            
-            let finalTimestamp = backendTimestamp;
-            if (localTimestamp && new Date(localTimestamp).getTime() > new Date(backendTimestamp).getTime()) {
-              finalTimestamp = localTimestamp;
-            }
+            const finalTimestamp = messageTimestamp || chat.last_message_time || chat.timestamp || '';
 
             let chatName = chat.name || chat.chat_name;
             if (!chatName && isGroup) chatName = '未命名群组';
