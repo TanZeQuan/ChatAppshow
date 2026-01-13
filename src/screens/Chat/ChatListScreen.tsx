@@ -90,23 +90,24 @@ export default function ChatListScreen() {
   
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // ✅ 标记首次加载
 
   const currentUserId = user?.id;
 
-  // 初始化加载
+  // 初始化加载（首次进入显示 loading）
   useEffect(() => {
     if (currentUserId) {
-      refreshData();
+      refreshData(true); // 首次加载显示 loading
     }
   }, [currentUserId]);
 
-  // 页面聚焦时刷新
+  // 页面聚焦时静默刷新（不显示 loading，不会跳动）
   useFocusEffect(
     useCallback(() => {
-      if (currentUserId) {
-        refreshData();
+      if (currentUserId && !isInitialLoad) {
+        refreshData(false); // ✅ 静默刷新
       }
-    }, [currentUserId])
+    }, [currentUserId, isInitialLoad])
   );
 
   // WebSocket 实时消息处理
@@ -187,10 +188,13 @@ export default function ChatListScreen() {
   }, [addChat, getChatById, navigation]);
 
   // ✅✅✅ 核心逻辑：双重校验刷新 ✅✅✅
-  const refreshData = async () => {
+  // showLoading: true = 显示下拉刷新动画, false = 静默刷新
+  const refreshData = async (showLoading: boolean = false) => {
     if (!currentUserId) return;
 
-    setIsRefreshing(true);
+    if (showLoading) {
+      setIsRefreshing(true);
+    }
 
     try {
       // 1. 并行请求：获取聊天记录 + 获取最新好友列表
@@ -255,13 +259,23 @@ export default function ChatListScreen() {
               finalAvatar = ensureFullImageUrl(apiImage);
             }
 
-            const lastMsgObj = (chat.message && chat.message.length > 0) 
-              ? chat.message[chat.message.length - 1] 
-              : null;
+            // ✅ 处理新的 message 格式（对象）和旧格式（数组）的兼容
+            let lastMsgObj = null;
+            if (chat.message) {
+              if (Array.isArray(chat.message) && chat.message.length > 0) {
+                // 旧格式：message 是数组
+                lastMsgObj = chat.message[chat.message.length - 1];
+              } else if (typeof chat.message === 'object' && chat.message.message_id) {
+                // 新格式：message 是对象
+                lastMsgObj = chat.message;
+              }
+            }
             const lastMessageText = lastMsgObj?.message || chat.last_message || '';
             const lastMessageType = lastMsgObj?.type || chat.last_message_type;
 
-            const backendTimestamp = chat.last_message_time || chat.timestamp || new Date().toISOString();
+            // ✅ 优先使用 message 对象中的 created_at 时间
+            const messageTimestamp = lastMsgObj?.created_at;
+            const backendTimestamp = messageTimestamp || chat.last_message_time || chat.timestamp || new Date().toISOString();
             const localTimestamp = existingChat?.timestamp;
             
             let finalTimestamp = backendTimestamp;
@@ -307,6 +321,9 @@ export default function ChatListScreen() {
       console.error("刷新聊天列表失败:", error);
     } finally {
       setIsRefreshing(false);
+      if (isInitialLoad) {
+        setIsInitialLoad(false); // ✅ 首次加载完成后，后续都用静默刷新
+      }
     }
   };
 
@@ -449,7 +466,7 @@ export default function ChatListScreen() {
           contentContainerStyle={styles.listContent}
           extraData={[onlineUsers, searchQuery]}
           showsVerticalScrollIndicator={false}
-          onRefresh={refreshData}
+          onRefresh={() => refreshData(true)}
           refreshing={isRefreshing}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
