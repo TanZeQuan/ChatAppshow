@@ -61,7 +61,7 @@ const isValidAvatar = (avatar: string | null | undefined): boolean => {
 };
 
 // ✅ 简单格式化：直接从后端时间字符串提取，不做时区转换
-// 今天显示 HH:mm，其他日期显示 日期/月份，不是今年显示 日期/月份/年份
+// 今天显示 h:mm AM/PM，其他日期显示 日期/月份，不是今年显示 日期/月份/年份
 const formatTime = (timestamp: string): string => {
   if (!timestamp) return '';
   
@@ -84,9 +84,17 @@ const formatTime = (timestamp: string): string => {
   // 判断是否是今天
   const isToday = year === todayYear && month === todayMonth && day === todayDay;
   
+  // 转换为 12 小时制 AM/PM 格式
+  const formatToAmPm = (h: string, m: string): string => {
+    const hourNum = parseInt(h, 10);
+    const ampm = hourNum >= 12 ? 'PM' : 'AM';
+    const hour12 = hourNum % 12 || 12; // 0 点变成 12
+    return `${hour12}:${m} ${ampm}`;
+  };
+  
   if (isToday) {
-    // 今天：显示 HH:mm
-    return `${hour}:${minute}`;
+    // 今天：显示 h:mm AM/PM
+    return formatToAmPm(hour, minute);
   } else if (year !== todayYear) {
     // 不是今年：显示 日期/月份/年份
     return `${day}/${month}/${year}`;
