@@ -60,25 +60,40 @@ const isValidAvatar = (avatar: string | null | undefined): boolean => {
   return true;
 };
 
+// ✅ 简单格式化：直接从后端时间字符串提取，不做时区转换
+// 今天显示 HH:mm，其他日期显示 日期/月份，不是今年显示 日期/月份/年份
 const formatTime = (timestamp: string): string => {
   if (!timestamp) return '';
-  const date = new Date(timestamp);
+  
+  // 提取日期和时间部分 "2026-01-13 17:12:27"
+  const dateTimeMatch = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (!dateTimeMatch) return '';
+  
+  const [, year, month, day, hour, minute] = dateTimeMatch;
+  
+  // 获取今天的日期（从后端视角，假设后端是马来西亚时间 GMT+8）
   const now = new Date();
-  if (isNaN(date.getTime())) return '';
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInMins = Math.floor(diffInMs / (1000 * 60));
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-  const isSameDay = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-  const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
-
-  if (diffInMins < 1) return '刚刚';
-  if (diffInMins < 60) return `${diffInMins}分钟前`;
-  if (isSameDay) return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  if (isYesterday) return '昨天';
-  if (diffInDays < 7) { const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; return weekdays[date.getDay()]; }
-  if (date.getFullYear() === now.getFullYear()) { return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`; }
-  return `${date.getFullYear().toString().slice(-2)}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+  // 转换为 GMT+8 时间
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const gmt8 = new Date(utc + (8 * 60 * 60000));
+  
+  const todayYear = gmt8.getFullYear().toString();
+  const todayMonth = (gmt8.getMonth() + 1).toString().padStart(2, '0');
+  const todayDay = gmt8.getDate().toString().padStart(2, '0');
+  
+  // 判断是否是今天
+  const isToday = year === todayYear && month === todayMonth && day === todayDay;
+  
+  if (isToday) {
+    // 今天：显示 HH:mm
+    return `${hour}:${minute}`;
+  } else if (year !== todayYear) {
+    // 不是今年：显示 日期/月份/年份
+    return `${day}/${month}/${year}`;
+  } else {
+    // 今年其他日期：显示 日期/月份
+    return `${day}/${month}`;
+  }
 };
 
 export default function ChatListScreen() {
