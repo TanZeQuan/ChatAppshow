@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readChatMessages, updateGroup } from '../../api/Chat';
+import { readFriends, createFriendRequest } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
 import { useChatStore } from '../../store/chatStore';
 import { useUserStore } from '../../store/userStore';
@@ -42,6 +43,10 @@ export default function GroupMemberList() {
     const [groupChat, setGroupChat] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [kickingMemberId, setKickingMemberId] = useState<string | null>(null);
+    
+    // ✅ 新增：好友列表和添加好友状态
+    const [friendIds, setFriendIds] = useState<string[]>([]);
+    const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
 
     useEffect(() => {
         const chat = getChatById(groupId);
@@ -50,6 +55,60 @@ export default function GroupMemberList() {
         }
         setIsLoading(false);
     }, [groupId, getChatById]);
+
+    // ✅ 新增：加载好友列表
+    const loadFriendList = useCallback(async () => {
+        try {
+            const result = await readFriends(2); // isstatus = 2 表示已接受的好友
+            if (result.success && result.data) {
+                const allFriends = [
+                    ...(result.data.request || []),
+                    ...(result.data.approve || [])
+                ];
+                const ids = allFriends.map((f: any) => f.user_id);
+                setFriendIds(ids);
+                console.log('📋 [GroupMemberList] 好友列表:', ids);
+            }
+        } catch (error) {
+            console.error('❌ [GroupMemberList] 加载好友列表失败:', error);
+        }
+    }, []);
+
+    // ✅ 新增：添加好友的处理函数
+    const handleAddFriend = useCallback(async (memberId: string, memberName: string) => {
+        if (memberId === currentUserId) {
+            Alert.alert('提示', '不能添加自己为好友');
+            return;
+        }
+
+        setAddingFriendId(memberId);
+
+        try {
+            console.log('📤 [GroupMemberList] 发送好友请求给:', memberId);
+            
+            const result = await createFriendRequest(memberId, `来自群聊"${groupChat?.name || '未知群聊'}"的好友请求`);
+
+            if (result.success) {
+                Alert.alert('成功', `已向 ${memberName} 发送好友请求`);
+            } else {
+                const errorMessage = result.message || '';
+                if (errorMessage.includes('已发送') || errorMessage.includes('already') || errorMessage.includes('pending')) {
+                    Alert.alert('提示', '好友请求已发送，请等待对方确认');
+                } else if (errorMessage.includes('已是好友') || errorMessage.includes('already friends')) {
+                    // 刷新好友列表
+                    await loadFriendList();
+                    Alert.alert('提示', '你们已经是好友了');
+                } else {
+                    Alert.alert('发送失败', result.message || '请稍后重试');
+                }
+            }
+        } catch (error: any) {
+            console.error('❌ [GroupMemberList] 发送好友请求失败:', error);
+            Alert.alert('发送失败', '网络错误，请稍后重试');
+        } finally {
+            setAddingFriendId(null);
+        }
+    }, [currentUserId, groupChat?.name, loadFriendList]);
 
     // Load group members from API
     const loadGroupMembers = useCallback(async () => {
@@ -130,7 +189,8 @@ export default function GroupMemberList() {
         useCallback(() => {
             console.log('🔄 [GroupMemberList] Screen focused, reloading members...');
             loadGroupMembers();
-        }, [loadGroupMembers])
+            loadFriendList(); // ✅ 同时加载好友列表
+        }, [loadGroupMembers, loadFriendList])
     );
 
     // Memoized members list
@@ -266,6 +326,11 @@ export default function GroupMemberList() {
         const permission = checkKickPermission(member.id);
         const showKickBadge = permission.hasPermission && !isCurrentUser;
         const isOnline = onlineUsers.includes(member.id);
+        
+        // ✅ 新增：判断是否是好友
+        const isFriend = friendIds.includes(member.id);
+        const isAddingThisFriend = addingFriendId === member.id;
+        const showAddFriendButton = !isCurrentUser && !isFriend;
 
         return (
             <View style={styles.memberItemWrapper}>
@@ -294,6 +359,34 @@ export default function GroupMemberList() {
                         <Text style={styles.memberName}>{member.name}</Text>
                         <Text style={styles.memberId}>ID: {member.id}</Text>
                     </View>
+                    
+                    {/* ✅ 新增：添加好友按钮 */}
+                    {showAddFriendButton && (
+                        <TouchableOpacity
+                            style={styles.addFriendButton}
+                            onPress={() => handleAddFriend(member.id, member.name)}
+                            disabled={isAddingThisFriend}
+                            activeOpacity={0.7}
+                        >
+                            {isAddingThisFriend ? (
+                                <ActivityIndicator size="small" color="#FFD860" />
+                            ) : (
+                                <>
+                                    <Ionicons name="person-add-outline" size={14} color="#FFD860" />
+                                    <Text style={styles.addFriendText}>添加</Text>
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    )}
+                    
+                    {/* 已是好友标签 */}
+                    {!isCurrentUser && isFriend && (
+                        <View style={styles.friendLabel}>
+                            <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                            <Text style={styles.friendLabelText}>好友</Text>
+                        </View>
+                    )}
+                    
                     {groupChat?.ownerId === member.id && <Text style={styles.ownerLabel}>群主</Text>}
                     {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
                         <Text style={styles.adminLabel}>管理员</Text>
@@ -518,5 +611,39 @@ const styles = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: borders.radius4,
         marginLeft: 8,
+    },
+    // ✅ 新增：添加好友按钮样式
+    addFriendButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(255, 216, 96, 0.15)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 16,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#FFD860',
+    },
+    addFriendText: {
+        fontSize: typography.fontSize12,
+        color: '#E5A800',
+        fontWeight: '600' as const,
+        marginLeft: 4,
+    },
+    // ✅ 新增：好友标签样式
+    friendLabel: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(76, 175, 80, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 12,
+        marginRight: 8,
+    },
+    friendLabelText: {
+        fontSize: typography.fontSize11,
+        color: '#4CAF50',
+        fontWeight: '500' as const,
+        marginLeft: 3,
     },
 });

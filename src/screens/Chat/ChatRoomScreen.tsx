@@ -28,7 +28,7 @@ import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
-import { readFriends } from '../../api/Friend';
+import { readFriends, createFriendRequest } from '../../api/Friend';
 import { chatRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
 
 const { width, height } = Dimensions.get("window");
@@ -196,6 +196,41 @@ export default function ChatRoomScreen() {
       setIsCheckingFriendStatus(false);
     }
   }, [otherUserId, chat?.isGroup]);
+
+  // ✅ 新增：重新添加好友的处理函数
+  const [isAddingFriend, setIsAddingFriend] = useState(false);
+  
+  const handleReAddFriend = useCallback(async () => {
+    if (!otherUserId) {
+      Alert.alert('错误', '无法获取用户信息');
+      return;
+    }
+
+    setIsAddingFriend(true);
+
+    try {
+      console.log('📤 [ChatRoom] 发送好友请求给:', otherUserId);
+      
+      const result = await createFriendRequest(otherUserId, '请求重新添加好友');
+
+      if (result.success) {
+        Alert.alert('成功', '好友请求已发送，等待对方确认');
+      } else {
+        // 检查是否是"已发送过请求"的情况
+        const errorMessage = result.message || '';
+        if (errorMessage.includes('已发送') || errorMessage.includes('already') || errorMessage.includes('pending')) {
+          Alert.alert('提示', '好友请求已发送，请等待对方确认');
+        } else {
+          Alert.alert('发送失败', result.message || '请稍后重试');
+        }
+      }
+    } catch (error: any) {
+      console.error('❌ [ChatRoom] 发送好友请求失败:', error);
+      Alert.alert('发送失败', '网络错误，请稍后重试');
+    } finally {
+      setIsAddingFriend(false);
+    }
+  }, [otherUserId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -1253,12 +1288,37 @@ export default function ChatRoomScreen() {
           />
 
          {isFriendDeleted && !chat?.isGroup ? (
-            // 显示禁用状态的输入栏
+            // ✅ 显示非好友提示和重新添加按钮
             <View style={roomStyles.disabledInputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#999" />
-              <Text style={roomStyles.disabledInputText}>
-                对方已删除好友关系，无法发送消息
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <Ionicons name="person-remove-outline" size={20} color="#FF6B6B" />
+                <Text style={[roomStyles.disabledInputText, { marginLeft: 8, color: '#FF6B6B' }]}>
+                  你们已不是好友，无法发送消息
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FFD860',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                }}
+                onPress={handleReAddFriend}
+                disabled={isAddingFriend}
+              >
+                {isAddingFriend ? (
+                  <ActivityIndicator size="small" color="#333" />
+                ) : (
+                  <>
+                    <Ionicons name="person-add-outline" size={18} color="#333" />
+                    <Text style={{ marginLeft: 6, color: '#333', fontWeight: '600' }}>
+                      重新添加好友
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           ) : (
             // 正常的输入栏

@@ -11,6 +11,7 @@ import ProfileStack from "./stacks/ProfileStack";
 
 import WebSocketManager from "../services/WebSocketManager";
 import { useUserStore } from "../store/userStore";
+import { useFriendRequestStore } from "../store/friendRequestStore";
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
@@ -100,6 +101,10 @@ function MainTabsContent() {
   const insets = useSafeAreaInsets();
   const [dimensions, setDimensions] = useState(Dimensions.get("window"));
 
+  // ✅ 获取好友请求数量（只计算收到的请求，不计算自己发出的）
+  const friendRequests = useFriendRequestStore((state) => state.requests);
+  const pendingRequestCount = friendRequests.filter(r => r.type === 'received').length;
+
   // 监听屏幕尺寸变化（方向变化、折叠屏等）
   useEffect(() => {
     const subscription = Dimensions.addEventListener("change", ({ window }) => {
@@ -165,7 +170,18 @@ function MainTabsContent() {
       <Tab.Screen 
         name="ContactsStack" 
         component={ContactsStack} 
-        options={{ title: "好友" }} 
+        options={{ 
+          title: "好友",
+          // ✅ 显示好友请求红点 badge
+          tabBarBadge: pendingRequestCount > 0 ? pendingRequestCount : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#FF3B30',
+            fontSize: 10,
+            minWidth: 18,
+            height: 18,
+            borderRadius: 9,
+          },
+        }} 
       />
       <Tab.Screen 
         name="ProfileStack" 
