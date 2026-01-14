@@ -11,6 +11,15 @@ type CallCallback = (data: any) => void;
 type TypingIndicatorCallback = (data: { chatId: string; userId: string; isTyping: boolean }) => void;
 
 class WebSocketManager {
+  sendCallSignal(arg0: { type: string; chat_id: any; sender: string; receiver: any; payload: { userName: string | undefined; avatar: string | undefined; }; }) {
+    throw new Error('Method not implemented.');
+  }
+  sendReadSignal(arg0: { receiver: string[]; chat_id: string; }) {
+    throw new Error('Method not implemented.');
+  }
+  sendForwardMessage(arg0: { type: number; message: string; message_id: any; sender: string; receiver: any; chat_id: string; }) {
+    throw new Error('Method not implemented.');
+  }
   private static instance: WebSocketManager;
 
   public ws: WebSocket | null = null;

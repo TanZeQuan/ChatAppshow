@@ -245,10 +245,14 @@ export default function GroupCallScreen() {
     // Broadcast LEAVE to peers so they close connection
     if (receivers.length > 0) {
         WebSocketManager.sendCallSignal({
-            type: 'LEAVE_CALL',
-            chat_id: chatId,
-            sender: currentUserId,
-            receiver: receivers
+          type: 'LEAVE_CALL',
+          chat_id: chatId,
+          sender: currentUserId,
+          receiver: receivers,
+          payload: {
+            userName: undefined,
+            avatar: undefined
+          }
         });
     }
 
