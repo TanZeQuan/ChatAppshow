@@ -46,6 +46,7 @@ export const useUserStore = create<UserStore>()(
       setOnlineUsers: (userIds) => set({ onlineUsers: userIds }),
 
       updateUserOnlineStatus: (userId, isOnline) => {
+        console.log(`[userStore] Updating status for ${userId}: ${isOnline}`);
         const { onlineUsers } = get();
         const userExists = onlineUsers.includes(userId);
 

@@ -155,7 +155,7 @@ export default function AddGroupScreen() {
     try {
       // Creator is an admin
       const creator = { user_id: user.id, isadmin: 2 };
-      
+
       // Other members
       const members = selectedMembers.map(memberId => ({
         user_id: memberId,
@@ -242,20 +242,25 @@ export default function AddGroupScreen() {
               {
                 text: "确定",
                 onPress: () => {
-                  // Navigate to the newly created group chat room (cross-stack navigation)
-                  navigation.navigate("ChatStack" as any, {
-                    screen: "GroupRoom",
-                    params: {
-                      chatId: chatId, // ✅ Use extracted chatId
-                      chatName: groupName.trim(),
-                      isGroup: true,
-                    }
-                  });
+                  // 1️⃣ 先退回创建群聊页面
+                  navigation.goBack();
+
+                  // 2️⃣ 再跳转到 ChatStack 的 GroupRoom
+                  setTimeout(() => {
+                    navigation.navigate("ChatStack" as any, {
+                      screen: "GroupRoom",
+                      params: {
+                        chatId,
+                        chatName: groupName.trim(),
+                        isGroup: true,
+                      },
+                    });
+                  }, 50); // 给 navigation 一点时间完成 goBack
                 },
               },
             ]
           );
-        }, 300); // Small delay to ensure modal animation completes
+        }, 300);
       } else {
         // Show error
         const errorMsg = result?.message || "创建群聊失败，请重试";

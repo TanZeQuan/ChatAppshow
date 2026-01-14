@@ -367,7 +367,7 @@ export default function CallScreen() {
       Emitter.off('endCall', handleEndCall);
 
     };
-  }, [remoteUserId, isIncoming]);
+  }, [remoteUserId, isIncoming, displayName, fetchUserInfo]);
 
   // ---------------------------------------------------------
   // ✅ 接听 (开始通话)

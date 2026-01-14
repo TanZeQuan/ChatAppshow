@@ -21,10 +21,14 @@ export class P2PManager {
 
   private userId: string;
   private chatId: string;
+  private userName: string;
+  private avatar: string;
 
-  constructor(userId: string, chatId: string) {
+  constructor(userId: string, chatId: string, userName: string, avatar: string) {
     this.userId = userId;
     this.chatId = chatId;
+    this.userName = userName;
+    this.avatar = avatar;
   }
 
   // 1. 初始化本地媒体流
@@ -105,7 +109,9 @@ export class P2PManager {
         call_type: 0,
         payload: {
           sdp: offer,
-          call_mode: 'group' // ✅ 移到 payload 里面
+          call_mode: 'group', // ✅ 移到 payload 里面
+          userName: this.userName,
+          avatar: this.avatar,
         }
       });
     } catch (e) {
@@ -136,7 +142,9 @@ export class P2PManager {
         call_id: callId,
         payload: {
           sdp: answer,
-          call_mode: 'group' // ✅ 移到 payload 里面
+          call_mode: 'group', // ✅ 移到 payload 里面
+          userName: this.userName,
+          avatar: this.avatar,
         }
       });
     } catch (e) {

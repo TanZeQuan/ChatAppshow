@@ -110,7 +110,7 @@ export default function GroupCallScreen() {
     console.log('🚀 GroupCallScreen Mounted');
     
     // Initialize P2P Manager
-    p2pRef.current = new P2PManager(currentUserId, chatId);
+    p2pRef.current = new P2PManager(currentUserId, chatId, currentUser?.name || '', currentUser?.avatar || '');
 
     const initCall = async () => {
       try {
