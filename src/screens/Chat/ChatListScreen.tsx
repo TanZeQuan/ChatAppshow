@@ -40,7 +40,7 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
           if (parsed.type.includes('VOICE_CALL')) return '[语音通话]';
           if (parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }
   switch (type) {
@@ -83,11 +83,11 @@ const formatTime = (timestamp: string): string => {
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-  
+
   const { chatList, setChats, addChat, getChatById } = useChatStore();
   const { user, onlineUsers } = useUserStore();
   const { setContacts } = useContactStore(); // ✅ 获取 setContacts 方法
-  
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -113,12 +113,15 @@ export default function ChatListScreen() {
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
       if (!data.type || !data.chat_id) return;
-      
+
       console.log('⚡️ [ChatList] 收到实时消息:', { chatId: data.chat_id });
-      
+
       const existingChat = getChatById(data.chat_id);
       const chatName = existingChat?.name || data.sender || '新消息';
-      
+      const me = currentUserId;
+
+      let memberIds = existingChat?.memberIds || [];
+
       const updatedChat: ChatListItem = {
         id: data.chat_id,
         name: chatName,
@@ -131,7 +134,8 @@ export default function ChatListScreen() {
         unreadCount: (existingChat?.unreadCount || 0) + 1,
         rawData: existingChat?.rawData || {},
         type: 0,
-        online: false
+        online: false,
+        otherUserId: undefined
       };
 
       addChat(updatedChat);
@@ -149,7 +153,7 @@ export default function ChatListScreen() {
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(chat => 
+      result = result.filter(chat =>
         (chat.name && chat.name.toLowerCase().includes(query)) ||
         (chat.lastMessage && chat.lastMessage.toLowerCase().includes(query))
       );
@@ -178,13 +182,24 @@ export default function ChatListScreen() {
         memberIds: chat.memberIds || [],
       });
     } else {
+      // ✅ 关键：在这里算 otherUserId
+      const otherUserId =
+        chat.memberIds?.find(id => id !== currentUserId) ||
+        latestChat?.memberIds?.find(id => id !== currentUserId);
+
+      if (!otherUserId) {
+        console.warn('⚠️ [ChatList] Could not find otherUserId for chat:', chat.id);
+        return;
+      }
+
       navigation.navigate('ChatRoom', {
         chatId: chat.id,
         chatName: chat.name,
+        otherUserId,          // ✅ 现在一定有值
         isGroup: false,
       });
     }
-  }, [addChat, getChatById, navigation]);
+  }, [addChat, getChatById, navigation, currentUserId]);
 
   // ✅✅✅ 核心逻辑：双重校验刷新 ✅✅✅
   const refreshData = async () => {
@@ -198,26 +213,26 @@ export default function ChatListScreen() {
         readUserChats(currentUserId),
         readFriends(2) // status 2 = 已添加的好友
       ]);
-      
+
       // 2. 构建有效好友白名单
       const validFriendIds = new Set<string>();
-      
+
       if (friendsResult.success && friendsResult.data) {
         const allFriends = [
           ...(friendsResult.data.approve || []),
           ...(friendsResult.data.request || [])
         ];
-        
+
         // 🛠️ 顺便更新 ContactStore (优化：保持通讯录页面数据也是最新的)
         const contactsForStore = allFriends.map((friend: any) => ({
-            id: friend.user_id || friend.id || friend.userId,
-            name: friend.name || friend.username || `用户${friend.user_id}`,
-            avatar: friend.avatar || friend.image,
-            online: friend.online || false,
-            // ... 需要根据 ContactStore 的类型补全其他字段
-            listId: friend.list_id || 0,
-            isFriend: true,
-            rawData: friend
+          id: friend.user_id || friend.id || friend.userId,
+          name: friend.name || friend.username || `用户${friend.user_id}`,
+          avatar: friend.avatar || friend.image,
+          online: friend.online || false,
+          // ... 需要根据 ContactStore 的类型补全其他字段
+          listId: friend.list_id || 0,
+          isFriend: true,
+          rawData: friend
         }));
         // 注意：这里需要确保 setContacts 接受的数据格式与你的 Store 定义一致
         // 如果格式复杂，可以注释掉这行，只保留下面的 ID 收集
@@ -239,12 +254,12 @@ export default function ChatListScreen() {
             const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : (existingChat?.memberIds || []);
 
             const isGroup = chat.istype === 2 || chat.type === 2 || chat.isGroup || false;
-            
+
             // 🔥 过滤逻辑：如果是私聊，且对方不在好友白名单中 -> 返回 null
             if (!isGroup) {
               const otherId = finalMemberIds.find((id: any) => String(id) !== String(currentUserId));
-              if (otherId && !validFriendIds.has(String(otherId))) {
-                 return null; // 标记为无效
+              if (!otherId || !validFriendIds.has(String(otherId))) {
+                return null; // 标记为无效
               }
             }
 
@@ -255,15 +270,15 @@ export default function ChatListScreen() {
               finalAvatar = ensureFullImageUrl(apiImage);
             }
 
-            const lastMsgObj = (chat.message && chat.message.length > 0) 
-              ? chat.message[chat.message.length - 1] 
+            const lastMsgObj = (chat.message && chat.message.length > 0)
+              ? chat.message[chat.message.length - 1]
               : null;
             const lastMessageText = lastMsgObj?.message || chat.last_message || '';
             const lastMessageType = lastMsgObj?.type || chat.last_message_type;
 
             const backendTimestamp = chat.last_message_time || chat.timestamp || new Date().toISOString();
             const localTimestamp = existingChat?.timestamp;
-            
+
             let finalTimestamp = backendTimestamp;
             if (localTimestamp && new Date(localTimestamp).getTime() > new Date(backendTimestamp).getTime()) {
               finalTimestamp = localTimestamp;
@@ -271,16 +286,16 @@ export default function ChatListScreen() {
 
             let chatName = chat.name || chat.chat_name;
             if (!chatName && isGroup) chatName = '未命名群组';
-            
+
             // 如果没名字，尝试从 members 补全
             if (!isGroup && (!chatName || chatName.trim() === '')) {
-               if (chat.members && Array.isArray(chat.members)) {
-                  const otherMember = chat.members.find((m: any) => m.user_id !== currentUserId && m.id !== currentUserId);
-                  if (otherMember) {
-                    chatName = otherMember.name || otherMember.username;
-                    if (!finalAvatar && otherMember.avatar) finalAvatar = ensureFullImageUrl(otherMember.avatar);
-                  }
-               }
+              if (chat.members && Array.isArray(chat.members)) {
+                const otherMember = chat.members.find((m: any) => m.user_id !== currentUserId && m.id !== currentUserId);
+                if (otherMember) {
+                  chatName = otherMember.name || otherMember.username;
+                  if (!finalAvatar && otherMember.avatar) finalAvatar = ensureFullImageUrl(otherMember.avatar);
+                }
+              }
             }
             if (!chatName) chatName = '';
 
@@ -312,7 +327,7 @@ export default function ChatListScreen() {
 
   const loadGroupMembersForAllChats = async (chats: ChatListItem[]) => {
     if (!currentUserId) return;
-    
+
     const groupChats = chats.filter(chat => chat.isGroup);
 
     for (const chat of groupChats) {
@@ -325,18 +340,18 @@ export default function ChatListScreen() {
           user_id: currentUserId,
           offset: 0,
         });
-        
+
         if (result.success && result.data?.group) {
           const membersInfo = result.data.group.map((m: any) => ({
             id: m.user_id,
             name: m.name || '未知用户',
             avatar: ensureFullImageUrl(m.image || m.avatar)
           }));
-          
-          addChat({ 
-            ...chat, 
-            members: membersInfo, 
-            memberIds: membersInfo.map((m: any) => m.id) 
+
+          addChat({
+            ...chat,
+            members: membersInfo,
+            memberIds: membersInfo.map((m: any) => m.id)
           });
         }
       } catch (e) {
@@ -390,16 +405,16 @@ export default function ChatListScreen() {
           </View>
 
           <View style={styles.messageRow}>
-            <Text 
+            <Text
               style={[
                 styles.message,
                 item.unreadCount > 0 && styles.unreadMessage
-              ]} 
+              ]}
               numberOfLines={1}
             >
               {item.lastMessage}
             </Text>
-            
+
             {item.unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -420,7 +435,7 @@ export default function ChatListScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>森通</Text>
           </View>
-          
+
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={18} color="#999" style={styles.searchIcon} />
             <TextInput
