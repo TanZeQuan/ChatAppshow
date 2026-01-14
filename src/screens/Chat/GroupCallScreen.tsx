@@ -266,13 +266,16 @@ export default function GroupCallScreen() {
           styles.avatarContainer, 
           item.isSpeaking && styles.speakingBorder 
       ]}>
-        {item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
-        ) : (
-          <View style={[styles.avatarImage, styles.placeholderAvatar]}>
-             <Text style={styles.placeholderText}>{item.userName?.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
+        <Image 
+          source={
+            !item.avatar || 
+            item.avatar.trim() === '' || 
+            item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+              ? require('../../assets/images/personal.png')
+              : { uri: item.avatar }
+          } 
+          style={styles.avatarImage} 
+        />
       </View>
       <Text style={styles.nameText} numberOfLines={1}>
         {item.userId === currentUserId ? 'Me' : item.userName}

@@ -542,12 +542,17 @@ export default function CallScreen() {
         <View style={styles.topSection}>
           {loadingUserInfo ? (
             <View style={styles.avatar}><ActivityIndicator size="large" color="#FFFFFF" /></View>
-          ) : displayAvatar ? (
-            <Image source={{ uri: displayAvatar }} style={styles.avatarImage} />
           ) : (
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{displayName.charAt(0).toUpperCase()}</Text>
-            </View>
+            <Image 
+              source={
+                !displayAvatar || 
+                displayAvatar.trim() === '' || 
+                displayAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                  ? require('../../assets/images/personal.png')
+                  : { uri: displayAvatar }
+              } 
+              style={styles.avatarImage} 
+            />
           )}
 
           <Text style={styles.username}>{displayName}</Text>
