@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "876204196536",
+    "project_id": "improject-6a572",
+    "storage_bucket": "improject-6a572.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:876204196536:android:e9f42571645496b1b6aa4d",
+        "android_client_info": {
+          "package_name": "com.anonymous.ChatApp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDYYOTZYoavyPmhXkcddK0zm77O7DCF29I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
