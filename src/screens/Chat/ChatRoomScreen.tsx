@@ -199,7 +199,7 @@ export default function ChatRoomScreen() {
 
   // ✅ 新增：重新添加好友的处理函数
   const [isAddingFriend, setIsAddingFriend] = useState(false);
-  
+
   const handleReAddFriend = useCallback(async () => {
     if (!otherUserId) {
       Alert.alert('错误', '无法获取用户信息');
@@ -210,7 +210,7 @@ export default function ChatRoomScreen() {
 
     try {
       console.log('📤 [ChatRoom] 发送好友请求给:', otherUserId);
-      
+
       const result = await createFriendRequest(otherUserId, '请求重新添加好友');
 
       if (result.success) {
@@ -927,20 +927,22 @@ export default function ChatRoomScreen() {
     }
   };
 
-  const pickImage = async () => {
+  // --- 内部通用逻辑：处理媒体选择和发送 ---
+ const handleMediaSelect = useCallback(async (mediaType: ImagePicker.MediaTypeOptions) => {
     if (isFriendDeleted) {
-      Alert.alert('无法发送', '对方已删除好友关系，无法发送图片');
+      Alert.alert('无法发送', '对方已删除好友关系，无法发送文件');
       return;
     }
+
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Gallery permission is required to select images');
+        Alert.alert('权限不足', '需要相册权限才能选择文件');
         return;
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: mediaType, 
         allowsEditing: false,
         quality: 0.8,
         allowsMultipleSelection: true,
@@ -948,20 +950,31 @@ export default function ChatRoomScreen() {
 
       if (!result.canceled && result.assets.length > 0) {
         setIsUploadingImage(true);
-        // ✅ 发送图片时也滚动（稍长延迟等待上传）
         scrollToBottom(true, 0);
 
         try {
           const receiver = chatMembers.filter(id => id !== currentUserId);
+          
           const files = result.assets.map(asset => {
-            const fileName = asset.fileName || 'image.jpg';
+            const uri = asset.uri;
+            const defaultExt = asset.type === 'video' ? 'mp4' : 'jpg';
+            const fileName = asset.fileName || `file_${Date.now()}.${defaultExt}`;
             const extension = fileName.split('.').pop()?.toLowerCase();
-            let mimeType = 'image/jpeg';
-            if (extension === 'png') mimeType = 'image/png';
-            else if (extension === 'jpg' || extension === 'jpeg') mimeType = 'image/jpeg';
-            else if (extension === 'gif') mimeType = 'image/gif';
-            else if (extension === 'webp') mimeType = 'image/webp';
-            return { uri: asset.uri, name: fileName, type: mimeType };
+            
+            let mimeType = 'application/octet-stream';
+
+            if (asset.type === 'video') {
+               mimeType = 'video/mp4'; 
+               if (extension === 'mov') mimeType = 'video/quicktime';
+            } else {
+               mimeType = 'image/jpeg';
+               if (extension === 'png') mimeType = 'image/png';
+               else if (extension === 'gif') mimeType = 'image/gif';
+               else if (extension === 'webp') mimeType = 'image/webp';
+               else if (extension === 'heic') mimeType = 'image/heic';
+            }
+
+            return { uri: uri, name: fileName, type: mimeType };
           });
 
           const apiResult = await sendChatMessage({
@@ -972,33 +985,47 @@ export default function ChatRoomScreen() {
           });
 
           if (apiResult.success && apiResult.data) {
-            const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
-              ? apiResult.data.isreceive : receiver;
+             const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+                ? apiResult.data.isreceive : receiver;
 
-            if (actualReceivers.length > 0) {
-              WebSocketManager.sendForwardMessage({
-                type: apiResult.data.type,
-                message: apiResult.data.message,
-                message_id: apiResult.data.message_id,
-                sender: currentUserId,
-                receiver: actualReceivers,
-                chat_id: chatId
-              });
-            }
-            await loadMessages(false, false);
+              if (actualReceivers.length > 0) {
+                WebSocketManager.sendForwardMessage({
+                  type: apiResult.data.type,
+                  message: apiResult.data.message,
+                  message_id: apiResult.data.message_id,
+                  sender: currentUserId,
+                  receiver: actualReceivers,
+                  chat_id: chatId
+                });
+              }
+              await loadMessages(false, false);
           } else {
-            Alert.alert('Send Failed', apiResult.message || 'Image failed to send, please retry');
+            Alert.alert('发送失败', apiResult.message || '文件发送失败，请重试');
           }
         } catch (error: any) {
-          Alert.alert('Send Failed', error.message || 'Network error, please retry');
+          Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
           setIsUploadingImage(false);
         }
       }
     } catch (error) {
-      Alert.alert('Selection Failed', 'Error selecting image');
+      console.error(error);
+      Alert.alert('错误', '选择文件时发生错误');
     }
-  };
+  }, [isFriendDeleted, chatMembers, currentUserId, chatId, loadMessages, scrollToBottom]); 
+  // ⬆️ 依赖项补全：只有当这些变量变化时，函数才重新创建
+
+  // 2. 只选图片 (修复：添加了依赖数组)
+  const pickImage = useCallback(() => {
+    handleMediaSelect(ImagePicker.MediaTypeOptions.Images);
+  }, [handleMediaSelect]); // 👈 必须加上这个数组
+
+  // 3. 只选视频 (修复：添加了依赖数组)
+  const pickVideo = useCallback(() => {
+    handleMediaSelect(ImagePicker.MediaTypeOptions.Videos);
+  }, [handleMediaSelect]); // 👈 必须加上这个数组
+
+  
 
   // ✅ 修正版：单聊和群聊分别跳转到正确的 Screen
   const handleStartCall = useCallback(async () => {
@@ -1190,23 +1217,23 @@ export default function ChatRoomScreen() {
   }, [disableSearch, setSearchQuery]);
 
   // ✅ Updated Toolbar configuration
-  const toolbarButtons = {
+ const toolbarButtons = useMemo(() => ({
     row1: [
-      { icon: 'image-outline', label: '图片', onPress: pickImage },
-      { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
+      { 
+        icon: 'image-outline', 
+        label: '图片', 
+        onPress: pickImage // ✅ 直接绑定，无参数传递
+      },
+      { 
+        icon: 'play-circle-outline', 
+        label: '视频', 
+        onPress: pickVideo // ✅ 直接绑定，无参数传递
+      },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
-      // ✅ Added Contact Card Button
-      { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
+      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('提示', '即将推出') },
+      { icon: 'card-outline', label: '名片', onPress: handleSendContactCard },
     ],
-    // row2: [
-    //   { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('Coming Soon', 'File sharing is not yet implemented.') },
-    //   // ✅ Added Contact Card Button
-    //   { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
-    //   // { icon: 'trash-outline', label: '清除记录', onPress: handleClearChat },
-    //   // { icon: 'settings-outline', label: '设置', onPress: handleOpenSettings },
-    // ],
-  };
+  }), [pickImage, pickVideo, handleStartCall, handleSendContactCard]);
 
   // Loading screen
   if (isLoading && messages.length === 0) {
@@ -1287,7 +1314,7 @@ export default function ChatRoomScreen() {
             }
           />
 
-         {isFriendDeleted && !chat?.isGroup ? (
+          {isFriendDeleted && !chat?.isGroup ? (
             // ✅ 显示非好友提示和重新添加按钮
             <View style={roomStyles.disabledInputContainer}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
