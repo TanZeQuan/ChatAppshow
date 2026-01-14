@@ -733,7 +733,7 @@ export default function ChatRoomScreen() {
     if (chat?.isGroup) {
       // 群聊：发通话卡片
       const callInviteData = JSON.stringify({
-        type: 'GROUP_VIDEO_CALL',
+        type: 'GROUP_VOICE_CALL',  // ✅ 修复：语音通话应该是 VOICE_CALL
         roomId: chatId,
         hostName: currentUserName,
         startTime: new Date().toISOString()

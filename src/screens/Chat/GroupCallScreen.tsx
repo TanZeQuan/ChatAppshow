@@ -225,7 +225,7 @@ export default function GroupCallScreen() {
     if (isHost) {
         // Host sends system message to end call in chat
         const endCallData = JSON.stringify({
-            type: 'GROUP_VIDEO_CALL',
+            type: 'GROUP_VOICE_CALL',  // ✅ 修复：语音通话应该是 VOICE_CALL
             roomId: chatId,
             hostName: currentUser?.name,
             status: 'ended',
