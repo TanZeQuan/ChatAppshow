@@ -13,13 +13,46 @@ const Stack = createNativeStackNavigator<ContactsStackParamList>();
 
 export default function ContactsStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Contacts" component={ContactsScreen} options={{ title: "Contacts" }} />
-      <Stack.Screen name="AddFriend" component={AddFriendScreen} options={{ title: "Add Friend" }} />
-      <Stack.Screen name="AddGroup" component={AddGroupScreen} options={{ title: "Add Group" }} />
-      <Stack.Screen name="JoinGroup" component={JoinGroupScreen} options={{ title: "Join Group" }} />
-      <Stack.Screen name="FriendRequest" component={FriendRequest} options={{ title: "FriendRequest" }} />
-      <Stack.Screen name="ScanGroup" component={ScanGroup} options={{ title: "ScanGroup" }} />
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        // ✅ 全局平滑转场动画配置
+        animation: 'slide_from_right',
+        animationDuration: 250,
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+      }}
+    >
+      <Stack.Screen 
+        name="Contacts" 
+        component={ContactsScreen} 
+        options={{ title: "Contacts", animation: 'fade' }} 
+      />
+      <Stack.Screen 
+        name="AddFriend" 
+        component={AddFriendScreen} 
+        options={{ title: "Add Friend", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="AddGroup" 
+        component={AddGroupScreen} 
+        options={{ title: "Add Group", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="JoinGroup" 
+        component={JoinGroupScreen} 
+        options={{ title: "Join Group", animation: 'slide_from_bottom' }} 
+      />
+      <Stack.Screen 
+        name="FriendRequest" 
+        component={FriendRequest} 
+        options={{ title: "FriendRequest", animation: 'slide_from_right' }} 
+      />
+      <Stack.Screen 
+        name="ScanGroup" 
+        component={ScanGroup} 
+        options={{ title: "ScanGroup", animation: 'slide_from_bottom' }} 
+      />
     </Stack.Navigator>
   );
 }

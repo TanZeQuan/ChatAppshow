@@ -18,72 +18,115 @@ const Stack = createNativeStackNavigator<ChatStackParamList>();
 
 export default function ChatStack() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        // ✅ 全局平滑转场动画配置
+        animation: 'slide_from_right', // iOS 风格的滑动动画
+        animationDuration: 250, // 动画时长
+        gestureEnabled: true, // 允许手势返回
+        gestureDirection: 'horizontal', // 水平手势
+      }}
+    >
       <Stack.Screen
         name="ChatList"
         component={ChatListScreen}
-        options={{ title: "Chats" }}
+        options={{ 
+          title: "Chats",
+          // 聊天列表不需要进入动画（它是首页）
+          animation: 'fade',
+        }}
       />
 
       <Stack.Screen
         name="ChatRoom"
         component={ChatRoomScreen}
-        options={{ title: "Chat Room" }}
+        options={{ 
+          title: "Chat Room",
+          animation: 'slide_from_right',
+        }}
       />
 
       <Stack.Screen
         name="ChatSettingScreen"
         component={ChatSettingScreen}
-        options={{ title: "Chat Setting" }}
+        options={{ 
+          title: "Chat Setting",
+          animation: 'slide_from_right',
+        }}
       />
 
       <Stack.Screen
         name="GroupRoom"
         component={GroupRoomScreen}
-        options={{ title: "Group Room" }}
+        options={{ 
+          title: "Group Room",
+          animation: 'slide_from_right',
+        }}
       />
 
       <Stack.Screen
         name="GroupSettingScreen"
         component={GroupSettingScreen}
-        options={{ title: "Group Setting" }}
+        options={{ 
+          title: "Group Setting",
+          animation: 'slide_from_right',
+        }}
       />
 
       <Stack.Screen
         name="GroupMemberList"
         component={GroupMemberList}
-        options={{ title: "Group Members" }}
+        options={{ 
+          title: "Group Members",
+          animation: 'slide_from_bottom',
+        }}
       />
 
       <Stack.Screen
         name="AddGroupMembers"
         component={AddGroupMembers}
-        options={{ title: "Add Group Members" }}
+        options={{ 
+          title: "Add Group Members",
+          animation: 'slide_from_bottom',
+        }}
       />
 
       <Stack.Screen
         name="ChatHistory"
         component={ChatHistory}
-        options={{ title: "Chat History" }}
+        options={{ 
+          title: "Chat History",
+          animation: 'slide_from_right',
+        }}
       />
       <Stack.Screen
         name="SelectContactForCard"
         component={SelectContactForCard}
-        options={{ title: "Select Contact" }}
+        options={{ 
+          title: "Select Contact",
+          animation: 'slide_from_bottom',
+        }}
       />
       <Stack.Screen
         name="SingleCallScreen"
         component={SingleCallScreen}
         options={{
           headerShown: false,
-          presentation: 'fullScreenModal', // 这样弹出时更有打电话的感觉
-          gestureEnabled: false // 禁止手势划走
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          gestureEnabled: false
         }}
       />
       <Stack.Screen
         name="GroupCallScreen"
         component={GroupCallScreen}
-        options={{ title: "Group Call" }}
+        options={{ 
+          title: "Group Call",
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          gestureEnabled: false
+        }}
       />
     </Stack.Navigator>
   );

@@ -19,6 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import EmojiPicker from 'rn-emoji-keyboard';
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
+import { createFriendRequest, readFriends } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
 import { useSearchChatHistory } from '../../components/ChatHistory';
 import { ChatInputBar } from '../../components/ChatInputBar';
@@ -28,7 +29,6 @@ import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { useVoiceRecorder } from '../../hooks/useVoiceRecorder';
 import WebSocketManager from '../../services/WebSocketManager';
 import { useChatStore } from '../../store/chatStore';
-import { readFriends, createFriendRequest } from '../../api/Friend';
 import { chatRoomSpecificStyles, createRoomStyles } from "../../styles/chatRoomStyles";
 
 const { width, height } = Dimensions.get("window");
@@ -697,10 +697,26 @@ export default function ChatRoomScreen() {
 
         // Construct the new message object from the WebSocket payload
         // Assumption: Backend includes sender_name, sender_avatar, and created_at
+        // ✅ 修复：如果后端没返回 created_at，生成马来西亚时间格式（与后端 API 一致）
+        let messageCreatedAt = data.created_at;
+        if (!messageCreatedAt) {
+          // 生成 GMT+8 马来西亚时间，格式 "YYYY-MM-DD HH:mm:ss"
+          const now = new Date();
+          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const gmt8 = new Date(utc + (8 * 60 * 60000));
+          const year = gmt8.getFullYear();
+          const month = String(gmt8.getMonth() + 1).padStart(2, '0');
+          const day = String(gmt8.getDate()).padStart(2, '0');
+          const hour = String(gmt8.getHours()).padStart(2, '0');
+          const minute = String(gmt8.getMinutes()).padStart(2, '0');
+          const second = String(gmt8.getSeconds()).padStart(2, '0');
+          messageCreatedAt = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+        }
+        
         const receivedMessage = {
           id: data.message_id,
           text: data.message,
-          createdAt: data.created_at || new Date().toISOString(), // Use server time
+          createdAt: messageCreatedAt,
           senderId: data.sender,
           type: data.type || 1,
           name: data.sender_name || 'Unknown User', // Use sender info from payload
@@ -782,10 +798,25 @@ export default function ChatRoomScreen() {
       if (result.success && result.data && result.data.message_id) {
         const sentMessage = result.data;
 
+        // ✅ 修复：如果后端没返回 created_at，生成马来西亚时间格式
+        let sentCreatedAt = sentMessage.created_at;
+        if (!sentCreatedAt) {
+          const now = new Date();
+          const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+          const gmt8 = new Date(utc + (8 * 60 * 60000));
+          const year = gmt8.getFullYear();
+          const month = String(gmt8.getMonth() + 1).padStart(2, '0');
+          const day = String(gmt8.getDate()).padStart(2, '0');
+          const hour = String(gmt8.getHours()).padStart(2, '0');
+          const minute = String(gmt8.getMinutes()).padStart(2, '0');
+          const second = String(gmt8.getSeconds()).padStart(2, '0');
+          sentCreatedAt = `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+        }
+        
         const newMessageForStore = {
           id: sentMessage.message_id,
           text: messageText,
-          createdAt: sentMessage.created_at || new Date().toISOString(),
+          createdAt: sentCreatedAt,
           senderId: currentUserId,
           type: sentMessage.type || 1,
           name: currentUserName,
@@ -1317,7 +1348,7 @@ export default function ChatRoomScreen() {
           {isFriendDeleted && !chat?.isGroup ? (
             // ✅ 显示非好友提示和重新添加按钮
             <View style={roomStyles.disabledInputContainer}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 , marginRight: 10 }}>
                 <Ionicons name="person-remove-outline" size={20} color="#FF6B6B" />
                 <Text style={[roomStyles.disabledInputText, { marginLeft: 8, color: '#FF6B6B' }]}>
                   你们已不是好友，无法发送消息
@@ -1326,7 +1357,7 @@ export default function ChatRoomScreen() {
               <TouchableOpacity
                 style={{
                   backgroundColor: '#FFD860',
-                  paddingHorizontal: 20,
+                  paddingHorizontal: 15,
                   paddingVertical: 10,
                   borderRadius: 20,
                   flexDirection: 'row',
@@ -1341,7 +1372,7 @@ export default function ChatRoomScreen() {
                   <>
                     <Ionicons name="person-add-outline" size={18} color="#333" />
                     <Text style={{ marginLeft: 6, color: '#333', fontWeight: '600' }}>
-                      重新添加好友
+                      添加好友
                     </Text>
                   </>
                 )}

@@ -392,7 +392,32 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
                 item.sender === 'me' && !isContactCard && { color: '#080808ff' },
                 isContactCard && { color: '#999', fontSize: 10 }
               ]}>
-                {new Date(item.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                {(() => {
+                  // ✅ 统一时间解析：处理后端马来西亚时间 (GMT+8) 和 ISO 格式，显示 AM/PM 格式
+                  const timestamp = item.createdAt;
+                  if (!timestamp) return '';
+                  
+                  // 转换为 12 小时制 AM/PM 格式
+                  const formatToAmPm = (h: number, m: number): string => {
+                    const ampm = h >= 12 ? 'PM' : 'AM';
+                    const hour12 = h % 12 || 12; // 0 点变成 12
+                    const minuteStr = m.toString().padStart(2, '0');
+                    return `${hour12}:${minuteStr} ${ampm}`;
+                  };
+                  
+                  // 检查是否是 "YYYY-MM-DD HH:mm:ss" 格式（后端马来西亚时间，无时区标识）
+                  const dateTimeMatch = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+                  if (dateTimeMatch) {
+                    // 直接提取时间部分，不做时区转换（因为后端已经是正确的显示时间）
+                    const [, , , , hour, minute] = dateTimeMatch;
+                    return formatToAmPm(parseInt(hour, 10), parseInt(minute, 10));
+                  }
+                  
+                  // ISO 格式或其他格式，使用 Date 解析后转本地时间
+                  const date = new Date(timestamp);
+                  if (isNaN(date.getTime())) return '';
+                  return formatToAmPm(date.getHours(), date.getMinutes());
+                })()}
               </Text>
               {readStatus && (
                 <Ionicons
