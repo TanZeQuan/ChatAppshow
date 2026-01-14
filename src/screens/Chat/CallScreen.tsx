@@ -3,6 +3,7 @@ import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacit
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { RTCView } from 'react-native-webrtc';
 
 // API & Service
 import { readUsers } from '../../api/User';
@@ -158,6 +159,9 @@ export default function CallScreen() {
   const [displayAvatar, setDisplayAvatar] = useState<string>(paramAvatar || '');
   const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
+  // 🔊 远程音频流 URL (用于激活音频播放)
+  const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
+
   // ⏱️ 计时器状态
   const [durationSeconds, setDurationSeconds] = useState(0);
 
@@ -166,6 +170,24 @@ export default function CallScreen() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const activeChatIdRef = useRef<string | null>(initialChatId || null);
   const isProcessingRef = useRef(false);
+
+  // 🔊 监听远程音频流 - 当通话连接成功时激活音频
+  useEffect(() => {
+    if (status === 'Connected' || status === '通话中') {
+      const checkRemoteStream = () => {
+        const callService = WebSocketManager.callService;
+        if (callService?.remoteStream) {
+          const url = callService.remoteStream.toURL();
+          console.log('🔊 [CallScreen] 获取到远程音频流 URL:', url);
+          setRemoteStreamUrl(url);
+        } else {
+          // 如果还没获取到，100ms 后重试
+          setTimeout(checkRemoteStream, 100);
+        }
+      };
+      checkRemoteStream();
+    }
+  }, [status]);
 
   // ---------------------------------------------------------
   // 🛠️ 确保获取 ChatID
@@ -316,11 +338,12 @@ export default function CallScreen() {
     }
 
     if (!isIncoming) {
-      console.log('📞 [CallScreen] 发起呼叫:', remoteUserId);
+      console.log('📞 [CallScreen] 发起呼叫:', remoteUserId, 'chatId:', activeChatIdRef.current);
       WebSocketManager.startCall(
         remoteUserId,
         paramName || displayName,
-        paramAvatar || displayAvatar
+        paramAvatar || displayAvatar,
+        activeChatIdRef.current || undefined  // ✅ 传递 chatId
       );
       // 注意：这里不发 invite 消息了，按你的要求只在结束时发
       fetchUserInfo(remoteUserId);
@@ -507,6 +530,14 @@ export default function CallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* 🔊 隐藏的 RTCView 用于激活远程音频流播放 */}
+      {remoteStreamUrl && (
+        <RTCView
+          streamURL={remoteStreamUrl}
+          style={styles.hiddenAudioView}
+          objectFit="cover"
+        />
+      )}
       <View style={styles.contentContainer}>
         <View style={styles.topSection}>
           {loadingUserInfo ? (
@@ -558,6 +589,7 @@ export default function CallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#2C2C2C' },
+  hiddenAudioView: { width: 0, height: 0, position: 'absolute' },
   contentContainer: { flex: 1, justifyContent: 'space-between' },
   topSection: { alignItems: 'center', marginTop: 100 },
   avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#4A4A4A', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
