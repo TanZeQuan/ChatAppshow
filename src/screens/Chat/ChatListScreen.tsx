@@ -1,17 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Dimensions,
   FlatList,
   Image,
+  LayoutAnimation,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
+  UIManager,
   View,
 } from 'react-native';
+
+// ✅ 启用 Android 的 LayoutAnimation 支持
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { readChatMessages, readUserChats } from '../../api/Chat';
 import { readFriends } from '../../api/Friend'; // ✅ 引入 API
@@ -40,7 +48,7 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
           if (parsed.type.includes('VOICE_CALL')) return '[语音通话]';
           if (parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
         }
-      } catch (e) { }
+      } catch (e) {}
     }
   }
   switch (type) {
@@ -60,92 +68,95 @@ const isValidAvatar = (avatar: string | null | undefined): boolean => {
   return true;
 };
 
+// ✅ 简单格式化：直接从后端时间字符串提取，不做时区转换
+// 今天显示 h:mm AM/PM，其他日期显示 日期/月份，不是今年显示 日期/月份/年份
 const formatTime = (timestamp: string): string => {
   if (!timestamp) return '';
-  const date = new Date(timestamp);
+  
+  // 提取日期和时间部分 "2026-01-13 17:12:27"
+  const dateTimeMatch = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+  if (!dateTimeMatch) return '';
+  
+  const [, year, month, day, hour, minute] = dateTimeMatch;
+  
+  // 获取今天的日期（从后端视角，假设后端是马来西亚时间 GMT+8）
   const now = new Date();
-  if (isNaN(date.getTime())) return '';
-  const diffInMs = now.getTime() - date.getTime();
-  const diffInMins = Math.floor(diffInMs / (1000 * 60));
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
-  const isSameDay = date.getDate() === now.getDate() && date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-  const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-  const isYesterday = date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth() && date.getFullYear() === yesterday.getFullYear();
-
-  if (diffInMins < 1) return '刚刚';
-  if (diffInMins < 60) return `${diffInMins}分钟前`;
-  if (isSameDay) return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-  if (isYesterday) return '昨天';
-  if (diffInDays < 7) { const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']; return weekdays[date.getDay()]; }
-  if (date.getFullYear() === now.getFullYear()) { return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`; }
-  return `${date.getFullYear().toString().slice(-2)}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+  // 转换为 GMT+8 时间
+  const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+  const gmt8 = new Date(utc + (8 * 60 * 60000));
+  
+  const todayYear = gmt8.getFullYear().toString();
+  const todayMonth = (gmt8.getMonth() + 1).toString().padStart(2, '0');
+  const todayDay = gmt8.getDate().toString().padStart(2, '0');
+  
+  // 判断是否是今天
+  const isToday = year === todayYear && month === todayMonth && day === todayDay;
+  
+  // 转换为 12 小时制 AM/PM 格式
+  const formatToAmPm = (h: string, m: string): string => {
+    const hourNum = parseInt(h, 10);
+    const ampm = hourNum >= 12 ? 'PM' : 'AM';
+    const hour12 = hourNum % 12 || 12; // 0 点变成 12
+    return `${hour12}:${m} ${ampm}`;
+  };
+  
+  if (isToday) {
+    // 今天：显示 h:mm AM/PM
+    return formatToAmPm(hour, minute);
+  } else if (year !== todayYear) {
+    // 不是今年：显示 日期/月份/年份
+    return `${day}/${month}/${year}`;
+  } else {
+    // 今年其他日期：显示 日期/月份
+    return `${day}/${month}`;
+  }
 };
 
 export default function ChatListScreen() {
   const navigation = useNavigation<any>();
-
+  
   const { chatList, setChats, addChat, getChatById } = useChatStore();
   const { user, onlineUsers } = useUserStore();
   const { setContacts } = useContactStore(); // ✅ 获取 setContacts 方法
-
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // ✅ 标记首次加载
 
   const currentUserId = user?.id;
 
-  // 初始化加载
+  // 初始化加载（首次进入显示 loading）
   useEffect(() => {
     if (currentUserId) {
-      refreshData();
+      refreshData(true); // 首次加载显示 loading
     }
   }, [currentUserId]);
 
-  // 页面聚焦时刷新
+  // 页面聚焦时静默刷新（不显示 loading，不会跳动）
   useFocusEffect(
     useCallback(() => {
-      if (currentUserId) {
-        refreshData();
+      if (currentUserId && !isInitialLoad) {
+        refreshData(false); // ✅ 静默刷新
       }
-    }, [currentUserId])
+    }, [currentUserId, isInitialLoad])
   );
 
-  // WebSocket 实时消息处理
+  // WebSocket 实时消息处理 - 收到新消息时静默刷新 API 获取最新数据
   useEffect(() => {
     const handleWebSocketMessage = (data: any) => {
       if (!data.type || !data.chat_id) return;
-
-      console.log('⚡️ [ChatList] 收到实时消息:', { chatId: data.chat_id });
-
-      const existingChat = getChatById(data.chat_id);
-      const chatName = existingChat?.name || data.sender || '新消息';
-      const me = currentUserId;
-
-      let memberIds = existingChat?.memberIds || [];
-
-      const updatedChat: ChatListItem = {
-        id: data.chat_id,
-        name: chatName,
-        avatar: existingChat?.avatar || null,
-        isGroup: existingChat?.isGroup || false,
-        members: existingChat?.members || [],
-        memberIds: existingChat?.memberIds || [],
-        lastMessage: formatLastMessagePreview(data.message, data.type),
-        timestamp: new Date().toISOString(),
-        unreadCount: (existingChat?.unreadCount || 0) + 1,
-        rawData: existingChat?.rawData || {},
-        type: 0,
-        online: false,
-        otherUserId: undefined
-      };
-
-      addChat(updatedChat);
+      
+      console.log('⚡️ [ChatList] 收到实时消息，触发静默刷新:', { chatId: data.chat_id });
+      
+      // ✅ 完全依赖 API：收到 WebSocket 消息时，静默刷新列表获取最新数据
+      refreshData(false);
     };
 
     WebSocketManager.addMessageCallback(handleWebSocketMessage);
     return () => {
       WebSocketManager.removeMessageCallback(handleWebSocketMessage);
     };
-  }, [addChat, getChatById]);
+  }, []);
 
   // 排序和搜索逻辑
   const sortedAndFilteredChats = useMemo(() => {
@@ -153,7 +164,7 @@ export default function ChatListScreen() {
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(chat =>
+      result = result.filter(chat => 
         (chat.name && chat.name.toLowerCase().includes(query)) ||
         (chat.lastMessage && chat.lastMessage.toLowerCase().includes(query))
       );
@@ -182,30 +193,22 @@ export default function ChatListScreen() {
         memberIds: chat.memberIds || [],
       });
     } else {
-      // ✅ 关键：在这里算 otherUserId
-      const otherUserId =
-        chat.memberIds?.find(id => id !== currentUserId) ||
-        latestChat?.memberIds?.find(id => id !== currentUserId);
-
-      if (!otherUserId) {
-        console.warn('⚠️ [ChatList] Could not find otherUserId for chat:', chat.id);
-        return;
-      }
-
       navigation.navigate('ChatRoom', {
         chatId: chat.id,
         chatName: chat.name,
-        otherUserId,          // ✅ 现在一定有值
         isGroup: false,
       });
     }
-  }, [addChat, getChatById, navigation, currentUserId]);
+  }, [addChat, getChatById, navigation]);
 
   // ✅✅✅ 核心逻辑：双重校验刷新 ✅✅✅
-  const refreshData = async () => {
+  // showLoading: true = 显示下拉刷新动画, false = 静默刷新
+  const refreshData = async (showLoading: boolean = false) => {
     if (!currentUserId) return;
 
-    setIsRefreshing(true);
+    if (showLoading) {
+      setIsRefreshing(true);
+    }
 
     try {
       // 1. 并行请求：获取聊天记录 + 获取最新好友列表
@@ -213,26 +216,26 @@ export default function ChatListScreen() {
         readUserChats(currentUserId),
         readFriends(2) // status 2 = 已添加的好友
       ]);
-
+      
       // 2. 构建有效好友白名单
       const validFriendIds = new Set<string>();
-
+      
       if (friendsResult.success && friendsResult.data) {
         const allFriends = [
           ...(friendsResult.data.approve || []),
           ...(friendsResult.data.request || [])
         ];
-
+        
         // 🛠️ 顺便更新 ContactStore (优化：保持通讯录页面数据也是最新的)
         const contactsForStore = allFriends.map((friend: any) => ({
-          id: friend.user_id || friend.id || friend.userId,
-          name: friend.name || friend.username || `用户${friend.user_id}`,
-          avatar: friend.avatar || friend.image,
-          online: friend.online || false,
-          // ... 需要根据 ContactStore 的类型补全其他字段
-          listId: friend.list_id || 0,
-          isFriend: true,
-          rawData: friend
+            id: friend.user_id || friend.id || friend.userId,
+            name: friend.name || friend.username || `用户${friend.user_id}`,
+            avatar: friend.avatar || friend.image,
+            online: friend.online || false,
+            // ... 需要根据 ContactStore 的类型补全其他字段
+            listId: friend.list_id || 0,
+            isFriend: true,
+            rawData: friend
         }));
         // 注意：这里需要确保 setContacts 接受的数据格式与你的 Store 定义一致
         // 如果格式复杂，可以注释掉这行，只保留下面的 ID 收集
@@ -254,12 +257,12 @@ export default function ChatListScreen() {
             const finalMemberIds = backendMemberIds.length > 0 ? backendMemberIds : (existingChat?.memberIds || []);
 
             const isGroup = chat.istype === 2 || chat.type === 2 || chat.isGroup || false;
-
+            
             // 🔥 过滤逻辑：如果是私聊，且对方不在好友白名单中 -> 返回 null
             if (!isGroup) {
               const otherId = finalMemberIds.find((id: any) => String(id) !== String(currentUserId));
-              if (!otherId || !validFriendIds.has(String(otherId))) {
-                return null; // 标记为无效
+              if (otherId && !validFriendIds.has(String(otherId))) {
+                 return null; // 标记为无效
               }
             }
 
@@ -270,32 +273,36 @@ export default function ChatListScreen() {
               finalAvatar = ensureFullImageUrl(apiImage);
             }
 
-            const lastMsgObj = (chat.message && chat.message.length > 0)
-              ? chat.message[chat.message.length - 1]
-              : null;
+            // ✅ 处理新的 message 格式（对象）和旧格式（数组）的兼容
+            let lastMsgObj = null;
+            if (chat.message) {
+              if (Array.isArray(chat.message) && chat.message.length > 0) {
+                // 旧格式：message 是数组
+                lastMsgObj = chat.message[chat.message.length - 1];
+              } else if (typeof chat.message === 'object' && chat.message.message_id) {
+                // 新格式：message 是对象
+                lastMsgObj = chat.message;
+              }
+            }
             const lastMessageText = lastMsgObj?.message || chat.last_message || '';
             const lastMessageType = lastMsgObj?.type || chat.last_message_type;
 
-            const backendTimestamp = chat.last_message_time || chat.timestamp || new Date().toISOString();
-            const localTimestamp = existingChat?.timestamp;
-
-            let finalTimestamp = backendTimestamp;
-            if (localTimestamp && new Date(localTimestamp).getTime() > new Date(backendTimestamp).getTime()) {
-              finalTimestamp = localTimestamp;
-            }
+            // ✅ 完全依赖 API 返回的时间，优先使用 message.created_at
+            const messageTimestamp = lastMsgObj?.created_at;
+            const finalTimestamp = messageTimestamp || chat.last_message_time || chat.timestamp || '';
 
             let chatName = chat.name || chat.chat_name;
             if (!chatName && isGroup) chatName = '未命名群组';
-
+            
             // 如果没名字，尝试从 members 补全
             if (!isGroup && (!chatName || chatName.trim() === '')) {
-              if (chat.members && Array.isArray(chat.members)) {
-                const otherMember = chat.members.find((m: any) => m.user_id !== currentUserId && m.id !== currentUserId);
-                if (otherMember) {
-                  chatName = otherMember.name || otherMember.username;
-                  if (!finalAvatar && otherMember.avatar) finalAvatar = ensureFullImageUrl(otherMember.avatar);
-                }
-              }
+               if (chat.members && Array.isArray(chat.members)) {
+                  const otherMember = chat.members.find((m: any) => m.user_id !== currentUserId && m.id !== currentUserId);
+                  if (otherMember) {
+                    chatName = otherMember.name || otherMember.username;
+                    if (!finalAvatar && otherMember.avatar) finalAvatar = ensureFullImageUrl(otherMember.avatar);
+                  }
+               }
             }
             if (!chatName) chatName = '';
 
@@ -315,6 +322,22 @@ export default function ChatListScreen() {
           // 🔥 修复 TS 错误：明确告诉 TS 过滤后的数组里只有 ChatListItem
           .filter((item: ChatListItem | null): item is ChatListItem => item !== null);
 
+        // ✅ 使用 LayoutAnimation 实现平滑的列表更新动画
+        LayoutAnimation.configureNext({
+          duration: 300,
+          create: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+          update: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+          },
+          delete: {
+            type: LayoutAnimation.Types.easeInEaseOut,
+            property: LayoutAnimation.Properties.opacity,
+          },
+        });
+        
         setChats(formattedChats);
         loadGroupMembersForAllChats(formattedChats);
       }
@@ -322,12 +345,15 @@ export default function ChatListScreen() {
       console.error("刷新聊天列表失败:", error);
     } finally {
       setIsRefreshing(false);
+      if (isInitialLoad) {
+        setIsInitialLoad(false); // ✅ 首次加载完成后，后续都用静默刷新
+      }
     }
   };
 
   const loadGroupMembersForAllChats = async (chats: ChatListItem[]) => {
     if (!currentUserId) return;
-
+    
     const groupChats = chats.filter(chat => chat.isGroup);
 
     for (const chat of groupChats) {
@@ -340,18 +366,18 @@ export default function ChatListScreen() {
           user_id: currentUserId,
           offset: 0,
         });
-
+        
         if (result.success && result.data?.group) {
           const membersInfo = result.data.group.map((m: any) => ({
             id: m.user_id,
             name: m.name || '未知用户',
             avatar: ensureFullImageUrl(m.image || m.avatar)
           }));
-
-          addChat({
-            ...chat,
-            members: membersInfo,
-            memberIds: membersInfo.map((m: any) => m.id)
+          
+          addChat({ 
+            ...chat, 
+            members: membersInfo, 
+            memberIds: membersInfo.map((m: any) => m.id) 
           });
         }
       } catch (e) {
@@ -405,16 +431,16 @@ export default function ChatListScreen() {
           </View>
 
           <View style={styles.messageRow}>
-            <Text
+            <Text 
               style={[
                 styles.message,
                 item.unreadCount > 0 && styles.unreadMessage
-              ]}
+              ]} 
               numberOfLines={1}
             >
               {item.lastMessage}
             </Text>
-
+            
             {item.unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -435,7 +461,7 @@ export default function ChatListScreen() {
           <View style={styles.header}>
             <Text style={styles.headerTitle}>森通</Text>
           </View>
-
+          
           <View style={styles.searchContainer}>
             <Ionicons name="search" size={18} color="#999" style={styles.searchIcon} />
             <TextInput
@@ -464,7 +490,7 @@ export default function ChatListScreen() {
           contentContainerStyle={styles.listContent}
           extraData={[onlineUsers, searchQuery]}
           showsVerticalScrollIndicator={false}
-          onRefresh={refreshData}
+          onRefresh={() => refreshData(true)}
           refreshing={isRefreshing}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
