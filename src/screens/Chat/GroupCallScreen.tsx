@@ -211,10 +211,12 @@ export default function GroupCallScreen() {
 
   const toggleMute = () => {
     if (localStream) {
+        const newMutedState = !isMicMuted;
         localStream.getAudioTracks().forEach(track => {
-            track.enabled = !isMicMuted;
+            track.enabled = !newMutedState;  // ✅ 修复：静音时 enabled=false，非静音时 enabled=true
         });
-        setIsMicMuted(!isMicMuted);
+        setIsMicMuted(newMutedState);
+        console.log(`🎤 [GroupCall] 麦克风${newMutedState ? '已静音' : '已开启'}`);
     }
   };
 
