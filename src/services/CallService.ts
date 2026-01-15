@@ -20,6 +20,7 @@ export class WebRTCCallService {
   configuration: { iceServers: { urls: string; }[]; };
   pendingOffer: any;
   currentCallId: string | null;
+  currentChatId: string | null; // ✅ 新增：保存当前通话的 chat_id
 
   constructor(ws: WebSocket, currentUserId: string) {
     this.ws = ws;
@@ -32,12 +33,13 @@ export class WebRTCCallService {
     this.remoteStream = null;
     this.targetUserId = null;
     this.currentCallId = null;
+    this.currentChatId = null; // ✅ 初始化
     this.candidateQueue = [];
-    this.currentCallId = null;
 
     this.configuration = {
       iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' }
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }, // ✅ 新增备用 STUN 服务器
       ]
     };
   }
@@ -69,12 +71,18 @@ export class WebRTCCallService {
       return;
     }
 
+    // ✅ 统一信令格式，与群聊保持一致
     const message: any = {
       msg: 'call_signal',
       type: type,
       user_id: this.currentUserId,
+      sender: this.currentUserId,  // ✅ 新增 sender 字段
+      chat_id: this.currentChatId || '',  // ✅ 新增 chat_id 字段
       receiver: [receiverId],
-      payload: payload
+      payload: {
+        ...payload,
+        call_mode: 'single'  // ✅ 标识为一对一通话
+      }
     };
 
     // Add call_type for offer (0=Voice, 1=Video)
@@ -89,10 +97,16 @@ export class WebRTCCallService {
 
   // --- Call Initiation ---
 
-  async startCall(targetUserId: string, userName: string, avatar: string) {
+  async startCall(targetUserId: string, userName: string, avatar: string, chatId?: string) {
     this.targetUserId = targetUserId;
+    this.currentChatId = chatId || null;  // ✅ 保存 chat_id
     this.onStatusChange('Calling...');
     Emitter.emit('startCall', targetUserId);
+
+    console.log('📞 [CallService] startCall - 发起呼叫:', {
+      to: targetUserId,
+      chatId: this.currentChatId
+    });
 
     await this.setupPeerConnection();
 
@@ -103,9 +117,16 @@ export class WebRTCCallService {
   }
 
   async handleOffer(data: any) {
-    this.targetUserId = data.user_id;
+    this.targetUserId = data.user_id || data.sender;
     this.pendingOffer = data.payload.sdp;
-    this.onIncomingCall(data.user_id);
+    this.currentChatId = data.chat_id || null;  // ✅ 保存来电的 chat_id
+    this.currentCallId = data.call_id || null;  // ✅ 保存 call_id
+    console.log('📞 [CallService] handleOffer - 来电信息:', {
+      from: this.targetUserId,
+      chatId: this.currentChatId,
+      callId: this.currentCallId
+    });
+    this.onIncomingCall(this.targetUserId);
   }
 
   async answerCall() {
@@ -303,7 +324,9 @@ export class WebRTCCallService {
     }
     this.targetUserId = null;
     this.currentCallId = null;
+    this.currentChatId = null;  // ✅ 清理 chatId
     this.pendingOffer = null;
+    this.candidateQueue = [];  // ✅ 清理候选队列
     this.onStatusChange('Ended');
     Emitter.emit('endCall');
   }

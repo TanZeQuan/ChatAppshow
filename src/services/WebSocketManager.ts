@@ -159,10 +159,11 @@ class WebSocketManager {
   public startCall(
     targetUserId: string,
     userName: string,
-    avatar: string
+    avatar: string,
+    chatId?: string  // ✅ 新增 chatId 参数
   ) {
     if (this.callService) {
-      this.callService.startCall(targetUserId, userName, avatar);
+      this.callService.startCall(targetUserId, userName, avatar, chatId);
     } else {
       console.warn("⚠️ CallService not initialized, cannot start call");
     }

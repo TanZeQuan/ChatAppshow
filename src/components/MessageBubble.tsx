@@ -104,7 +104,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
       const parsed = JSON.parse(messageText);
 
       // Check for Call
-      if (parsed.type === 'GROUP_VIDEO_CALL' || parsed.type === 'SINGLE_VOICE_CALL') {
+      if (parsed.type === 'GROUP_VIDEO_CALL' || parsed.type === 'GROUP_VOICE_CALL' || parsed.type === 'SINGLE_VOICE_CALL') {
         isCallMessage = true;
       }
       // Check for Contact Card
@@ -214,6 +214,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     const isInactive = isEnded || isCancelled || isRejected;
 
     const isVideo = callData.type === 'GROUP_VIDEO_CALL';
+    const isGroupVoice = callData.type === 'GROUP_VOICE_CALL';
     const iconName = isVideo ? "videocam" : "call";
 
     // ✅ FIXED: Corrected text logic

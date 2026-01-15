@@ -211,10 +211,12 @@ export default function GroupCallScreen() {
 
   const toggleMute = () => {
     if (localStream) {
+        const newMutedState = !isMicMuted;
         localStream.getAudioTracks().forEach(track => {
-            track.enabled = !isMicMuted;
+            track.enabled = !newMutedState;  // ✅ 修复：静音时 enabled=false，非静音时 enabled=true
         });
-        setIsMicMuted(!isMicMuted);
+        setIsMicMuted(newMutedState);
+        console.log(`🎤 [GroupCall] 麦克风${newMutedState ? '已静音' : '已开启'}`);
     }
   };
 
@@ -225,7 +227,7 @@ export default function GroupCallScreen() {
     if (isHost) {
         // Host sends system message to end call in chat
         const endCallData = JSON.stringify({
-            type: 'GROUP_VIDEO_CALL',
+            type: 'GROUP_VOICE_CALL',  // ✅ 修复：语音通话应该是 VOICE_CALL
             roomId: chatId,
             hostName: currentUser?.name,
             status: 'ended',
@@ -270,13 +272,16 @@ export default function GroupCallScreen() {
           styles.avatarContainer, 
           item.isSpeaking && styles.speakingBorder 
       ]}>
-        {item.avatar ? (
-          <Image source={{ uri: item.avatar }} style={styles.avatarImage} />
-        ) : (
-          <View style={[styles.avatarImage, styles.placeholderAvatar]}>
-             <Text style={styles.placeholderText}>{item.userName?.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
+        <Image 
+          source={
+            !item.avatar || 
+            item.avatar.trim() === '' || 
+            item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+              ? require('../../assets/images/personal.png')
+              : { uri: item.avatar }
+          } 
+          style={styles.avatarImage} 
+        />
       </View>
       <Text style={styles.nameText} numberOfLines={1}>
         {item.userId === currentUserId ? 'Me' : item.userName}
