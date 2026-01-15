@@ -239,7 +239,7 @@ export default function GroupCallScreen() {
       setIsSpeakerOn(newSpeakerState);
       console.log(`🔊 [GroupCall] 扬声器${newSpeakerState ? '已开启（免提模式）' : '已关闭（听筒模式）'}`);
     } catch (error) {
-      console.error('❌ [GroupCall] 切换扬声器失败:', error);
+      console.log('❌ [GroupCall] 切换扬声器失败:', error);
       Alert.alert('提示', '切换扬声器失败，请重试');
     }
   };

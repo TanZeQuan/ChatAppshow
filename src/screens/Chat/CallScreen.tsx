@@ -320,7 +320,7 @@ export default function CallScreen() {
       setIsSpeakerOn(newSpeakerState);
       console.log(`🔊 [CallScreen] 扬声器${newSpeakerState ? '已开启（免提模式）' : '已关闭（听筒模式）'}`);
     } catch (error) {
-      console.error('❌ [CallScreen] 切换扬声器失败:', error);
+      console.log('❌ [CallScreen] 切换扬声器失败:', error);
       Alert.alert('提示', '切换扬声器失败，请重试');
     }
   };

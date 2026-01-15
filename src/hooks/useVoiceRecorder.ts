@@ -20,6 +20,7 @@ export const useVoiceRecorder = ({
   // Voice recording state
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isPreparing, setIsPreparing] = useState(false); // 准备录音中
   const [isUploading, setIsUploading] = useState(false);
 
   // Voice playback state
@@ -30,6 +31,9 @@ export const useVoiceRecorder = ({
 
   // ✅ Start recording
   const startRecording = useCallback(async () => {
+    // 立即设置准备状态，让UI即时响应
+    setIsPreparing(true);
+    
     try {
       // Clean up any existing recording first
       if (recording) {
@@ -45,6 +49,7 @@ export const useVoiceRecorder = ({
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('权限被拒绝', '需要麦克风权限才能录音');
+        setIsPreparing(false);
         return;
       }
 
@@ -89,12 +94,14 @@ export const useVoiceRecorder = ({
       const { recording: newRecording } = await Audio.Recording.createAsync(recordingOptions);
       setRecording(newRecording);
       setIsRecording(true);
+      setIsPreparing(false); // 录音开始后关闭准备状态
       console.log('✅ [Voice] Recording started');
     } catch (err: any) {
-      console.error('❌ [Voice] Failed to start recording:', err);
+      console.log('❌ [Voice] Failed to start recording:', err);
       Alert.alert('录音失败', err.message || '无法启动录音，请重试');
       setRecording(null);
       setIsRecording(false);
+      setIsPreparing(false);
     }
   }, [recording]);
 
@@ -239,7 +246,7 @@ export const useVoiceRecorder = ({
       // Unload immediately since we don't need to play
       await tempSound.unloadAsync();
     } catch (error) {
-      console.warn('⚠️ [Voice] Failed to preload duration:', error);
+      console.log('⚠️ [Voice] Failed to preload duration:', error);
     }
   }, [voiceDurations]);
 
@@ -279,7 +286,7 @@ export const useVoiceRecorder = ({
       console.log('▶️ [Voice] Playing:', messageId);
 
     } catch (error: any) {
-      console.error('❌ [Voice] Failed to play:', error);
+      console.log('❌ [Voice] Failed to play:', error);
       Alert.alert('播放失败', '无法播放语音消息，请重试');
       setPlayingVoice(null);
     }
@@ -323,6 +330,7 @@ export const useVoiceRecorder = ({
     // State
     recording,
     isRecording,
+    isPreparing,
     isUploading,
     playingVoice,
     voiceDurations,

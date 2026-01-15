@@ -134,6 +134,7 @@ export default function ChatRoomScreen() {
   // ✅ Use voice recorder hook
   const {
     isRecording,
+    isPreparing,
     isUploading,
     playingVoice,
     voiceDurations,
@@ -971,6 +972,7 @@ export default function ChatRoomScreen() {
             inputText={inputText}
             setInputText={setInputText}
             isRecording={isRecording}
+            isPreparing={isPreparing}
             isUploading={isUploading}
             startRecording={startRecording}
             stopRecording={stopRecording}
