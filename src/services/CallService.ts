@@ -126,7 +126,9 @@ export class WebRTCCallService {
       chatId: this.currentChatId,
       callId: this.currentCallId
     });
-    this.onIncomingCall(this.targetUserId);
+    if (this.targetUserId) {
+      this.onIncomingCall(this.targetUserId);
+    }
   }
 
   async answerCall() {
