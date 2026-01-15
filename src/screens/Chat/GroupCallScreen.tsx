@@ -425,12 +425,13 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     paddingBottom: 50,
     paddingHorizontal: 30,
   },
   controlButton: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   iconCircle: {
     width: 60,
@@ -446,12 +447,12 @@ const styles = StyleSheet.create({
   },
   hangupButtonContainer: {
     alignItems: 'center',
-    bottom: 10, 
+    justifyContent: 'center',
   },
   hangupButton: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
@@ -465,5 +466,6 @@ const styles = StyleSheet.create({
   controlText: {
     color: '#fff',
     fontSize: 12,
+    textAlign: 'center',
   },
 });
