@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { MediaStream } from 'react-native-webrtc';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 
 import { readChatMessages, sendChatMessage } from '../../api/Chat';
 import WebSocketManager from '../../services/WebSocketManager';
@@ -220,6 +221,29 @@ export default function GroupCallScreen() {
     }
   };
 
+  // ✅ 扬声器切换功能
+  const toggleSpeaker = async () => {
+    try {
+      const newSpeakerState = !isSpeakerOn;
+      
+      // 使用 expo-av 的 Audio API 切换音频输出模式
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        // playThroughEarpieceAndroid: true 表示使用听筒，false 表示使用扬声器
+        playThroughEarpieceAndroid: !newSpeakerState,
+        // staysActiveInBackground: 保持后台音频活跃
+        staysActiveInBackground: true,
+      });
+      
+      setIsSpeakerOn(newSpeakerState);
+      console.log(`🔊 [GroupCall] 扬声器${newSpeakerState ? '已开启（免提模式）' : '已关闭（听筒模式）'}`);
+    } catch (error) {
+      console.error('❌ [GroupCall] 切换扬声器失败:', error);
+      Alert.alert('提示', '切换扬声器失败，请重试');
+    }
+  };
+
   const hangup = async () => {
     const finalDuration = formatDuration(durationRef.current);
     const receivers = participants.filter(p => p.userId !== currentUserId).map(p => p.userId);
@@ -325,7 +349,7 @@ export default function GroupCallScreen() {
         </TouchableOpacity>
 
         {/* Speaker Button */}
-        <TouchableOpacity style={styles.controlButton} onPress={() => setIsSpeakerOn(!isSpeakerOn)}>
+        <TouchableOpacity style={styles.controlButton} onPress={toggleSpeaker}>
             <View style={[styles.iconCircle, isSpeakerOn ? styles.iconActive : null]}>
                 <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color={isSpeakerOn ? "#000" : "#fff"} />
             </View>
