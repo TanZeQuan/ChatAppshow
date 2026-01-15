@@ -58,7 +58,7 @@
     "@config-plugins/react-native-webrtc": "^13.0.0",
     "@tsconfig/react-native": "^3.0.8",
     "@types/estree": "^1.0.8",
-    "@types/jest": "^30.0.0",
+    "@types/jest": "29.5.14",
     "@types/json-schema": "^7.0.15",
     "@types/react": "~19.1.0",
     "eslint": "^9.25.0",

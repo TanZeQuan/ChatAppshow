@@ -68,7 +68,7 @@ export const useUserStore = create<UserStore>()(
           user: null,
           token: null,
           isLoggedIn: false,
-          onlineUsers: [], // Clear online users on logout
+          onlineUsers: [], 
         });
 
         // Clear chat store
