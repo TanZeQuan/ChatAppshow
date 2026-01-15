@@ -289,7 +289,7 @@ export const baseRoomStyles = RNStyleSheet.create({
     backgroundColor: 'rgba(102, 126, 234, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: scaleWidth(12),
+    marginRight: scaleWidth(5),
   },
   voiceInfo: {
     flex: 1,

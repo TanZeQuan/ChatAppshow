@@ -143,12 +143,22 @@ export default function ChatRoomScreen() {
     playAudio,
     stopAudio,
     formatTime,
+    preloadVoiceDuration,
   } = useVoiceRecorder({
     chatId,
     currentUserId,
     chatMembers,
     onMessageSent: () => loadMessages(false, false),
   });
+
+  // ✅ 预加载语音消息时长
+  useEffect(() => {
+    messages.forEach(msg => {
+      if (msg.type === 2 && msg.voiceUrl && !voiceDurations[msg.id]) {
+        preloadVoiceDuration(msg.voiceUrl, msg.id);
+      }
+    });
+  }, [messages, voiceDurations, preloadVoiceDuration]);
 
   // Wrap loadMessages in useCallback to prevent closure issues
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {

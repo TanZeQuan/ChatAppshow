@@ -212,6 +212,37 @@ export const useVoiceRecorder = ({
     }
   }, [playingVoice]);
 
+  // ✅ Preload voice duration without playing
+  const preloadVoiceDuration = useCallback(async (voiceUrl: string, messageId: string) => {
+    // Skip if already loaded
+    if (voiceDurations[messageId]) {
+      return;
+    }
+
+    try {
+      console.log('🔍 [Voice] Preloading duration for:', messageId);
+      
+      const { sound: tempSound, status } = await Audio.Sound.createAsync(
+        { uri: voiceUrl },
+        { shouldPlay: false }
+      );
+
+      if (status.isLoaded && status.durationMillis) {
+        const durationSeconds = Math.round(status.durationMillis / 1000);
+        setVoiceDurations(prev => ({
+          ...prev,
+          [messageId]: durationSeconds
+        }));
+        console.log(`✅ [Voice] Duration loaded for ${messageId}: ${durationSeconds}s`);
+      }
+
+      // Unload immediately since we don't need to play
+      await tempSound.unloadAsync();
+    } catch (error) {
+      console.warn('⚠️ [Voice] Failed to preload duration:', error);
+    }
+  }, [voiceDurations]);
+
   // ✅ Play audio
   const playAudio = useCallback(async (voiceUrl: string, messageId: string) => {
     try {
@@ -303,5 +334,6 @@ export const useVoiceRecorder = ({
     playAudio,
     stopAudio,
     formatTime,
+    preloadVoiceDuration,
   };
 };
