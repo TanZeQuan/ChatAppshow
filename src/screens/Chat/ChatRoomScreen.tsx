@@ -339,6 +339,7 @@ export default function ChatRoomScreen() {
   // ✅ Use voice recorder hook
   const {
     isRecording,
+    isPreparing,
     isUploading,
     playingVoice,
     voiceDurations,
@@ -348,6 +349,7 @@ export default function ChatRoomScreen() {
     playAudio,
     stopAudio,
     formatTime,
+    preloadVoiceDuration,
   } = useVoiceRecorder({
     chatId,
     currentUserId,
@@ -358,6 +360,15 @@ export default function ChatRoomScreen() {
     },
     // ✅ 传入好友删除状态
   });
+
+  // ✅ 预加载语音消息时长
+  useEffect(() => {
+    messages.forEach(msg => {
+      if (msg.type === 2 && msg.voiceUrl && !voiceDurations[msg.id]) {
+        preloadVoiceDuration(msg.voiceUrl, msg.id);
+      }
+    });
+  }, [messages, voiceDurations, preloadVoiceDuration]);
 
   // Wrap loadMessages in useCallback
   const loadMessages = useCallback(async (loadMore = false, showLoading = true) => {
@@ -1384,6 +1395,7 @@ export default function ChatRoomScreen() {
               inputText={inputText}
               setInputText={setInputText}
               isRecording={isRecording}
+              isPreparing={isPreparing}
               isUploading={isUploading}
               startRecording={startRecording}
               stopRecording={stopRecording}

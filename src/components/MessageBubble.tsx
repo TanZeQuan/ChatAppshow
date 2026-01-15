@@ -359,11 +359,18 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
               {item.type === 2 && item.voiceUrl && (
                 <View style={roomStyles.voiceMessageContainer}>
-                  <TouchableOpacity onPress={() => playingVoice === item.id ? stopAudio() : playAudio(item.voiceUrl!, item.id)}>
+                  <TouchableOpacity 
+                    style={roomStyles.voicePlayButton}
+                    onPress={() => playingVoice === item.id ? stopAudio() : playAudio(item.voiceUrl!, item.id)}
+                  >
                     <Ionicons name={playingVoice === item.id ? "pause-circle" : "play-circle"} size={scaleWidth(28)} color={item.sender === 'me' ? "#000000ff" : "#1c275b"} />
                   </TouchableOpacity>
                   <Text style={[roomStyles.voiceDuration, item.sender === 'me' && { color: '#000000ff' }]}>
-                    {playingVoice === item.id ? '播放中' : '语音'}
+                    {playingVoice === item.id 
+                      ? `播放中 [ ${Math.max(0, (voiceDurations[item.id] || 0) - Math.floor(playbackPosition / 1000))}秒 ]`
+                      : voiceDurations[item.id] 
+                        ? `语音 [ ${voiceDurations[item.id]}秒 ]` 
+                        : '语音'}
                   </Text>
                 </View>
               )}

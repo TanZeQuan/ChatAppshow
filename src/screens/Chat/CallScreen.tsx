@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
-import { ActivityIndicator, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { getOriginalTabBarStyle } from "../../components/tabstyle";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { RTCView } from 'react-native-webrtc';
+import { Audio } from 'expo-av';
+import { Ionicons } from '@expo/vector-icons';
 
 // API & Service
 import { readUsers } from '../../api/User';
@@ -162,6 +164,12 @@ export default function CallScreen() {
   // 🔊 远程音频流 URL (用于激活音频播放)
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
 
+  // 🎤 静音状态
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  
+  // 🔊 免提状态
+  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
+
   // ⏱️ 计时器状态
   const [durationSeconds, setDurationSeconds] = useState(0);
 
@@ -272,6 +280,48 @@ export default function CallScreen() {
       console.log('⏱️ [Timer] 停止计时，总时长:', durationRef.current);
       clearInterval(timerRef.current);
       timerRef.current = null;
+    }
+  };
+
+  // ---------------------------------------------------------
+  // 🎤 静音切换功能
+  // ---------------------------------------------------------
+  const toggleMute = () => {
+    const callService = WebSocketManager.callService;
+    if (callService?.localStream) {
+      const newMutedState = !isMicMuted;
+      callService.localStream.getAudioTracks().forEach((track: any) => {
+        track.enabled = !newMutedState; // 静音时 enabled=false，非静音时 enabled=true
+      });
+      setIsMicMuted(newMutedState);
+      console.log(`🎤 [CallScreen] 麦克风${newMutedState ? '已静音' : '已开启'}`);
+    } else {
+      console.warn('⚠️ [CallScreen] 无法切换静音：localStream 不存在');
+    }
+  };
+
+  // ---------------------------------------------------------
+  // 🔊 免提切换功能
+  // ---------------------------------------------------------
+  const toggleSpeaker = async () => {
+    try {
+      const newSpeakerState = !isSpeakerOn;
+      
+      // 使用 expo-av 的 Audio API 切换音频输出模式
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        // playThroughEarpieceAndroid: true 表示使用听筒，false 表示使用扬声器
+        playThroughEarpieceAndroid: !newSpeakerState,
+        // staysActiveInBackground: 保持后台音频活跃
+        staysActiveInBackground: true,
+      });
+      
+      setIsSpeakerOn(newSpeakerState);
+      console.log(`🔊 [CallScreen] 扬声器${newSpeakerState ? '已开启（免提模式）' : '已关闭（听筒模式）'}`);
+    } catch (error) {
+      console.log('❌ [CallScreen] 切换扬声器失败:', error);
+      Alert.alert('提示', '切换扬声器失败，请重试');
     }
   };
 
@@ -579,10 +629,29 @@ export default function CallScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.outgoingButtons}>
-              <TouchableOpacity style={styles.hangupButton} onPress={hangup} disabled={isProcessingRef.current}>
-                <View style={[styles.buttonCircle, styles.hangupCircle]}><Text style={styles.buttonIcon}>✕</Text></View>
-                <Text style={styles.buttonLabel}>挂断</Text>
+            <View style={styles.footer}>
+              {/* 静音按钮 */}
+              <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>
+                <View style={[styles.iconCircle, isMicMuted ? styles.iconActive : null]}>
+                  <Ionicons name={isMicMuted ? "mic-off" : "mic"} size={28} color={isMicMuted ? "#000" : "#fff"} />
+                </View>
+                <Text style={styles.controlText}>{isMicMuted ? "已静音" : "静音"}</Text>
+              </TouchableOpacity>
+
+              {/* 挂断按钮 */}
+              <TouchableOpacity style={styles.hangupButtonContainer} onPress={hangup} disabled={isProcessingRef.current}>
+                <View style={styles.hangupButton}>
+                  <Ionicons name="call" size={32} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
+                </View>
+                <Text style={styles.controlText}>挂断</Text>
+              </TouchableOpacity>
+
+              {/* 免提按钮 */}
+              <TouchableOpacity style={styles.controlButton} onPress={toggleSpeaker}>
+                <View style={[styles.iconCircle, isSpeakerOn ? styles.iconActive : null]}>
+                  <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color={isSpeakerOn ? "#000" : "#fff"} />
+                </View>
+                <Text style={styles.controlText}>{isSpeakerOn ? "免提开" : "免提"}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -593,7 +662,7 @@ export default function CallScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#2C2C2C' },
+  container: { flex: 1, backgroundColor: '#202020' },
   hiddenAudioView: { width: 0, height: 0, position: 'absolute' },
   contentContainer: { flex: 1, justifyContent: 'space-between' },
   topSection: { alignItems: 'center', marginTop: 100 },
@@ -602,15 +671,59 @@ const styles = StyleSheet.create({
   avatarText: { fontSize: 40, color: '#FFFFFF', fontWeight: '500' },
   username: { fontSize: 28, color: '#FFFFFF', fontWeight: '500', marginBottom: 12 },
   statusText: { fontSize: 18, color: '#FFFFFF', marginTop: 8, fontVariant: ['tabular-nums'] },
-  bottomSection: { paddingBottom: 60, alignItems: 'center' },
+  bottomSection: { paddingBottom: 50, alignItems: 'center' },
   incomingButtons: { flexDirection: 'row', justifyContent: 'space-around', width: width * 0.8 },
-  outgoingButtons: { alignItems: 'center' },
   buttonCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#FF3B30', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
   answerCircle: { backgroundColor: '#07C160' },
-  hangupCircle: { backgroundColor: '#FF3B30' },
   buttonIcon: { fontSize: 32, color: '#FFFFFF', fontWeight: 'bold' },
   buttonLabel: { fontSize: 14, color: '#FFFFFF', marginTop: 4 },
   rejectButton: { alignItems: 'center' },
   answerButton: { alignItems: 'center' },
-  hangupButton: { alignItems: 'center' },
+  // 与群聊一致的底部控制栏样式
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+    width: '100%',
+  },
+  controlButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconActive: {
+    backgroundColor: '#fff',
+  },
+  hangupButtonContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hangupButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#FF3B30',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+  },
+  controlText: {
+    color: '#fff',
+    fontSize: 12,
+    textAlign: 'center',
+  },
 });

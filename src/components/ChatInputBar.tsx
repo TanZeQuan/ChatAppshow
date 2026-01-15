@@ -20,6 +20,7 @@ interface ChatInputBarProps {
 
   // Voice recording state
   isRecording: boolean;
+  isPreparing?: boolean; // 准备录音中
   isUploading: boolean;
   startRecording: () => void;
   stopRecording: () => void;
@@ -67,6 +68,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
   inputText,
   setInputText,
   isRecording,
+  isPreparing,
   isUploading,
   startRecording,
   stopRecording,
@@ -136,11 +138,60 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
     handleSend();
   }
 
+  // 是否显示录音状态（准备中或录音中）
+  const showRecordingUI = isPreparing || isRecording;
+
   return (
     <View style={roomStyles.inputSection}>
+      {/* 录音中提示 */}
+      {showRecordingUI && (
+        <View style={{
+          position: 'absolute',
+          top: -50,
+          left: 0,
+          right: 0,
+          backgroundColor: isPreparing ? 'rgba(255, 149, 0, 0.95)' : 'rgba(255, 59, 48, 0.95)',
+          paddingVertical: 12,
+          paddingHorizontal: 20,
+          borderRadius: 8,
+          marginHorizontal: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 100,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 5,
+        }}>
+          <View style={{
+            width: 12,
+            height: 12,
+            borderRadius: 6,
+            backgroundColor: '#fff',
+            marginRight: 10,
+          }} />
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>
+            {isPreparing ? '准备录音...' : '录音中... 松开发送'}
+          </Text>
+        </View>
+      )}
+
       <View style={roomStyles.inputContainer}>
         <TouchableOpacity
-          style={roomStyles.iconButton}
+          style={[
+            roomStyles.iconButton,
+            showRecordingUI && {
+              backgroundColor: isPreparing ? '#FF9500' : '#FF3B30',
+              borderRadius: scaleWidth(15),
+              width: scaleWidth(30),
+              height: scaleWidth(30),
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 0,
+            }
+          ]}
           onPressIn={startRecording}
           onPressOut={stopRecording}
           disabled={isUploading}
@@ -148,7 +199,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           {isUploading ? (
             <ActivityIndicator color="#333" size={scaleWidth(20)} />
           ) : (
-            <Ionicons name="mic" size={scaleWidth(22)} color={isRecording ? 'red' : '#333'} />
+            <Ionicons name="mic" size={scaleWidth(20)} color={showRecordingUI ? '#fff' : '#333'} />
           )}
         </TouchableOpacity>
 
