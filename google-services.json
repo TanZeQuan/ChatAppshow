@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "876204196536",
-    "project_id": "improject-6a572",
-    "storage_bucket": "improject-6a572.firebasestorage.app"
+    "project_number": "832789043804",
+    "project_id": "chatapp-28aa9",
+    "storage_bucket": "chatapp-28aa9.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:876204196536:android:e9f42571645496b1b6aa4d",
+        "mobilesdk_app_id": "1:832789043804:android:c093b6453ba53a5536e499",
         "android_client_info": {
-          "package_name": "com.anonymous.ChatApp"
+          "package_name": "com.sentalk.chatapp"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyDYYOTZYoavyPmhXkcddK0zm77O7DCF29I"
+          "current_key": "AIzaSyBFUdYlnUUJjCgM0zRcb5RHXxuYa-_P9tc"
         }
       ],
       "services": {

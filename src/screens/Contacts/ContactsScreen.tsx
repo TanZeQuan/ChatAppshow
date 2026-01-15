@@ -43,7 +43,7 @@ export default function ContactsScreen() {
   const [searchText, setSearchText] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // ✅ 状态表：存储 { user_id: true/false }
   const [onlineStatusMap, setOnlineStatusMap] = useState<Record<string, boolean>>({});
 
@@ -97,7 +97,7 @@ export default function ContactsScreen() {
     // 定义处理函数：结构是 { userId, isOnline }
     const handlePresenceChange = ({ userId, isOnline }: { userId: string; isOnline: boolean }) => {
       console.log(`📡 [Contacts] User ${userId} is now ${isOnline ? 'Online' : 'Offline'}`);
-      
+
       setOnlineStatusMap(prev => {
         // 如果状态没变，就不更新，减少渲染
         if (prev[userId] === isOnline) return prev;
@@ -138,7 +138,7 @@ export default function ContactsScreen() {
           const userId = friend.user_id || friend.id || friend.userId || friend.approve_id || friend.request_id;
           const userName = friend.name || friend.username || friend.display_name || friend.user_name || `用户${userId}`;
           const userAvatar = friend.avatar || friend.profile_picture || friend.avatarUrl || friend.avatar_url || friend.photo || friend.image;
-          
+
           // ✅ 3. 参考 ChatSetting：使用 WebSocketManager.isUserOnline 获取初始实时状态
           // 如果 Manager 里没记录，才用 API 的 fallback
           const isOnline = WebSocketManager.isUserOnline(userId) || friend.online || false;
@@ -229,7 +229,7 @@ export default function ContactsScreen() {
           animated: true,
           viewOffset: 0,
         });
-      } catch (error) {}
+      } catch (error) { }
     }
   };
 
@@ -310,37 +310,37 @@ export default function ContactsScreen() {
       } else if (result.success && result.message === "Chat existed.") {
         const retryResult = await readUserChats(currentUserId);
         if (retryResult.success && retryResult.data) {
-           const allChats = retryResult.data;
-           const privateChats = allChats.filter((c: any) => c.type === 1 || c.type === '1');
-           let foundChat = null;
-           for (const chat of privateChats) {
-             const messagesResult = await readChatMessages({chat_id: chat.chat_id, user_id: currentUserId, offset: 0});
-             if (messagesResult.success && messagesResult.data) {
-                const groupMembers = messagesResult.data.group || [];
-                const memberIds = groupMembers.map((m: any) => m.user_id);
-                if (memberIds.includes(contact.id)) { foundChat = chat; break; }
-             }
-           }
-           if (foundChat) {
-             const chatId = foundChat.chat_id;
-             const chatName = foundChat.name || foundChat.chat_name || contact.name;
-             addChat({
-               id: chatId,
-               name: chatName,
-               avatar: foundChat.image || foundChat.avatar || contact.avatar,
-               isGroup: false,
-               members: foundChat.members || [],
-               memberIds: [],
-               lastMessage: foundChat.last_message || '',
-               timestamp: foundChat.last_message_time || foundChat.timestamp || new Date().toISOString(),
-               unreadCount: foundChat.unread_count || foundChat.unread || 0,
-               online: false,
-               type: 0
-             });
-             parentNavigation.navigate("ChatStack", {screen: "ChatRoom", params: {chatId, chatName, isGroup: false}});
-           } else {
-             Alert.alert("无法进入聊天", "后端说聊天已存在，但找不到。");
-           }
+          const allChats = retryResult.data;
+          const privateChats = allChats.filter((c: any) => c.type === 1 || c.type === '1');
+          let foundChat = null;
+          for (const chat of privateChats) {
+            const messagesResult = await readChatMessages({ chat_id: chat.chat_id, user_id: currentUserId, offset: 0 });
+            if (messagesResult.success && messagesResult.data) {
+              const groupMembers = messagesResult.data.group || [];
+              const memberIds = groupMembers.map((m: any) => m.user_id);
+              if (memberIds.includes(contact.id)) { foundChat = chat; break; }
+            }
+          }
+          if (foundChat) {
+            const chatId = foundChat.chat_id;
+            const chatName = foundChat.name || foundChat.chat_name || contact.name;
+            addChat({
+              id: chatId,
+              name: chatName,
+              avatar: foundChat.image || foundChat.avatar || contact.avatar,
+              isGroup: false,
+              members: foundChat.members || [],
+              memberIds: [],
+              lastMessage: foundChat.last_message || '',
+              timestamp: foundChat.last_message_time || foundChat.timestamp || new Date().toISOString(),
+              unreadCount: foundChat.unread_count || foundChat.unread || 0,
+              online: false,
+              type: 0
+            });
+            parentNavigation.navigate("ChatStack", { screen: "ChatRoom", params: { chatId, chatName, isGroup: false } });
+          } else {
+            Alert.alert("无法进入聊天", "后端说聊天已存在，但找不到。");
+          }
         }
       } else {
         Alert.alert("提示", `无法创建聊天: ${result.message || '请重试'}`);
@@ -474,9 +474,9 @@ export default function ContactsScreen() {
                   {/* ✅ 4. 完全保留你的头像逻辑 (ngrok 判断) */}
                   <Image
                     source={
-                      !item.avatar || 
-                      item.avatar.trim() === '' || 
-                      item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                      !item.avatar ||
+                        item.avatar.trim() === '' ||
+                        item.avatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
                         ? require('../../assets/images/personal.png')
                         : { uri: item.avatar }
                     }
@@ -484,7 +484,7 @@ export default function ContactsScreen() {
                   />
                   {/* ✅ 5. 状态灯 (保留位置，颜色动态) */}
                   <View style={[
-                    styles.statusDot, 
+                    styles.statusDot,
                     { backgroundColor: isOnline ? colors.functional.greenSuccess : '#B0B0B0' }
                   ]} />
                 </View>
@@ -536,25 +536,28 @@ const styles = StyleSheet.create({
   badgeContainer: { position: 'absolute', top: -5, right: -5, backgroundColor: colors.functional.red, borderRadius: 10, minWidth: 20, height: 20, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 5 },
   badgeText: { color: colors.text.white, fontSize: typography.fontSize12, fontWeight: typography.fontWeight600 },
   listContainer: { flex: 1, position: 'relative', backgroundColor: colors.background.white },
-  listContent: { flexGrow: 1 },
+  listContent: {
+    flexGrow: 1,
+    paddingBottom: scaleHeight(100) // 增加 100 的底部距离，确保最后一个不被挡住
+  },
   sectionHeader: { backgroundColor: colors.background.gradientYellow[0], paddingHorizontal: scaleWidth(16), paddingVertical: scaleHeight(4) },
   sectionHeaderText: { fontSize: typography.fontSize13, color: colors.text.grayDark, fontWeight: typography.fontWeight500 },
   contactItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: scaleWidth(16), paddingVertical: scaleHeight(12), backgroundColor: colors.background.white, borderBottomWidth: borders.width05, borderBottomColor: colors.border.grayLight },
   avatarContainer: { position: 'relative', marginRight: scaleWidth(12) },
   avatarImage: { width: scaleWidth(40), height: scaleWidth(40), borderRadius: borders.radius4, backgroundColor: colors.background.gray },
-  
+
   // ✅ 状态圆点：颜色由代码控制
-  statusDot: { 
-    position: 'absolute', 
-    bottom: 0, 
-    right: 0, 
-    width: scaleWidth(12), 
-    height: scaleWidth(12), 
-    borderRadius: scaleWidth(6), 
-    borderWidth: 2, 
-    borderColor: colors.background.white 
+  statusDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: scaleWidth(12),
+    height: scaleWidth(12),
+    borderRadius: scaleWidth(6),
+    borderWidth: 2,
+    borderColor: colors.background.white
   },
-  
+
   contactInfo: { flex: 1, justifyContent: 'center' },
   contactName: { fontSize: typography.fontSize16, color: colors.text.black, fontWeight: typography.fontWeight400 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: scaleHeight(80) },
