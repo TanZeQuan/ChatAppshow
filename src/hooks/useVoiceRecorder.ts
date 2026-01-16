@@ -227,7 +227,7 @@ export const useVoiceRecorder = ({
     }
 
     try {
-      console.log('🔍 [Voice] Preloading duration for:', messageId);
+      // Preloading voice duration
       
       const { sound: tempSound, status } = await Audio.Sound.createAsync(
         { uri: voiceUrl },
@@ -240,13 +240,13 @@ export const useVoiceRecorder = ({
           ...prev,
           [messageId]: durationSeconds
         }));
-        console.log(`✅ [Voice] Duration loaded for ${messageId}: ${durationSeconds}s`);
+        // Voice duration loaded
       }
 
       // Unload immediately since we don't need to play
       await tempSound.unloadAsync();
     } catch (error) {
-      console.log('⚠️ [Voice] Failed to preload duration:', error);
+      // Voice preload failed
     }
   }, [voiceDurations]);
 
