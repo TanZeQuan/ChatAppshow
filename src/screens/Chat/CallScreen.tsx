@@ -9,9 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 // API & Service
 import { readUsers } from '../../api/User';
-import { createPrivateChat, sendChatMessage } from '../../api/Chat';
+import { createPrivateChat, sendChatMessage, startCall, callRoom } from '../../api/Chat';
 import { Emitter } from '../../services/EventEmitter';
 import WebSocketManager from '../../services/WebSocketManager';
+import TcpSocketService, { TcpServerMessage } from '../../services/TcpSocketService';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
 
@@ -39,40 +40,65 @@ export default function CallScreen() {
 
   const insets = useSafeAreaInsets();
 
+  // ---------------------------------------------------------
+  // 🔥🔥🔥 核心修复：权限 + 激活通话模式 (默认为扬声器) 🔥🔥🔥
+  // ---------------------------------------------------------
+  useEffect(() => {
+    let isMounted = true;
+
+    const initAudio = async () => {
+      try {
+        console.log('🔊 [Audio] 正在检查麦克风权限...');
+        // 1. 必须先获取权限，否则 Android 无法建立 Voice Communication 通道
+        const { status } = await Audio.requestPermissionsAsync();
+
+        if (status !== 'granted') {
+          Alert.alert('权限错误', '必须授予麦克风权限才能进行通话');
+          return;
+        }
+
+        console.log('🔊 [Audio] 权限获取成功，正在配置音频模式...');
+
+        // 2. 配置音频模式
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: true,
+          shouldDuckAndroid: true,
+          // 👇 确保这一行是 false，先走扬声器，打通了再切听筒
+          playThroughEarpieceAndroid: false,
+        });
+        if (isMounted) {
+          setIsSpeakerOn(true); // UI 同步显示为免提开启
+          console.log('✅ [Audio] 通话模式已激活 (默认扬声器)');
+        }
+      } catch (e) {
+        console.error('❌ [Audio] 音频初始化失败:', e);
+      }
+    };
+
+    initAudio();
+
+    return () => { isMounted = false; };
+  }, []);
+
   useFocusEffect(
     React.useCallback(() => {
-      // Hide tab bar when screen is focused
-      navigation.getParent()?.setOptions({
-        tabBarStyle: { display: 'none' }
-      });
-
-      // Show tab bar when leaving the screen with ORIGINAL STYLE
+      navigation.getParent()?.setOptions({ tabBarStyle: { display: 'none' } });
       return () => {
-        navigation.getParent()?.setOptions({
-          tabBarStyle: getOriginalTabBarStyle(insets) // Restore your custom yellow style
-        });
+        navigation.getParent()?.setOptions({ tabBarStyle: getOriginalTabBarStyle(insets) });
       };
     }, [navigation, insets])
   );
 
   useLayoutEffect(() => {
-    // 尝试获取父级导航（通常是 TabNavigator）
     const parent = navigation.getParent();
-
     if (parent) {
-      // 进入页面时：隐藏 TabBar
-      parent.setOptions({
-        tabBarStyle: { display: "none" }
-      });
+      parent.setOptions({ tabBarStyle: { display: "none" } });
     }
-
-    // 🔥🔥🔥 核心修复：离开页面时恢复 TabBar 🔥🔥🔥
     return () => {
       if (parent) {
-        parent.setOptions({
-          // 恢复默认显示 (通常是 flex)
-          tabBarStyle: { display: "flex" }
-        });
+        parent.setOptions({ tabBarStyle: { display: "flex" } });
       }
     };
   }, [navigation]);
@@ -81,74 +107,38 @@ export default function CallScreen() {
     const handleRemoteSignal = (data: any) => {
       console.log('📡 [CallScreen] 收到对方信令:', data.type);
 
-      // --------------------------
-      // 1. 对方接听了 (Answer)
-      // --------------------------
       if (data.type === 'answer') {
         console.log('✅ 对方已接听');
         setStatus('Connected');
         startTimer();
-      }
-
-      // --------------------------
-      // 2. 对方拒绝了 (Reject)
-      // --------------------------
-      else if (data.type === 'reject') {
-        console.log('❌ 对方已拒绝，准备退出页面...');
-        setStatus('Rejected'); // 更新 UI 显示 "对方已拒绝"
+      } else if (data.type === 'reject') {
+        if (isEndedRef.current) return;
+        isEndedRef.current = true;
+        console.log('❌ 对方已拒绝');
+        setStatus('Rejected');
         stopTimer();
-
-        // ⏱️ 延迟 1秒，让用户看清提示后再退
+        TcpSocketService.disconnect();
         setTimeout(() => {
-          // 策略 A: 如果有 ChatID，跳转进聊天室 (体验最好)
-          if (activeChatIdRef.current) {
-            navigation.replace('ChatRoom', {
-              chatId: activeChatIdRef.current,
-              chatName: displayName,
-            });
-          }
-          // 策略 B: 如果能返回，直接返回
-          else if (navigation.canGoBack()) {
-            navigation.goBack();
-          }
-          // 策略 C: 兜底，重置回主页 (防止卡死)
-          else {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'MainTabs' }],
-            });
-          }
+          goBackOrToChat();
         }, 1000);
-      }
-
-      // --------------------------
-      // 3. 对方挂断了 (End) - 通话中挂断
-      // --------------------------
-      else if (data.type === 'end') {
+      } else if (data.type === 'end') {
+        if (isEndedRef.current) return;
+        isEndedRef.current = true;
         console.log('🛑 对方已挂断');
         setStatus('Ended');
         stopTimer();
+        TcpSocketService.disconnect();
         setTimeout(() => {
-          if (activeChatIdRef.current) {
-            navigation.replace('ChatRoom', {
-              chatId: activeChatIdRef.current,
-              chatName: displayName,
-            });
-          } else if (navigation.canGoBack()) {
-            navigation.goBack();
-          }
+          goBackOrToChat();
         }, 800);
       }
     };
 
-    // 注册监听
     WebSocketManager.addCallCallback(handleRemoteSignal);
-
-    // 清理监听
     return () => {
       WebSocketManager.removeCallCallback(handleRemoteSignal);
     };
-  }, [navigation]); // 依赖项加上 navigation
+  }, [navigation]);
 
   const remoteUserId = (isIncoming ? callerId : targetId) || '';
 
@@ -161,35 +151,34 @@ export default function CallScreen() {
   const [displayAvatar, setDisplayAvatar] = useState<string>(paramAvatar || '');
   const [loadingUserInfo, setLoadingUserInfo] = useState(false);
 
-  // 🔊 远程音频流 URL (用于激活音频播放)
   const [remoteStreamUrl, setRemoteStreamUrl] = useState<string | null>(null);
-
-  // 🎤 静音状态
   const [isMicMuted, setIsMicMuted] = useState(false);
-  
-  // 🔊 免提状态
-  const [isSpeakerOn, setIsSpeakerOn] = useState(false);
 
-  // ⏱️ 计时器状态
+  // 🔥 默认为 true，因为我们初始化时 playThroughEarpieceAndroid: false
+  const [isSpeakerOn, setIsSpeakerOn] = useState(true);
+
   const [durationSeconds, setDurationSeconds] = useState(0);
 
-  // Refs
   const durationRef = useRef(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const activeChatIdRef = useRef<string | null>(initialChatId || null);
   const isProcessingRef = useRef(false);
+  const callIdRef = useRef<string | null>(null);
+  const isEndedRef = useRef(false);
 
-  // 🔊 监听远程音频流 - 当通话连接成功时激活音频
+  const [isLoading, setIsLoading] = useState(!isIncoming);
+  const [loadingStatus, setLoadingStatus] = useState('正在连接...');
+
   useEffect(() => {
     if (status === 'Connected' || status === '通话中') {
       const checkRemoteStream = () => {
         const callService = WebSocketManager.callService;
-        if (callService?.remoteStream) {
-          const url = callService.remoteStream.toURL();
+        const stream = callService?.remoteStream;
+        if (stream) {
+          const url = (stream as any).toURL();
           console.log('🔊 [CallScreen] 获取到远程音频流 URL:', url);
           setRemoteStreamUrl(url);
         } else {
-          // 如果还没获取到，100ms 后重试
           setTimeout(checkRemoteStream, 100);
         }
       };
@@ -197,13 +186,25 @@ export default function CallScreen() {
     }
   }, [status]);
 
-  // ---------------------------------------------------------
-  // 🛠️ 确保获取 ChatID
-  // ---------------------------------------------------------
+  const goBackOrToChat = () => {
+    if (activeChatIdRef.current) {
+      navigation.replace('ChatRoom', {
+        chatId: activeChatIdRef.current,
+        chatName: displayName,
+      });
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: 'MainTabs' }],
+      });
+    }
+  };
+
   const ensureTargetChatId = async (retries = 2): Promise<string | null> => {
     if (activeChatIdRef.current) return activeChatIdRef.current;
     if (!currentUserId || !remoteUserId) return null;
-
     for (let i = 0; i < retries; i++) {
       try {
         const res = await createPrivateChat({
@@ -212,64 +213,69 @@ export default function CallScreen() {
           chat_with: remoteUserId,
           image: displayAvatar || ''
         });
-
         const newId = res.data?.chat_id || res.data?.id || res.data?.response?.chat_id;
         if (newId) {
           const strId = newId.toString();
           activeChatIdRef.current = strId;
           return strId;
         }
-      } catch (error) {
-        // ignore
-      }
+      } catch (error) { }
     }
     return null;
   };
 
-  // ---------------------------------------------------------
-  // 📡 获取用户信息
-  // ---------------------------------------------------------
   const fetchUserInfo = useCallback(async (userId: string) => {
     if (!userId) return;
-    if (paramName && paramAvatar) return;
 
-    const localContact = getContactById(userId);
-    if (localContact && localContact.name) {
-      setDisplayName(localContact.name);
-      setDisplayAvatar(localContact.avatar || '');
+    // 1. 先尝试用 route params 更新 (如果有的话)
+    if (paramName) setDisplayName(paramName);
+    if (paramAvatar) setDisplayAvatar(paramAvatar);
+
+    // 2. 如果已经有头像了，就不用去查了 (节省资源)
+    // 注意：这里要排除默认头像或 ngrok 这种无效头像
+    if (displayAvatar && !displayAvatar.includes('personal.png') && !displayAvatar.includes('ngrok')) {
       return;
     }
 
+    // 3. 尝试从本地缓存获取
+    const localContact = getContactById(userId);
+    if (localContact) {
+      if (localContact.name) setDisplayName(localContact.name);
+      if (localContact.avatar) setDisplayAvatar(localContact.avatar);
+      // 如果本地有，就不去网络查了，除非你想强制刷新
+      return;
+    }
+
+    // 4. 最后手段：从网络拉取
+    console.log('👤 [CallScreen] 本地无头像，正在从服务器拉取:', userId);
     setLoadingUserInfo(true);
     try {
       const result = await readUsers(userId);
       if (result.success && result.data) {
         const userData = result.data.response || result.data;
-        setDisplayName(userData.name || userData.nickname || '未知用户');
-        setDisplayAvatar(userData.image || userData.avatar || '');
+        const newName = userData.name || userData.nickname || '未知用户';
+        const newAvatar = userData.image || userData.avatar || '';
+
+        setDisplayName(newName);
+        setDisplayAvatar(newAvatar);
+        console.log('✅ [CallScreen] 用户信息更新:', newName);
       }
     } catch (error) {
-      console.log('Fetch user error', error);
+      console.log('❌ [CallScreen] 拉取用户信息失败', error);
     } finally {
       setLoadingUserInfo(false);
     }
-  }, [getContactById, paramName, paramAvatar]);
+  }, [getContactById, paramName, paramAvatar, displayAvatar]);
 
-  // ---------------------------------------------------------
-  // ⏱️ 计时器逻辑 (核心)
-  // ---------------------------------------------------------
   const startTimer = () => {
-    // 防止重复启动
     if (timerRef.current) return;
-
     console.log('⏱️ [Timer] 通话接通，开始计时');
     setDurationSeconds(0);
     durationRef.current = 0;
-
     timerRef.current = setInterval(() => {
       setDurationSeconds(prev => {
         const next = prev + 1;
-        durationRef.current = next; // 实时更新 ref 用于挂断时读取
+        durationRef.current = next;
         return next;
       });
     }, 1000);
@@ -283,62 +289,48 @@ export default function CallScreen() {
     }
   };
 
-  // ---------------------------------------------------------
-  // 🎤 静音切换功能
-  // ---------------------------------------------------------
   const toggleMute = () => {
     const callService = WebSocketManager.callService;
-    if (callService?.localStream) {
+    const localStream = callService?.getLocalStream;
+    if (localStream) {
       const newMutedState = !isMicMuted;
-      callService.localStream.getAudioTracks().forEach((track: any) => {
-        track.enabled = !newMutedState; // 静音时 enabled=false，非静音时 enabled=true
+      localStream.getAudioTracks().forEach((track: any) => {
+        track.enabled = !newMutedState;
       });
       setIsMicMuted(newMutedState);
       console.log(`🎤 [CallScreen] 麦克风${newMutedState ? '已静音' : '已开启'}`);
-    } else {
-      console.warn('⚠️ [CallScreen] 无法切换静音：localStream 不存在');
     }
   };
 
-  // ---------------------------------------------------------
-  // 🔊 免提切换功能
-  // ---------------------------------------------------------
+  // 🔥 切换免提/听筒
   const toggleSpeaker = async () => {
     try {
       const newSpeakerState = !isSpeakerOn;
-      
-      // 使用 expo-av 的 Audio API 切换音频输出模式
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
-        // playThroughEarpieceAndroid: true 表示使用听筒，false 表示使用扬声器
-        playThroughEarpieceAndroid: !newSpeakerState,
-        // staysActiveInBackground: 保持后台音频活跃
         staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        // false = 扬声器(免提), true = 听筒
+        playThroughEarpieceAndroid: !newSpeakerState,
       });
-      
       setIsSpeakerOn(newSpeakerState);
-      console.log(`🔊 [CallScreen] 扬声器${newSpeakerState ? '已开启（免提模式）' : '已关闭（听筒模式）'}`);
+      console.log(`🔊 [CallScreen] 切换到: ${newSpeakerState ? '免提 (扬声器)' : '听筒'}`);
     } catch (error) {
       console.log('❌ [CallScreen] 切换扬声器失败:', error);
-      Alert.alert('提示', '切换扬声器失败，请重试');
+      Alert.alert('提示', '切换失败，请重试');
     }
   };
 
-  // ---------------------------------------------------------
-  // 📤 发送聊天记录 (API)
-  // ---------------------------------------------------------
   const sendCallRecord = async (
     recordStatus: 'active' | 'rejected' | 'cancelled' | 'ended' | 'answered',
     displayMessage: string,
     duration: string = '00:00'
   ) => {
     if (!currentUserId || !remoteUserId) return false;
-
     try {
       const targetId = await ensureTargetChatId();
       if (!targetId) return false;
-
       const callData = JSON.stringify({
         type: 'SINGLE_VOICE_CALL',
         roomId: targetId,
@@ -348,9 +340,6 @@ export default function CallScreen() {
         startTime: new Date().toISOString(),
         displayMessage: displayMessage
       });
-
-      console.log(`📤 [sendCallRecord] 发送: ${displayMessage}, 时长: ${duration}`);
-
       await sendChatMessage({
         sender: currentUserId,
         isreceive: [remoteUserId],
@@ -360,14 +349,10 @@ export default function CallScreen() {
       });
       return true;
     } catch (error) {
-      console.warn('❌ [sendCallRecord] 发送异常:', error);
       return false;
     }
   };
 
-  // ---------------------------------------------------------
-  // 📞 发送 WebSocket 信令
-  // ---------------------------------------------------------
   const sendCallSignal = (signalType: 'end' | 'reject' | 'answer') => {
     if (!remoteUserId || !currentUserId) return;
     WebSocketManager.sendCallSignal({
@@ -378,59 +363,120 @@ export default function CallScreen() {
     });
   };
 
-  // ---------------------------------------------------------
-  // 🚀 初始化
-  // ---------------------------------------------------------
   useEffect(() => {
     if (!remoteUserId) {
-      console.error('❌ [CallScreen] 错误: 缺少 remoteUserId');
+      console.error('[CallScreen] 错误: 缺少 remoteUserId');
       return;
     }
 
-    if (!isIncoming) {
-      console.log('📞 [CallScreen] 发起呼叫:', remoteUserId, 'chatId:', activeChatIdRef.current);
-      WebSocketManager.startCall(
-        remoteUserId,
-        paramName || displayName,
-        paramAvatar || displayAvatar,
-        activeChatIdRef.current || undefined  // ✅ 传递 chatId
-      );
-      // 注意：这里不发 invite 消息了，按你的要求只在结束时发
-      fetchUserInfo(remoteUserId);
-    } else {
-      console.log('📞 [CallScreen] 收到来电:', remoteUserId);
-      fetchUserInfo(remoteUserId);
-    }
+    const initCall = async () => {
+      if (!isIncoming) {
+        // ... Caller Logic ...
+        console.log('[CallScreen] 发起呼叫:', remoteUserId);
+        try {
+          setLoadingStatus('正在创建通话...');
+          const callResult = await startCall({
+            user_id: currentUserId,
+            callees: [remoteUserId],
+            istype: 0,
+          });
 
-    // ✅ 监听状态变化：接通时自动开始计时
+          if (callResult.success && callResult.data?.call_id) {
+            callIdRef.current = callResult.data.call_id;
+            setLoadingStatus('正在连接服务器...');
+            try {
+              await TcpSocketService.connect(currentUserId, callIdRef.current);
+              TcpSocketService.sendCall(currentUserId, callIdRef.current);
+              setLoadingStatus('正在呼叫对方...');
+              WebSocketManager.startCall(
+                remoteUserId,
+                paramName || displayName,
+                paramAvatar || displayAvatar,
+                activeChatIdRef.current || undefined,
+                callIdRef.current
+              );
+              setIsLoading(false);
+            } catch (tcpError) {
+              console.warn('TCP 失败，使用 WebSocket');
+              WebSocketManager.startCall(
+                remoteUserId,
+                paramName || displayName,
+                paramAvatar || displayAvatar,
+                activeChatIdRef.current || undefined
+              );
+              setIsLoading(false);
+            }
+          } else {
+            WebSocketManager.startCall(
+              remoteUserId,
+              paramName || displayName,
+              paramAvatar || displayAvatar,
+              activeChatIdRef.current || undefined
+            );
+            setIsLoading(false);
+          }
+        } catch (error) {
+          setIsLoading(false);
+        }
+        fetchUserInfo(remoteUserId);
+      } else {
+        // ... Callee Logic ...
+        console.log('[CallScreen] 收到来电:', remoteUserId);
+        fetchUserInfo(remoteUserId);
+      }
+    };
+
+    initCall();
+
     const handleCallStatus = (newStatus: string) => {
       console.log('🔄 [Status Change]', newStatus);
       setStatus(newStatus);
-
-      // 当底层 WebRTC 连接成功 或 状态变为 "通话中" 时
       if (newStatus === 'Connected' || newStatus === '通话中') {
         startTimer();
       }
     };
 
-    // 对方挂断处理
     const handleEndCall = () => {
+      if (isEndedRef.current) return;
+      isEndedRef.current = true;
       console.log('📞 [Passive End] 收到对方挂断信号');
       stopTimer();
       setStatus('Ended');
+      TcpSocketService.disconnect();
       setTimeout(() => {
-        // ✅ 对方挂断后返回聊天室，而不是 goBack
-        if (activeChatIdRef.current) {
-          navigation.replace('ChatRoom', {
-            chatId: activeChatIdRef.current,
-            chatName: displayName,
-          });
-        } else if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
+        goBackOrToChat();
       }, 800);
     };
 
+    const handleTcpMessage = (data: TcpServerMessage) => {
+      console.log('📡 [CallScreen-TCP] 收到 TCP 消息:', data.msg, data.type);
+      if (data.msg === 'signal' && data.type) {
+        const callService = WebSocketManager.callService;
+        if (callService) {
+          const signalData = {
+            type: data.type,
+            user_id: data.user_id,
+            sender: data.user_id,
+            payload: data.payload || {},
+            call_id: data.room_id,
+          };
+          callService.handleSignal(signalData);
+        }
+      }
+      if (data.msg === 'end' || data.msg === 'user_left') {
+        if (!isEndedRef.current) {
+          isEndedRef.current = true;
+          stopTimer();
+          setStatus('Ended');
+          TcpSocketService.disconnect();
+          setTimeout(() => {
+            goBackOrToChat();
+          }, 800);
+        }
+      }
+    };
+
+    TcpSocketService.addMessageCallback(handleTcpMessage);
     Emitter.on('callStatus', handleCallStatus);
     Emitter.on('endCall', handleEndCall);
 
@@ -438,13 +484,10 @@ export default function CallScreen() {
       stopTimer();
       Emitter.off('callStatus', handleCallStatus);
       Emitter.off('endCall', handleEndCall);
-
+      TcpSocketService.removeMessageCallback(handleTcpMessage);
     };
   }, [remoteUserId, isIncoming, displayName, fetchUserInfo]);
 
-  // ---------------------------------------------------------
-  // ✅ 接听 (开始通话)
-  // ---------------------------------------------------------
   const answer = async () => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
@@ -452,13 +495,36 @@ export default function CallScreen() {
     try {
       setStatus('Connecting...'); // 先显示连接中
 
-      // 1. WebSocket 应答
+      // 🔥🔥🔥 补充逻辑 1：接听瞬间，再次强制激活音频硬件 🔥🔥🔥
+      // 防止 App 在后台或锁屏时音频被挂起
+      console.log('🔊 [Answer] 接听中，强制激活音频模式...');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false, // ⚠️ 强制先用免提！听筒声音太小容易被误判为没声音
+      });
+      setIsSpeakerOn(true); // 更新 UI 状态
+
+      // 🔥🔥🔥 补充逻辑 2：手动检查并开启麦克风轨道 (这是你缺少的！) 🔥🔥🔥
+      const callService = WebSocketManager.callService;
+      if (callService && callService.getLocalStream) {
+        callService.getLocalStream.getAudioTracks().forEach((track: any) => {
+          if (!track.enabled) {
+            console.log('🎤 [Answer] 发现麦克风被禁用，正在强制开启...');
+            track.enabled = true; // <--- 强行打开开关
+          }
+        });
+      }
+
+      // 3. 原有逻辑：WebSocket 应答
       WebSocketManager.callService?.answerCall();
-      // 2. 发送信令给对方，告诉他我接了
+
+      // 4. 原有逻辑：发送信令给对方
       sendCallSignal('answer');
 
       // 注意：这里不直接 startTimer，而是等待 'Connected' 事件触发 startTimer
-      // 这样能确保网络真正连通了才开始算时间
     } catch (e) {
       console.warn(e);
     } finally {
@@ -466,31 +532,16 @@ export default function CallScreen() {
     }
   };
 
-  // ---------------------------------------------------------
-  // ❌ 拒接
-  // ---------------------------------------------------------
   const reject = async () => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
     stopTimer();
-
     try {
       WebSocketManager.callService?.rejectCall();
       sendCallSignal('reject');
-
-      // 拒接记录为 "通话结束 00:00"
       await sendCallRecord('ended', '通话结束', '00:00');
-
       setTimeout(() => {
-        // ✅ 拒接后返回聊天室，而不是 goBack
-        if (activeChatIdRef.current) {
-          navigation.replace('ChatRoom', {
-            chatId: activeChatIdRef.current,
-            chatName: displayName,
-          });
-        } else if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
+        goBackOrToChat();
       }, 500);
     } catch (e) {
       console.warn(e);
@@ -499,58 +550,38 @@ export default function CallScreen() {
     }
   };
 
-  // ---------------------------------------------------------
-  // 🛑 挂断 (我方主动挂断)
-  // ---------------------------------------------------------
   const hangup = async () => {
     if (isProcessingRef.current) return;
     isProcessingRef.current = true;
-
-    // 1. 停止计时并获取最终时长
     stopTimer();
     const finalDuration = formatDuration(durationRef.current);
-
-    // 2. 判断是否真正接通过 (有时间 或者 状态是Connected)
     const isCallConnected = durationRef.current > 0 || status === 'Connected' || status === '通话中';
 
-    console.log('🛑 [Hangup] 挂断, 时长:', finalDuration, '是否接通:', isCallConnected);
-
     try {
-      // 3. 告诉对方挂断
+      if (callIdRef.current && TcpSocketService.isSocketConnected()) {
+        TcpSocketService.sendEnd(currentUserId, callIdRef.current);
+      }
+      if (callIdRef.current) {
+        try { await callRoom({ call_id: callIdRef.current, action: 'end', user_id: currentUserId }); } catch (e) { }
+      }
+      TcpSocketService.disconnect();
       sendCallSignal('end');
-
       let msgStatus: 'ended' | 'cancelled' | 'rejected' = 'ended';
       let displayMsg = '';
-
       if (isCallConnected) {
-        // A. 正常通话结束 -> 发送时长
         msgStatus = 'ended';
         displayMsg = `通话时长 ${finalDuration}`;
       } else if (!isIncoming) {
-        // B. 我拨打，没接通就挂了 -> 取消
         msgStatus = 'cancelled';
         displayMsg = '已取消';
       } else {
-        // C. 理论上被叫方未接听挂断算拒绝
         msgStatus = 'rejected';
         displayMsg = '通话结束';
       }
-
-      // 4. 发送最终记录
       await sendCallRecord(msgStatus, displayMsg, isCallConnected ? finalDuration : '00:00');
-
-      WebSocketManager.callService?.cleanup();
-
+      WebSocketManager.callService?.cleanup(true, true);
       setTimeout(() => {
-        // ✅ 挂断后返回聊天室，而不是 goBack
-        if (activeChatIdRef.current) {
-          navigation.replace('ChatRoom', {
-            chatId: activeChatIdRef.current,
-            chatName: displayName,
-          });
-        } else if (navigation.canGoBack()) {
-          navigation.goBack();
-        }
+        goBackOrToChat();
       }, 500);
     } catch (e) {
       console.warn(e);
@@ -574,13 +605,25 @@ export default function CallScreen() {
   };
 
   const showAnswerReject = isIncoming && (status === 'Ringing...' || status === '');
-
-  // 判断是否正在显示时间 (Connected状态)
   const isConnected = status === 'Connected' || status === '通话中';
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFD966" />
+          <Text style={styles.loadingText}>{loadingStatus}</Text>
+          <TouchableOpacity style={styles.cancelButton} onPress={() => { TcpSocketService.disconnect(); navigation.goBack(); }}>
+            <Text style={styles.cancelButtonText}>取消</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* 🔊 隐藏的 RTCView 用于激活远程音频流播放 */}
+      {/* 🔊 必须保留 1x1 像素，否则系统会杀后台流 */}
       {remoteStreamUrl && (
         <RTCView
           streamURL={remoteStreamUrl}
@@ -593,24 +636,23 @@ export default function CallScreen() {
           {loadingUserInfo ? (
             <View style={styles.avatar}><ActivityIndicator size="large" color="#FFFFFF" /></View>
           ) : (
-            <Image 
+            <Image
               source={
-                !displayAvatar || 
-                displayAvatar.trim() === '' || 
-                displayAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
-                  ? require('../../assets/images/personal.png')
+                !displayAvatar ||
+                  displayAvatar.trim() === '' ||
+                  displayAvatar.includes('ngrok') ||
+                  displayAvatar.includes('null')
+                  ? require('../../assets/images/personal.png') // 默认头像
                   : { uri: displayAvatar }
-              } 
-              style={styles.avatarImage} 
+              }
+              style={styles.avatarImage}
             />
           )}
 
           <Text style={styles.username}>{displayName}</Text>
-
-          {/* 状态显示区 */}
           <Text style={styles.statusText}>
             {status === 'Ended' ? '通话结束' :
-              isConnected ? formatDuration(durationSeconds) : // ✅ 接通后显示计时 00:00
+              isConnected ? formatDuration(durationSeconds) :
                 (isIncoming && status === 'Ringing...') ? '邀请你语音通话...' :
                   translateStatus(status)}
           </Text>
@@ -630,7 +672,6 @@ export default function CallScreen() {
             </View>
           ) : (
             <View style={styles.footer}>
-              {/* 静音按钮 */}
               <TouchableOpacity style={styles.controlButton} onPress={toggleMute}>
                 <View style={[styles.iconCircle, isMicMuted ? styles.iconActive : null]}>
                   <Ionicons name={isMicMuted ? "mic-off" : "mic"} size={28} color={isMicMuted ? "#000" : "#fff"} />
@@ -638,7 +679,6 @@ export default function CallScreen() {
                 <Text style={styles.controlText}>{isMicMuted ? "已静音" : "静音"}</Text>
               </TouchableOpacity>
 
-              {/* 挂断按钮 */}
               <TouchableOpacity style={styles.hangupButtonContainer} onPress={hangup} disabled={isProcessingRef.current}>
                 <View style={styles.hangupButton}>
                   <Ionicons name="call" size={32} color="#fff" style={{ transform: [{ rotate: '135deg' }] }} />
@@ -646,7 +686,7 @@ export default function CallScreen() {
                 <Text style={styles.controlText}>挂断</Text>
               </TouchableOpacity>
 
-              {/* 免提按钮 */}
+              {/* 🔥 免提按钮: 现在默认为 True */}
               <TouchableOpacity style={styles.controlButton} onPress={toggleSpeaker}>
                 <View style={[styles.iconCircle, isSpeakerOn ? styles.iconActive : null]}>
                   <Ionicons name={isSpeakerOn ? "volume-high" : "volume-medium"} size={28} color={isSpeakerOn ? "#000" : "#fff"} />
@@ -663,12 +703,19 @@ export default function CallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#202020' },
-  hiddenAudioView: { width: 0, height: 0, position: 'absolute' },
+
+  // 🔥🔥🔥 核心修复：1x1 像素防止被优化掉 🔥🔥🔥
+  hiddenAudioView: {
+    width: 1,
+    height: 1,
+    position: 'absolute',
+    opacity: 0,
+  },
+
   contentContainer: { flex: 1, justifyContent: 'space-between' },
   topSection: { alignItems: 'center', marginTop: 100 },
   avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#4A4A4A', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   avatarImage: { width: 120, height: 120, borderRadius: 60, marginBottom: 20, backgroundColor: '#4A4A4A' },
-  avatarText: { fontSize: 40, color: '#FFFFFF', fontWeight: '500' },
   username: { fontSize: 28, color: '#FFFFFF', fontWeight: '500', marginBottom: 12 },
   statusText: { fontSize: 18, color: '#FFFFFF', marginTop: 8, fontVariant: ['tabular-nums'] },
   bottomSection: { paddingBottom: 50, alignItems: 'center' },
@@ -679,7 +726,6 @@ const styles = StyleSheet.create({
   buttonLabel: { fontSize: 14, color: '#FFFFFF', marginTop: 4 },
   rejectButton: { alignItems: 'center' },
   answerButton: { alignItems: 'center' },
-  // 与群聊一致的底部控制栏样式
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -725,5 +771,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     textAlign: 'center',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  cancelButton: {
+    marginTop: 40,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  cancelButtonText: {
+    color: '#FF3B30',
+    fontSize: 16,
   },
 });

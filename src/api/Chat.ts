@@ -425,44 +425,63 @@ export const addGroup = async (params: AddGroupParams) => {
 };
 
 // Update group (add/remove members, leave)
-export interface UpdateGroupParams {
+// ==================== Group Member Management ====================
+// Endpoint: /chats/group/member
+// Actions: add, remove, permission, leave
+
+export interface GroupMemberParams {
   chat_id: string;
-  user_id: string;
-  action: "add" | "remove" | "leave";
-  target_id?: string; // Required for add/remove, leave also needs it
+  user_id: string;  // Admin's ID (or user's own ID for 'leave')
+  action: "add" | "remove" | "permission" | "leave";
+  target_id?: string;  // Required for add/remove/permission
+  permission?: 1 | 2;  // Required for 'permission' action: 1 = Member, 2 = Admin
 }
 
-export const updateGroup = async (params: UpdateGroupParams) => {
-  console.log("📞 updateGroup called:", params);
+/**
+ * Manage group members: add, remove, change permissions, or leave the group.
+ * 
+ * @param params.action - "add" | "remove" | "permission" | "leave"
+ * @param params.chat_id - Group chat ID
+ * @param params.user_id - Admin's ID (or user's own ID for 'leave')
+ * @param params.target_id - Target user ID (required for add/remove/permission)
+ * @param params.permission - 1 = Member, 2 = Admin (required for 'permission' action)
+ */
+export const manageGroupMember = async (params: GroupMemberParams) => {
+  console.log("📞 manageGroupMember called:", params);
 
   try {
     const formData = new FormData();
 
     const dataPayload: any = {
+      action: params.action,
       chat_id: params.chat_id,
       user_id: params.user_id,
-      action: params.action,
     };
 
-    // Add target_id for add/remove/leave actions
+    // Add target_id for add/remove/permission actions
     if (params.target_id) {
       dataPayload.target_id = params.target_id;
     }
 
-    console.log("➡ Sending to backend (updateGroup):", {
-      endpoint: "/chats/group/update",
+    // Add permission for 'permission' action
+    if (params.action === 'permission' && params.permission !== undefined) {
+      dataPayload.permission = params.permission;
+    }
+
+    console.log("➡ Sending to backend (manageGroupMember):", {
+      endpoint: "/chats/group/member",
       payload: dataPayload,
       action: params.action,
     });
 
     formData.append("data", JSON.stringify(dataPayload));
 
-    const response = await api.post("/chats/group/update", formData, {
+    const response = await api.post("/chats/group/member", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
 
-    console.log("📩 updateGroup full response:", {
+    console.log("📩 manageGroupMember full response:", {
       status: response.status,
       data: response.data,
       error: response.data?.error,
@@ -471,22 +490,22 @@ export const updateGroup = async (params: UpdateGroupParams) => {
     });
 
     if (response.data?.error === true) {
-      console.error("❌ updateGroup backend error:", response.data.message);
+      console.error("❌ manageGroupMember backend error:", response.data.message);
       return {
         success: false,
-        message: response.data.message || "Group update failed",
+        message: response.data.message || "Group member operation failed",
       };
     }
 
-    console.log("✅ updateGroup success");
+    console.log("✅ manageGroupMember success");
     return {
       success: true,
       data: response.data.response,
       message: response.data.message,
     };
   } catch (error: any) {
-    console.error("❌ updateGroup exception:", error);
-    console.error("❌ updateGroup error details:", {
+    console.error("❌ manageGroupMember exception:", error);
+    console.error("❌ manageGroupMember error details:", {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
@@ -498,34 +517,140 @@ export const updateGroup = async (params: UpdateGroupParams) => {
   }
 };
 
-// ✅ Update group name only (no action field)
-export const updateGroupName = async (chatId: string, userId: string, newName: string) => {
-  console.log("📞 updateGroupName called:", { chatId, userId, newName });
+// ✅ Legacy compatibility wrapper - redirects to new endpoint
+export interface UpdateGroupParams {
+  chat_id: string;
+  user_id: string;
+  action: "add" | "remove" | "leave";
+  target_id?: string;
+}
+
+/**
+ * @deprecated Use manageGroupMember() instead. This function is kept for backward compatibility.
+ */
+export const updateGroup = async (params: UpdateGroupParams) => {
+  console.log("📞 updateGroup called (legacy wrapper):", params);
+  return manageGroupMember(params);
+};
+
+// ==================== Convenience Functions ====================
+
+/**
+ * Add a member to the group (Admin only)
+ */
+export const addGroupMember = async (chatId: string, adminId: string, targetUserId: string) => {
+  console.log("📞 addGroupMember called:", { chatId, adminId, targetUserId });
+  return manageGroupMember({
+    action: 'add',
+    chat_id: chatId,
+    user_id: adminId,
+    target_id: targetUserId,
+  });
+};
+
+/**
+ * Remove a member from the group (Admin only)
+ */
+export const removeGroupMember = async (chatId: string, adminId: string, targetUserId: string) => {
+  console.log("📞 removeGroupMember called:", { chatId, adminId, targetUserId });
+  return manageGroupMember({
+    action: 'remove',
+    chat_id: chatId,
+    user_id: adminId,
+    target_id: targetUserId,
+  });
+};
+
+/**
+ * Change member permission/role (Admin only)
+ * @param permission - 1 = Member, 2 = Admin
+ */
+export const changeGroupMemberPermission = async (
+  chatId: string,
+  adminId: string,
+  targetUserId: string,
+  permission: 1 | 2
+) => {
+  console.log("📞 changeGroupMemberPermission called:", { chatId, adminId, targetUserId, permission });
+  return manageGroupMember({
+    action: 'permission',
+    chat_id: chatId,
+    user_id: adminId,
+    target_id: targetUserId,
+    permission: permission,
+  });
+};
+
+/**
+ * Leave a group (Any member)
+ */
+export const leaveGroup = async (chatId: string, userId: string) => {
+  console.log("📞 leaveGroup called:", { chatId, userId });
+  return manageGroupMember({
+    action: 'leave',
+    chat_id: chatId,
+    user_id: userId,
+  });
+};
+
+// ✅ Update group basic information (name and/or image)
+// Only group admins can perform this action
+export interface UpdateGroupInfoParams {
+  chat_id: string;
+  user_id: string;  // Admin's ID
+  name?: string;    // Optional: new group name
+  image?: {         // Optional: new group avatar file
+    uri: string;
+    name: string;
+    type: string;
+  };
+}
+
+export const updateGroupInfo = async (params: UpdateGroupInfoParams) => {
+  console.log("📞 updateGroupInfo called:", params);
 
   try {
     const formData = new FormData();
 
-    const dataPayload = {
-      chat_id: chatId,
-      user_id: userId,
-      name: newName,
+    // Build data payload (only include fields that are provided)
+    const dataPayload: { chat_id: string; user_id: string; name?: string } = {
+      chat_id: params.chat_id,
+      user_id: params.user_id,
     };
+
+    if (params.name) {
+      dataPayload.name = params.name;
+    }
 
     formData.append("data", JSON.stringify(dataPayload));
 
-    console.log("➡ Sending to backend (updateGroupName):", dataPayload);
+    console.log("➡ Sending to backend (updateGroupInfo):", {
+      endpoint: "/chats/group/update",
+      dataPayload,
+      hasImage: !!params.image,
+    });
+
+    // Append image file if provided
+    if (params.image) {
+      console.log('🖼️ [updateGroupInfo] Attaching image file:', params.image);
+      formData.append("image", {
+        uri: params.image.uri,
+        name: params.image.name,
+        type: params.image.type,
+      } as any);
+    }
 
     const response = await api.post("/chats/group/update", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
 
-    console.log("📩 updateGroupName response:", response.data);
+    console.log("📩 updateGroupInfo response:", response.data);
 
     if (response.data?.error === true) {
       return {
         success: false,
-        message: response.data.message || "Update group name failed",
+        message: response.data.message || "Update group info failed",
       };
     }
 
@@ -535,7 +660,7 @@ export const updateGroupName = async (chatId: string, userId: string, newName: s
       message: response.data.message,
     };
   } catch (error: any) {
-    console.error("❌ updateGroupName error:", error.response?.data || error.message);
+    console.error("❌ updateGroupInfo error:", error.response?.data || error.message);
     return {
       success: false,
       message: error.response?.data?.message || error.message,
@@ -543,77 +668,259 @@ export const updateGroupName = async (chatId: string, userId: string, newName: s
   }
 };
 
-// ✅ Update group image only (no action field)
+// ✅ Update group name only (convenience wrapper)
+export const updateGroupName = async (chatId: string, userId: string, newName: string) => {
+  console.log("📞 updateGroupName called:", { chatId, userId, newName });
+  return updateGroupInfo({
+    chat_id: chatId,
+    user_id: userId,
+    name: newName,
+  });
+};
+
+// ✅ Start Call API - 发起通话，获取 call_id
+export interface StartCallParams {
+  user_id: string;       // 发起人 ID
+  callees: string[];     // 被呼叫者 ID 数组
+  istype: number;        // 通话类型: 0=语音, 1=视频
+}
+
+export interface StartCallResponse {
+  success: boolean;
+  data?: {
+    call_id: string;     // 通话房间 ID，如 "IM_CALL_123"
+    [key: string]: any;
+  };
+  message?: string;
+}
+
+export const startCall = async (params: StartCallParams): Promise<StartCallResponse> => {
+  console.log("[startCall] user:", params.user_id, "callees:", params.callees.length);
+
+  try {
+    const formData = new FormData();
+    formData.append("data", JSON.stringify({
+      user_id: params.user_id,
+      callees: params.callees,
+      istype: params.istype,
+    }));
+
+    const response = await api.post("/chats/call/start", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          responseData = JSON.parse(responseData.substring(jsonStartIndex));
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      return { success: false, message: responseData.message || "Start call failed" };
+    }
+
+    // 提取 call_id
+    let callId: string | undefined;
+    if (typeof responseData?.response === 'string' && responseData.response.length > 0) {
+      callId = responseData.response;
+    } else if (responseData?.response?.call_id) {
+      callId = responseData.response.call_id;
+    } else if (responseData?.call_id) {
+      callId = responseData.call_id;
+    }
+
+    console.log("[startCall] call_id:", callId || "无");
+    
+    if (!callId) {
+      return { success: false, message: "No call_id returned from server" };
+    }
+    
+    return { success: true, data: { call_id: callId }, message: responseData.message };
+  } catch (error: any) {
+    console.error("[startCall] 失败:", error.message);
+    return { success: false, message: error.response?.data?.message || error.message };
+  }
+};
+
+// ✅ Call Room API - 管理通话房间 (join, leave, end, add)
+export interface CallRoomParams {
+  call_id: string;        // 通话房间 ID
+  callees?: string[];     // 被呼叫者 ID 数组 (用于 add)
+  action: 'join' | 'leave' | 'end' | 'add';  // 操作类型
+  user_id?: string;       // 用户 ID (可选)
+}
+
+export interface CallRoomResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+}
+
+export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse> => {
+  console.log("🔵 [callRoom] ====================================");
+  console.log("🔵 [callRoom] 管理通话房间");
+  console.log("🔵 [callRoom] call_id:", params.call_id);
+  console.log("🔵 [callRoom] action:", params.action);
+  console.log("🔵 [callRoom] ====================================");
+
+  try {
+    const formData = new FormData();
+
+    // 只发送 call_id 和 action（最简化版本）
+    // 如果后端还是报错，需要确认后端期望的确切格式
+    const dataPayload: any = {
+      call_id: params.call_id,
+      action: params.action,
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("🔵 [callRoom] 发送请求到: /chats/call/room");
+    console.log("🔵 [callRoom] payload:", JSON.stringify(dataPayload));
+
+    const response = await api.post("/chats/call/room", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("🔵 [callRoom] ====================================");
+    console.log("🔵 [callRoom] 收到后端响应");
+    console.log("🔵 [callRoom] 原始响应:", JSON.stringify(response.data, null, 2));
+    console.log("🔵 [callRoom] ====================================");
+
+    // 处理后端返回 HTML 警告的情况
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          const jsonString = responseData.substring(jsonStartIndex);
+          responseData = JSON.parse(jsonString);
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        console.error("🔵 [callRoom] ❌ 解析响应失败:", e);
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      // 静默处理错误，不影响通话功能（TCP Socket 是主要通道）
+      console.log("🔵 [callRoom] ⚠️ 后端返回错误 (忽略):", responseData.message);
+      return { success: false, message: responseData.message };
+    }
+
+    console.log("🔵 [callRoom] ✅ 成功!");
+    return {
+      success: true,
+      data: responseData?.response || responseData,
+      message: responseData.message,
+    };
+  } catch (error: any) {
+    // 静默处理异常，不影响通话功能
+    console.log("🔵 [callRoom] ⚠️ API 异常 (忽略):", error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
+// ✅ Call Fail API - 报告通话失败
+export interface CallFailParams {
+  call_id: string;  // 通话房间 ID
+}
+
+export interface CallFailResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+}
+
+export const callFail = async (params: CallFailParams): Promise<CallFailResponse> => {
+  console.log("🔴 [callFail] ====================================");
+  console.log("🔴 [callFail] 报告通话失败");
+  console.log("🔴 [callFail] call_id:", params.call_id);
+  console.log("🔴 [callFail] ====================================");
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload = {
+      call_id: params.call_id,
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("🔴 [callFail] 发送请求到: /chats/call/fail");
+
+    const response = await api.post("/chats/call/fail", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("🔴 [callFail] ====================================");
+    console.log("🔴 [callFail] 收到后端响应");
+    console.log("🔴 [callFail] 原始响应:", JSON.stringify(response.data, null, 2));
+    console.log("🔴 [callFail] ====================================");
+
+    // 处理后端返回 HTML 警告的情况
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          const jsonString = responseData.substring(jsonStartIndex);
+          responseData = JSON.parse(jsonString);
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        console.error("🔴 [callFail] ❌ 解析响应失败:", e);
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      console.error("🔴 [callFail] ❌ 后端返回错误:", responseData.message);
+      return { success: false, message: responseData.message };
+    }
+
+    console.log("🔴 [callFail] ✅ 报告成功!");
+    return {
+      success: true,
+      data: responseData?.response || responseData,
+      message: responseData.message,
+    };
+  } catch (error: any) {
+    console.error("🔴 [callFail] ❌ API 异常:", error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
+// ✅ Update group image only (convenience wrapper)
 export const updateGroupImage = async (
   chatId: string,
   userId: string,
   imageFile: { uri: string; name: string; type: string }
 ) => {
   console.log("📞 updateGroupImage called:", { chatId, userId, imageFile });
-
-  try {
-    const formData = new FormData();
-
-    const dataPayload = {
-      chat_id: chatId,
-      user_id: userId,
-    };
-
-    const dataJson = JSON.stringify(dataPayload);
-    console.log('📤 [UpdateGroupImage] Data JSON:', dataJson);
-    console.log('📤 [UpdateGroupImage] Data payload keys:', Object.keys(dataPayload));
-    console.log('📤 [UpdateGroupImage] Verifying NO action field:', !('action' in dataPayload));
-
-    formData.append("data", dataJson);
-
-    // ✅ Append image file
-    console.log('🖼️ [UpdateGroupImage] Attaching image file:', {
-      uri: imageFile.uri,
-      name: imageFile.name,
-      type: imageFile.type,
-    });
-
-    formData.append("image", {
-      uri: imageFile.uri,
-      name: imageFile.name,
-      type: imageFile.type,
-    } as any);
-
-    console.log("➡ Sending to backend endpoint: /chats/group/update");
-    console.log("➡ Request headers: Content-Type: multipart/form-data");
-
-    const response = await api.post("/chats/group/update", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-      timeout: 30000,
-    });
-
-    console.log("📩 [UpdateGroupImage] Full response:", JSON.stringify(response.data, null, 2));
-    console.log("📩 [UpdateGroupImage] Response error field:", response.data?.error);
-    console.log("📩 [UpdateGroupImage] Response message:", response.data?.message);
-    console.log("📩 [UpdateGroupImage] Response data:", response.data?.response);
-
-    if (response.data?.error === true) {
-      console.error("❌ [UpdateGroupImage] Backend returned error:", response.data.message);
-      return {
-        success: false,
-        message: response.data.message || "Update group image failed",
-      };
-    }
-
-    console.log("✅ [UpdateGroupImage] Success! New image URL:", response.data?.response?.image || response.data?.image);
-
-    return {
-      success: true,
-      data: response.data.response,
-      message: response.data.message,
-    };
-  } catch (error: any) {
-    console.error("❌ updateGroupImage exception:", error);
-    console.error("❌ updateGroupImage error response:", error.response?.data);
-    console.error("❌ updateGroupImage error message:", error.message);
-    return {
-      success: false,
-      message: error.response?.data?.message || error.message,
-    };
-  }
+  return updateGroupInfo({
+    chat_id: chatId,
+    user_id: userId,
+    image: imageFile,
+  });
 };

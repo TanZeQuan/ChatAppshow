@@ -1075,31 +1075,14 @@ export default function ChatRoomScreen() {
     // 1. 群聊逻辑 (Group Call)
     // ===========================
     if (chat?.isGroup) {
-      // A. 构造群通话邀请消息
-      const callInviteData = JSON.stringify({
-        type: 'GROUP_VOICE_CALL',  // ✅ 修复：语音通话应该是 VOICE_CALL
-        roomId: chatId,
-        hostName: currentUserName,
-        startTime: new Date().toISOString()
+      // 先跳转到群通话界面，让 GroupCallScreen 负责：
+      // 1. 调用 API 获取 call_id
+      // 2. 发送通话消息（包含 call_id）
+      // 3. 通过 WebSocket 发送 JOIN_CALL 通知
+      navigation.navigate('GroupCallScreen', {
+        chatId,
+        isHost: true // 标记我是主持人
       });
-
-      // B. 发送消息给群成员
-      const result = await sendChatMessage({
-        sender: currentUserId,
-        isreceive: chatMembers.filter(id => id !== currentUserId),
-        chat_id: chatId,
-        message: callInviteData,
-        type: 4, // 系统消息/卡片类型
-      });
-
-      // C. 发送成功后，自己跳转到群通话界面
-      if (result.success) {
-        // ❗ 注意：群聊是跳 GroupCallScreen
-        navigation.navigate('GroupCallScreen', {
-          chatId,
-          isHost: true // 标记我是主持人
-        });
-      }
     }
     // ===========================
     // 2. 单聊逻辑 (1v1 Call)
@@ -1216,7 +1199,8 @@ export default function ChatRoomScreen() {
     setInputText((prev) => prev + emoji.emoji);
   };
 
-  const renderItem = ({ item, index }: { item: DisplayMessage; index: number }) => (
+  // ✅ 性能优化：使用 useCallback 包装 renderItem，避免每次渲染都创建新函数
+  const renderItem = useCallback(({ item, index }: { item: DisplayMessage; index: number }) => (
     <MessageBubble
       item={item}
       index={index}
@@ -1234,7 +1218,22 @@ export default function ChatRoomScreen() {
       showSenderName={true}
       chatUnreadCount={chat?.unreadCount || 0}
     />
-  );
+  ), [
+    playingVoice, 
+    voiceDurations, 
+    playbackPosition, 
+    playAudio, 
+    stopAudio, 
+    formatTime, 
+    searchMode, 
+    searchQuery, 
+    currentMatchId, 
+    currentUserAvatar,
+    chat?.unreadCount
+  ]);
+
+  // ✅ 性能优化：为 FlatList 添加 keyExtractor
+  const keyExtractor = useCallback((item: DisplayMessage) => item.id, []);
 
   const handleGoBack = useCallback(() => {
     const state = navigation.getState();
@@ -1328,9 +1327,9 @@ export default function ChatRoomScreen() {
           )}
           <FlatList
             ref={flatListRef}
-            data={[...messages]}
+            data={messages}
             renderItem={renderItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractor}
             contentContainerStyle={roomStyles.chatList}
             inverted
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
@@ -1354,6 +1353,13 @@ export default function ChatRoomScreen() {
                 tintColor="#FFD966"
               />
             }
+
+            // ✅ 性能优化属性
+            removeClippedSubviews={true}           // 移除屏幕外的组件
+            maxToRenderPerBatch={10}               // 每批渲染的最大数量
+            windowSize={10}                        // 渲染窗口大小
+            initialNumToRender={15}                // 初始渲染数量
+            updateCellsBatchingPeriod={50}         // 批量更新间隔
           />
 
           {isFriendDeleted && !chat?.isGroup ? (
