@@ -168,7 +168,7 @@ export default function GroupSettingScreen() {
         if (!currentUserId || !chatId) return;
 
         try {
-            console.log('📥 [GroupSetting] Loading group members...');
+            console.log('📥 [GroupSetting] Loading | chatId:', chatId);
 
             // Get group members with all info from readChatMessages API
             const result = await readChatMessages({
@@ -179,12 +179,6 @@ export default function GroupSettingScreen() {
 
             if (result.success && result.data?.group && Array.isArray(result.data.group)) {
                 const groupMembers = result.data.group;
-                console.log('📥 [GroupSetting] Got group members:', groupMembers);
-                
-                // ✅ 调试：打印每个成员的 isadmin 值
-                groupMembers.forEach((m: any, i: number) => {
-                    console.log(`📥 [GroupSetting] Member ${i}: user_id=${m.user_id}, name=${m.name}, isadmin=${m.isadmin}, type=${typeof m.isadmin}`);
-                });
 
                 // ✅ Build members array directly from API response
                 const membersInfo: Member[] = groupMembers.map((member: any) => {
@@ -204,11 +198,7 @@ export default function GroupSettingScreen() {
                 const adminMembers = groupMembers.filter((m: any) => m.isadmin === 2 || m.isadmin === '2');
                 const adminIds = adminMembers.map((m: any) => m.user_id);
 
-                console.log('✅ [GroupSetting] Processed member info:', {
-                    total: membersInfo.length,
-                    adminIds: adminIds,
-                    adminCount: adminIds.length,
-                });
+                // Member info processed
 
                 // ✅ Get group info (name and image)
                 const groupInfo = result.data.info || {};
@@ -218,10 +208,7 @@ export default function GroupSettingScreen() {
                 // ✅ Use ensureFullImageUrl to process group image URL
                 const fullGroupImageUrl = ensureFullImageUrl(groupImageUrl);
 
-                console.log('📷 [GroupSetting] Group image:', {
-                    raw: groupImageUrl,
-                    full: fullGroupImageUrl,
-                });
+                // Group image loaded
 
                 // ✅ Save group image to state
                 setGroupImage(fullGroupImageUrl);
@@ -244,18 +231,14 @@ export default function GroupSettingScreen() {
                     isGroup: true,
                 };
                 
-                console.log('🔍 [GroupSetting] updatedChat:', {
-                    id: updatedChat.id,
-                    adminIds: updatedChat.adminIds,
-                    adminCount: updatedChat.adminIds?.length,
-                });
+                // Chat updated
                 
                 // ✅ 更新本地 state（立即响应 UI）
                 setGroupChat(updatedChat);
                 
                 // ✅ 更新 store（持久化）
                 addChat(updatedChat);
-                console.log('✅ [GroupSetting] Updated local state and store with adminIds:', adminIds);
+                console.log('✅ [GroupSetting] Loaded | members:', membersInfo.length, '| admins:', adminIds.length);
             } else {
                 console.warn('⚠️ [GroupSetting] No group members in API response');
             }
@@ -267,7 +250,7 @@ export default function GroupSettingScreen() {
     // ✅ Reload data when screen gains focus
     useFocusEffect(
         useCallback(() => {
-            console.log('🔄 [GroupSetting] Screen focused, reloading data...');
+            // Screen focused
             loadGroupMembers();
             loadFriendsList(false); // Silent reload
         }, [loadGroupMembers, loadFriendsList])
@@ -408,18 +391,11 @@ export default function GroupSettingScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
-                            console.log('🔄 [GroupSetting KickMember] Calling updateGroup API with:', {
-                                chat_id: chatId,
-                                user_id: currentUserId,
-                                action: 'remove',
-                                target_id: memberId,
-                                memberId_type: typeof memberId,
-                                memberId_length: memberId?.length,
-                            });
+                            console.log('🔄 [GroupSetting] Kick | targetId:', memberId);
 
                             // ✅ Validate memberId before calling API
                             if (!memberId || memberId.trim() === '') {
-                                console.error('❌ [GroupSetting KickMember] memberId is empty!');
+                                console.error('❌ [GroupSetting] memberId is empty');
                                 Alert.alert('错误', '无法获取成员ID，请重试');
                                 return;
                             }
@@ -585,7 +561,7 @@ export default function GroupSettingScreen() {
                     );
 
                     if (existingChat) {
-                        console.log('✅ 本地找到已有聊天:', existingChat.id);
+                        // Found existing chat
                         targetChatId = existingChat.id;
                     }
 
@@ -605,7 +581,7 @@ export default function GroupSettingScreen() {
                                 targetChatId = member.id;
                             }
                         } catch (error) {
-                            console.error('创建聊天失败:', error);
+                            console.error('❌ [GroupSetting] Create chat error');
                             targetChatId = member.id;
                         } finally {
                             setIsLoading(false);
@@ -663,11 +639,7 @@ export default function GroupSettingScreen() {
         // ✅ Check if current user is admin
         const adminIds = groupChat?.adminIds || [];
         const isAdmin = adminIds.includes(currentUserId);
-        console.log('🔐 [AddMembers] Permission check:', {
-            currentUserId,
-            adminIds: adminIds,
-            isAdmin,
-        });
+        // Permission check
 
         if (!isAdmin) {
             Alert.alert('权限不足', '只有管理员才能添加成员');
@@ -703,12 +675,7 @@ export default function GroupSettingScreen() {
             // ✅ Call new API that only sends chat_id, user_id, name (no action field)
             const result = await updateGroupName(chatId, currentUserId, newGroupName.trim());
 
-            console.log('✅ [UpdateGroupName] API response:', {
-                success: result.success,
-                message: result.message,
-                data: result.data,
-                fullResponse: result,
-            });
+            // UpdateGroupName response
 
             if (result.success) {
                 // ✅ Reload group members to get updated name from backend
@@ -855,6 +822,20 @@ export default function GroupSettingScreen() {
 
     // Leave group
     const handleLeaveGroup = useCallback(() => {
+        // ✅ 检查当前用户是否是管理员
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        
+        // ✅ 如果是管理员且是最后一位管理员，阻止退出
+        if (isAdmin && adminIds.length === 1) {
+            Alert.alert(
+                '无法退出',
+                '你是群里唯一的管理员，请先将其他成员设为管理员后再退出群聊。',
+                [{ text: '确定', style: 'default' }]
+            );
+            return;
+        }
+        
         Alert.alert(
             '退出群聊',
             `确定要退出群聊 "${chatName}" 吗？`,
@@ -875,7 +856,7 @@ export default function GroupSettingScreen() {
                                 target_id: currentUserId,
                             });
 
-                            console.log('✅ [LeaveGroup] API response:', result);
+                            // LeaveGroup response
 
                             if (result.success) {
                                 removeChat(chatId);
@@ -904,7 +885,7 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    }, [chatName, chatId, currentUserId, removeChat, navigation]);
+    }, [chatName, chatId, currentUserId, removeChat, navigation, groupChat?.adminIds]);
 
     // Dismiss group
     const handleDismissGroup = useCallback(() => {
@@ -930,12 +911,7 @@ export default function GroupSettingScreen() {
                             // ✅ Split members: others (remove) and self (leave)
                             const otherMembers = allMemberIds.filter(id => id !== currentUserId);
 
-                            console.log('🔄 [DismissGroup] Dismissing group:', {
-                                chat_id: chatId,
-                                total_members: allMemberIds.length,
-                                other_members: otherMembers.length,
-                                self: currentUserId,
-                            });
+                            console.log('🔄 [GroupSetting] Dismiss | chatId:', chatId, '| members:', allMemberIds.length);
 
                             // Step 1: Remove all other members
                             const removeResults = await Promise.all(
@@ -950,7 +926,7 @@ export default function GroupSettingScreen() {
                                 })
                             );
 
-                            console.log('✅ [DismissGroup] Remove others results:', removeResults);
+                            // Remove others completed
 
                             // Check if all removals succeeded
                             const failedRemovals = removeResults.filter(r => !r.success);
@@ -966,7 +942,6 @@ export default function GroupSettingScreen() {
                             }
 
                             // Step 2: Leave the group (self)
-                            console.log('🔄 [DismissGroup] Owner leaving group...');
                             const leaveResult = await updateGroup({
                                 chat_id: chatId,
                                 user_id: currentUserId,
@@ -974,7 +949,7 @@ export default function GroupSettingScreen() {
                                 target_id: currentUserId,
                             });
 
-                            console.log('✅ [DismissGroup] Leave result:', leaveResult);
+                            // Leave result processed
 
                             if (leaveResult.success) {
                                 removeChat(chatId);

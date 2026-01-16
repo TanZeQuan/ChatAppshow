@@ -105,10 +105,10 @@ export default function CallScreen() {
 
   useEffect(() => {
     const handleRemoteSignal = (data: any) => {
-      console.log('📡 [CallScreen] 收到对方信令:', data.type);
+      // 收到对方信令
 
       if (data.type === 'answer') {
-        console.log('✅ 对方已接听');
+        // 对方已接听
         setStatus('Connected');
         startTimer();
       } else if (data.type === 'reject') {
@@ -176,7 +176,7 @@ export default function CallScreen() {
         const stream = callService?.remoteStream;
         if (stream) {
           const url = (stream as any).toURL();
-          console.log('🔊 [CallScreen] 获取到远程音频流 URL:', url);
+          // 获取到远程音频流
           setRemoteStreamUrl(url);
         } else {
           setTimeout(checkRemoteStream, 100);
@@ -283,7 +283,7 @@ export default function CallScreen() {
 
   const stopTimer = () => {
     if (timerRef.current) {
-      console.log('⏱️ [Timer] 停止计时，总时长:', durationRef.current);
+      // 停止计时
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
@@ -365,7 +365,7 @@ export default function CallScreen() {
 
   useEffect(() => {
     if (!remoteUserId) {
-      console.error('[CallScreen] 错误: 缺少 remoteUserId');
+      console.error('❌ [CallScreen] Missing remoteUserId');
       return;
     }
 
@@ -379,9 +379,9 @@ export default function CallScreen() {
           playThroughEarpieceAndroid: true,   // Android: 使用听筒播放
           staysActiveInBackground: true,      // 保持后台音频活跃
         });
-        console.log('🔊 [CallScreen] 音频模式初始化成功');
+        // 音频模式初始化成功
       } catch (audioError) {
-        console.warn('⚠️ [CallScreen] 音频模式初始化失败:', audioError);
+        console.warn('⚠️ [CallScreen] Audio init failed');
       }
 
       if (!isIncoming) {
@@ -443,7 +443,7 @@ export default function CallScreen() {
     initCall();
 
     const handleCallStatus = (newStatus: string) => {
-      console.log('🔄 [Status Change]', newStatus);
+      // Status change
       setStatus(newStatus);
       if (newStatus === 'Connected' || newStatus === '通话中') {
         startTimer();

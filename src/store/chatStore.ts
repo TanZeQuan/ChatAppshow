@@ -9,9 +9,10 @@ type Message = {
   id: string;
   text: string;
   createdAt: string;
-  type?: number; // 1: text, 2: voice, 3: image/files
+  type?: number; // 1: text, 2: voice, 3: image/files, 5: video
   imageUrls?: string[]; // For type 3 messages
   voiceUrl?: string; // For type 2 messages
+  videoUrl?: string; // ✅ 新增：For type 5 video messages
 
   // Sender info
   senderId: string;
@@ -90,6 +91,9 @@ export const useChatStore = create<ChatStore>()(
           text: messageData.text || '',
           createdAt: messageData.createdAt || new Date().toISOString(),
           type: messageData.type, // Add type here
+          imageUrls: messageData.imageUrls, // ✅ 图片 URLs
+          voiceUrl: messageData.voiceUrl,   // ✅ 语音 URL
+          videoUrl: messageData.videoUrl,   // ✅ 视频 URL
           senderId: messageData.senderId || user.id,
           name: messageData.name || user.name,
           avatar: messageData.avatar || user.avatar,
@@ -165,11 +169,7 @@ export const useChatStore = create<ChatStore>()(
             ...processedChat, // Use processedChat here
           };
 
-          console.log(`📌 [chatStore] addChat - updating "${processedChat.name}":`, {
-            oldTimestamp: updatedChatList[existingIndex].timestamp,
-            newTimestamp: processedChat.timestamp,
-            isGroup: processedChat.isGroup,
-          });
+          // Chat updated
 
           // ✅ Move updated chat to top of list
           const [movedChat] = updatedChatList.splice(existingIndex, 1);
@@ -178,7 +178,7 @@ export const useChatStore = create<ChatStore>()(
           set({ chatList: updatedChatList });
         } else {
           // Add new chat to the top of the list
-          console.log(`➕ [chatStore] addChat - adding new "${processedChat.name}"`);
+          // New chat added
           set({
             chatList: [processedChat, ...currentChatList], // Use processedChat here
           });
@@ -194,11 +194,7 @@ export const useChatStore = create<ChatStore>()(
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
 
-        console.log('📊 [chatStore] setChats - sorted order:', sortedChats.map(c => ({
-          name: c.name,
-          timestamp: c.timestamp,
-          isGroup: c.isGroup,
-        })));
+        // Chats sorted and set
 
         set({ chatList: sortedChats });
       },
@@ -213,12 +209,31 @@ export const useChatStore = create<ChatStore>()(
           const chat = updatedChatList[chatIndex];
 
           let formattedLastMessage = '';
-          if (message.type === 2) { // Voice message
-            formattedLastMessage = '【语音】';
-          } else if (message.type === 3) { // Image/File message
-            formattedLastMessage = '【图片】';
-          } else { // Default to text message or if type is not recognized
-            formattedLastMessage = message.text;
+          switch (message.type) {
+            case 2: // Voice message
+              formattedLastMessage = '[语音消息]';
+              break;
+            case 3: // Image/File message
+              formattedLastMessage = '[图片]';
+              break;
+            case 4: // Contact card
+              formattedLastMessage = '[个人名片]';
+              break;
+            case 5: // Video
+              formattedLastMessage = '[视频]';
+              break;
+            default:
+              // ✅ 检测名片消息（即使 type 不是 4，也通过内容识别）
+              if (message.text && message.text.startsWith('{') && message.text.includes('userId') && message.text.includes('userName')) {
+                try {
+                  const parsed = JSON.parse(message.text);
+                  if (parsed.userId && parsed.userName) {
+                    formattedLastMessage = '[个人名片]';
+                    break;
+                  }
+                } catch (e) {}
+              }
+              formattedLastMessage = message.text || '新消息';
           }
 
           // Update chat

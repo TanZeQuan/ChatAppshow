@@ -181,7 +181,16 @@ export default function GroupCallScreen() {
 
     const initCall = async () => {
       try {
-        // ✅ 1. 先获取麦克风（不要先设置音频模式）
+        // 🔊 初始化音频模式 - 确保音频可以正常播放
+        setLoadingStatus('正在初始化音频...');
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+          playThroughEarpieceAndroid: true, // 默认使用听筒
+          staysActiveInBackground: true,
+        });
+        // 收到通话结束信号
+        
         setLoadingStatus('正在获取麦克风权限...');
         const stream = await callServiceRef.current?.initLocalStream();
 

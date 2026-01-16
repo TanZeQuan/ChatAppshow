@@ -39,14 +39,55 @@ const scaleHeight = (size: number) => (Dimensions.get("window").height / 812) * 
 
 const formatLastMessagePreview = (message: string, type: number | undefined): string => {
   if (!message && type === undefined) return '开始聊天吧~';
+  
+  // ✅ 检测是否是视频文件的辅助函数
+  const checkVideoUrl = (url: string) => {
+    if (!url || typeof url !== 'string') return false;
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.includes('/video/') || 
+           lowerUrl.endsWith('.mp4') || 
+           lowerUrl.endsWith('.mov') || 
+           lowerUrl.endsWith('.avi') ||
+           lowerUrl.endsWith('.webm');
+  };
+  
   if (message && typeof message === 'string') {
+    // 检测语音/视频通话
     if (message.includes('SINGLE_VOICE_CALL') || message.includes('GROUP_VOICE_CALL')) return '[语音通话]';
+    
+    // ✅ 直接检测 message 字符串是否包含视频路径（兼容各种格式）
+    if (checkVideoUrl(message)) return '[视频]';
+    
     if (message.startsWith('{') && message.includes('type')) {
       try {
         const parsed = JSON.parse(message);
         if (parsed.type) {
-          if (parsed.type.includes('VOICE_CALL')) return '[语音通话]';
-          if (parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
+          if (typeof parsed.type === 'string' && parsed.type.includes('VOICE_CALL')) return '[语音通话]';
+          if (typeof parsed.type === 'string' && parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
+        }
+        
+        // ✅ 检测视频文件（即使 type 是 3，也通过路径识别）
+        if (parsed.message) {
+          if (Array.isArray(parsed.message) && parsed.message.length > 0) {
+            if (checkVideoUrl(parsed.message[0])) return '[视频]';
+          } else if (typeof parsed.message === 'string' && checkVideoUrl(parsed.message)) {
+            return '[视频]';
+          }
+        }
+      } catch (e) {}
+    }
+    
+    // ✅ 检测 message 是数组字符串格式 "["/content/uploads/video/xxx.mp4"]"
+    if (message.startsWith('[') && message.includes('/video/')) {
+      return '[视频]';
+    }
+    
+    // ✅ 检测名片消息（即使 type 不是 4，也通过内容识别）
+    if (message.startsWith('{') && message.includes('userId') && message.includes('userName')) {
+      try {
+        const parsed = JSON.parse(message);
+        if (parsed.userId && parsed.userName) {
+          return '[个人名片]';
         }
       } catch (e) {}
     }
@@ -284,8 +325,55 @@ export default function ChatListScreen() {
                 lastMsgObj = chat.message;
               }
             }
-            const lastMessageText = lastMsgObj?.message || chat.last_message || '';
-            const lastMessageType = lastMsgObj?.type || chat.last_message_type;
+            
+            // ✅ 修复：lastMsgObj.message 可能是 JSON 字符串，需要解析
+            let lastMessageText = chat.last_message || '';
+            let lastMessageType = chat.last_message_type;
+            
+            if (lastMsgObj?.message) {
+              // 如果 message 是字符串，尝试解析
+              if (typeof lastMsgObj.message === 'string') {
+                try {
+                  const parsed = JSON.parse(lastMsgObj.message);
+                  lastMessageType = parsed.type || lastMessageType;
+                  // ✅ 检测视频：通过路径判断
+                  if (parsed.message) {
+                    const checkVideo = (url: string) => {
+                      if (!url) return false;
+                      const lower = url.toLowerCase();
+                      return lower.includes('/video/') || lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm');
+                    };
+                    
+                    if (Array.isArray(parsed.message) && parsed.message.length > 0 && checkVideo(parsed.message[0])) {
+                      lastMessageType = 5; // 强制设为视频类型
+                    } else if (typeof parsed.message === 'string' && checkVideo(parsed.message)) {
+                      lastMessageType = 5;
+                    }
+                  }
+                  lastMessageText = lastMsgObj.message; // 保留原始字符串给 formatLastMessagePreview
+                } catch (e) {
+                  lastMessageText = lastMsgObj.message;
+                }
+              } else {
+                // message 不是字符串（可能是数组），转成字符串
+                lastMessageText = JSON.stringify(lastMsgObj.message);
+              }
+            }
+            
+            if (!lastMessageType && lastMsgObj?.type) {
+              lastMessageType = lastMsgObj.type;
+            }
+            
+            // ✅ 调试：检查名片消息的 type
+            if (lastMessageType === 4 || (lastMessageText && lastMessageText.includes('userId'))) {
+              console.log('🎴 [ChatList] 检测到可能的名片消息:', {
+                chatName: chat.name,
+                lastMessageText: lastMessageText?.substring(0, 50),
+                lastMessageType,
+                lastMsgObjType: lastMsgObj?.type,
+                chatLastMessageType: chat.last_message_type,
+              });
+            }
 
             // ✅ 完全依赖 API 返回的时间，优先使用 message.created_at
             const messageTimestamp = lastMsgObj?.created_at;

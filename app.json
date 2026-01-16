@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "森通Chat",
-    "slug": "ChatApp",
+    "slug": "森通Chat",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "chatapp",
+    "scheme": "森通Chat",
     "icon": "./src/assets/images/sentalk-logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,7 +14,7 @@
     "ios": {
       "supportsTablet": true,
       "bitcode": false,
-      "bundleIdentifier": "com.anonymous.ChatApp",
+      "bundleIdentifier": "com.sentalk.chatapp",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
