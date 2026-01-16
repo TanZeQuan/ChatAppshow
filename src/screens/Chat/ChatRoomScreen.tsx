@@ -128,14 +128,14 @@ export default function ChatRoomScreen() {
 
     // 优先级1: 从路由参数获取（最准确）
     if (params.otherUserId) {
-      console.log('✅ Found otherUserId from params:', params.otherUserId);
+      // otherUserId from params
       return params.otherUserId;
     }
 
     // 优先级2: 从成员列表中找
     const foundInMembers = chatMembers.find(id => id !== currentUserId);
     if (foundInMembers) {
-      console.log('✅ Found otherUserId from chatMembers:', foundInMembers);
+      // otherUserId from chatMembers
       return foundInMembers;
     }
 
@@ -143,12 +143,12 @@ export default function ChatRoomScreen() {
     if (chat?.memberIds) {
       const foundInChatMemberIds = chat.memberIds.find((id: string) => id !== currentUserId);
       if (foundInChatMemberIds) {
-        console.log('✅ Found otherUserId from chat.memberIds:', foundInChatMemberIds);
+        // otherUserId from chat.memberIds
         return foundInChatMemberIds;
       }
     }
 
-    console.warn('⚠️ Could not find otherUserId');
+    // Could not find otherUserId
     return null;
   }, [chat, chatMembers, currentUserId, params.otherUserId]);
 
@@ -163,7 +163,7 @@ export default function ChatRoomScreen() {
     try {
       setIsCheckingFriendStatus(true);
 
-      console.log('🔍 [ChatRoom] 检查好友状态，对方ID:', otherUserId);
+      // 检查好友状态
 
       // 获取已接受的好友列表 (isstatus = 2)
       const result = await readFriends(2);
@@ -174,7 +174,7 @@ export default function ChatRoomScreen() {
           ...(result.data.approve || [])
         ];
 
-        console.log('📋 [ChatRoom] 当前好友列表:', allFriends.map(f => f.user_id));
+        // 好友列表已加载
 
         // 检查对方是否还在好友列表中
         const friendExists = allFriends.some(
@@ -184,13 +184,13 @@ export default function ChatRoomScreen() {
         setIsFriendDeleted(!friendExists);
 
         if (!friendExists) {
-          console.log('⚠️ [ChatRoom] 对方已删除好友关系');
+          // 对方已删除好友关系
         } else {
-          console.log('✅ [ChatRoom] 好友关系正常');
+          // 好友关系正常
         }
       }
     } catch (error) {
-      console.error('❌ [ChatRoom] 检查好友状态失败:', error);
+      console.error('❌ [ChatRoom] Check friend status error');
       // 出错时保守处理，允许继续聊天
       setIsFriendDeleted(false);
     } finally {
@@ -210,7 +210,7 @@ export default function ChatRoomScreen() {
     setIsAddingFriend(true);
 
     try {
-      console.log('📤 [ChatRoom] 发送好友请求给:', otherUserId);
+      // 发送好友请求
       
       const result = await createFriendRequest(otherUserId, '请求重新添加好友');
 
@@ -226,7 +226,7 @@ export default function ChatRoomScreen() {
         }
       }
     } catch (error: any) {
-      console.error('❌ [ChatRoom] 发送好友请求失败:', error);
+      console.error('❌ [ChatRoom] Send friend request error');
       Alert.alert('发送失败', '网络错误，请稍后重试');
     } finally {
       setIsAddingFriend(false);
@@ -235,12 +235,11 @@ export default function ChatRoomScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      console.log('🔄 [ChatRoom] Focus | chatId:', chatId);
       loadMessages(false, false);
 
       // ✅ 同时检查好友状态
       if (otherUserId && !chat?.isGroup) {
-        console.log('🔍 [ChatRoom] 聚焦时重新检查好友状态');
         checkFriendStatus();
       }
 
@@ -471,7 +470,6 @@ export default function ChatRoomScreen() {
                   videoUrl = ensureFullImageUrl(mediaUrls[0]);
                   messageType = 5; // 强制改为视频类型
                   messageText = '[Video]';
-                  console.log('🎬 [Video] 检测到视频文件 (type=3 但路径是视频):', videoUrl);
                 } else {
                   // 正常图片处理
                   imageUrls = mediaUrls.map((url: string) => ensureFullImageUrl(url));
@@ -495,36 +493,21 @@ export default function ChatRoomScreen() {
                   }
                 }
               }
-              // ✅ 新增：处理视频消息 (type === 5) - 和图片处理方式一致
+              // ✅ 处理视频消息 (type === 5)
               else if (messageType === 5) {
-                console.log('🎬 [Video] 解析视频消息:', { 
-                  rawMessage: msg.message,
-                  parsedMessage,
-                  msgType: msg.type 
-                });
-                
-                // 情况1: parsedMessage 直接是 URL 字符串
                 if (typeof parsedMessage === 'string') {
                   videoUrl = ensureFullImageUrl(parsedMessage);
-                }
-                // 情况2: parsedMessage 是数组 ["/uploads/video.mp4"]
-                else if (Array.isArray(parsedMessage) && parsedMessage.length > 0) {
+                } else if (Array.isArray(parsedMessage) && parsedMessage.length > 0) {
                   videoUrl = ensureFullImageUrl(parsedMessage[0]);
-                }
-                // 情况3: parsedMessage.message 是数组
-                else if (parsedMessage.message && Array.isArray(parsedMessage.message) && parsedMessage.message.length > 0) {
+                } else if (parsedMessage.message && Array.isArray(parsedMessage.message) && parsedMessage.message.length > 0) {
                   videoUrl = ensureFullImageUrl(parsedMessage.message[0]);
-                }
-                // 情况4: parsedMessage.message 是逗号分隔的字符串
-                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                } else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
                   const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
                   if (urls.length > 0) {
                     videoUrl = ensureFullImageUrl(urls[0]);
                   }
                 }
-                
                 messageText = '[Video]';
-                console.log('🎬 [Video] 最终视频 URL:', videoUrl);
               }
               else {
                 if (typeof parsedMessage === 'string') {
@@ -587,7 +570,7 @@ export default function ChatRoomScreen() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Error loading messages:", error);
+      console.error("❌ [ChatRoom] Load messages error");
       if (showLoading) {
         setIsLoading(false);
       }
@@ -602,7 +585,7 @@ export default function ChatRoomScreen() {
     const connectionCheckInterval = setInterval(() => {
       const connected = WebSocketManager.isWebSocketConnected();
       if (!connected) {
-        console.warn('⚠️ WebSocket disconnected!');
+        console.warn('⚠️ [ChatRoom] WebSocket disconnected');
       }
     }, 10000);
 
@@ -797,7 +780,7 @@ export default function ChatRoomScreen() {
       } else if (data.type && data.message) {
         // Fallback for older message formats or system messages that still use reload
         if (!data.chat_id || data.chat_id === chatIdRef.current) {
-          console.log("Fallback to loadMessages for message:", data);
+          // Fallback to loadMessages
           loadMessagesRef.current(false, false);
         }
       }
@@ -923,7 +906,7 @@ export default function ChatRoomScreen() {
         setInputText(messageText);
       }
     } catch (error: any) {
-      console.error("Error sending message:", error);
+      console.error("❌ [ChatRoom] Send error");
 
       // ✅ 检测异常中的错误信息
       const errorMessage = error.response?.data?.message || error.message || '';
@@ -966,7 +949,7 @@ export default function ChatRoomScreen() {
 
               Alert.alert('成功', '聊天记录已清空');
             } catch (error) {
-              console.error('Clear chat error:', error);
+              console.error('❌ [ChatRoom] Clear chat error');
               Alert.alert('错误', '清空失败，请重试');
             } finally {
               setIsLoading(false);
@@ -1002,18 +985,18 @@ export default function ChatRoomScreen() {
 
       // 🔥🔥🔥 3. 核心修复：如果上面都找不到，使用路由传过来的参数 (params.otherUserId) 🔥🔥🔥
       if (!targetId && params.otherUserId) {
-        console.log('Using params.otherUserId fallback:', params.otherUserId);
+        // Using params.otherUserId fallback
         targetId = params.otherUserId;
       }
 
       // 4. 安全检查
       if (!targetId) {
-        console.warn('⚠️ 无法找到对方 ID，无法打开设置页');
+        // 无法找到对方 ID
         Alert.alert('提示', '找不到用户信息，请重试');
         return;
       }
 
-      console.log('⚙️ Opening ChatSettings for:', targetId);
+      // Opening ChatSettings
 
       // 跳转到私聊设置页 (即个人资料页)
       navigation.navigate('ChatSettingScreen', {
@@ -1171,14 +1154,14 @@ export default function ChatRoomScreen() {
             Alert.alert('发送失败', apiResult.message || '视频发送失败，请重试');
           }
         } catch (error: any) {
-          console.error('Video upload error:', error);
+          console.error('❌ [ChatRoom] Video upload error');
           Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
           setIsUploadingImage(false);
         }
       }
     } catch (error) {
-      console.error('Video picker error:', error);
+      console.error('❌ [ChatRoom] Video picker error');
       Alert.alert('选择失败', '选择视频时出错');
     }
   };
@@ -1210,7 +1193,7 @@ export default function ChatRoomScreen() {
         const targetName = contact?.name || chatName || '未知用户';
         const targetAvatar = contact?.avatar || chat?.avatar || '';
 
-        console.log('📞 跳转单聊页面:', targetName);
+        // 跳转单聊页面
 
         // ❗ 注意：单聊是跳 CallScreen
         navigation.navigate('SingleCallScreen', {
@@ -1292,7 +1275,7 @@ export default function ChatRoomScreen() {
             Alert.alert('发送失败', result.message || '名片发送失败，请重试');
           }
         } catch (error) {
-          console.error('Error sending contact card:', error);
+          console.error('❌ [ChatRoom] Contact card error');
           Alert.alert('发送失败', '网络错误，请重试');
         }
       },

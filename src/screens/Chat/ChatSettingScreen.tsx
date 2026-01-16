@@ -73,14 +73,14 @@ export default function ChatSettingScreen() {
 
       setIsLoading(false);
     } catch (error) {
-      console.error("Error loading chat settings:", error);
+      console.error("❌ [ChatSetting] Load error");
       setIsLoading(false);
     }
   };
 
   const loadFriendListId = async () => {
     if (!otherUserId || !currentUser) {
-      console.log("Cannot load friend list ID: otherUserId or current user is missing.");
+      // Cannot load friend list ID
       return;
     }
     try {
@@ -98,14 +98,13 @@ export default function ChatSettingScreen() {
 
         if (friendRelation) {
           setFriendListId(friendRelation.list_id);
-          console.log("✅ Found friend list_id:", friendRelation.list_id, "for user:", otherUserId);
+          // Found friend list_id
         } else {
-          console.log(`❌ No friend relationship found for user: ${otherUserId}`);
-          console.log("Available friends:", allFriends.map((f: any) => ({ user_id: f.user_id, name: f.name })));
+          // No friend relationship found
         }
       }
     } catch (error) {
-      console.error("Error loading friend list_id:", error);
+      console.error("❌ [ChatSetting] Load friend list_id error");
     }
   };
 
@@ -216,7 +215,7 @@ export default function ChatSettingScreen() {
                 }
               ]);
             } catch (error) {
-              console.error('Block user error:', error);
+              console.error('❌ [ChatSetting] Block user error');
               setIsLoading(false);
               Alert.alert('错误', '网络连接失败，请检查您的网络');
             }
@@ -272,7 +271,7 @@ export default function ChatSettingScreen() {
                 }
               ]);
             } catch (error) {
-              console.error('Delete contact error:', error);
+              console.error('❌ [ChatSetting] Delete contact error');
               setIsLoading(false);
               Alert.alert('错误', '网络连接失败，请检查您的网络');
             }

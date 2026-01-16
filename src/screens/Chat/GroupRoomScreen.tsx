@@ -64,7 +64,7 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
-  console.log('🆔 ChatRoomScreen chatId:', chatId);
+  console.log('🆔 [GroupRoom] chatId:', chatId, '| userId:', currentUser?.id);
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
@@ -261,7 +261,6 @@ export default function ChatRoomScreen() {
                   videoUrl = ensureFullImageUrl(mediaUrls[0]);
                   messageType = 5; // 强制改为视频类型
                   messageText = '[视频]';
-                  console.log('🎬 [Video] 检测到视频文件 (type=3 但路径是视频):', videoUrl);
                 } else {
                   // 正常图片处理
                   imageUrls = mediaUrls.map((url: string) => ensureFullImageUrl(url));
@@ -287,36 +286,21 @@ export default function ChatRoomScreen() {
                   }
                 }
               }
-              // ✅ 新增：处理视频消息 (type === 5) - 和图片处理方式一致
+              // ✅ 处理视频消息 (type === 5)
               else if (messageType === 5) {
-                console.log('🎬 [Video] 解析视频消息:', { 
-                  rawMessage: msg.message,
-                  parsedMessage,
-                  msgType: msg.type 
-                });
-                
-                // 情况1: parsedMessage 直接是 URL 字符串
                 if (typeof parsedMessage === 'string') {
                   videoUrl = ensureFullImageUrl(parsedMessage);
-                }
-                // 情况2: parsedMessage 是数组 ["/uploads/video.mp4"]
-                else if (Array.isArray(parsedMessage) && parsedMessage.length > 0) {
+                } else if (Array.isArray(parsedMessage) && parsedMessage.length > 0) {
                   videoUrl = ensureFullImageUrl(parsedMessage[0]);
-                }
-                // 情况3: parsedMessage.message 是数组
-                else if (parsedMessage.message && Array.isArray(parsedMessage.message) && parsedMessage.message.length > 0) {
+                } else if (parsedMessage.message && Array.isArray(parsedMessage.message) && parsedMessage.message.length > 0) {
                   videoUrl = ensureFullImageUrl(parsedMessage.message[0]);
-                }
-                // 情况4: parsedMessage.message 是逗号分隔的字符串
-                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                } else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
                   const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
                   if (urls.length > 0) {
                     videoUrl = ensureFullImageUrl(urls[0]);
                   }
                 }
-                
                 messageText = '[视频]';
-                console.log('🎬 [Video] 最终视频 URL:', videoUrl);
               }
               else {
                 if (typeof parsedMessage === 'string') {
@@ -406,7 +390,7 @@ export default function ChatRoomScreen() {
     const connectionCheckInterval = setInterval(() => {
       const connected = WebSocketManager.isWebSocketConnected();
       if (!connected) {
-        console.warn('⚠️ WebSocket disconnected!');
+        console.warn('⚠️ [GroupRoom] WebSocket disconnected');
       }
     }, 10000);
 
@@ -449,7 +433,7 @@ export default function ChatRoomScreen() {
   // ✅ Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      console.log('🔄 [GroupRoom] Focus | chatId:', chatId);
       loadMessages(false, false);
 
       // ✅ 发送已读回执给所有群成员
@@ -469,7 +453,7 @@ export default function ChatRoomScreen() {
   const searchModeInitialized = useRef(false);
   useEffect(() => {
     if (params.searchMode === true && !searchModeInitialized.current) {
-      console.log('🔍 [Search] Auto-enabling search from params');
+      console.log('🔍 [GroupRoom] Search enabled');
       enableSearch();
       searchModeInitialized.current = true;
     }
@@ -488,7 +472,7 @@ export default function ChatRoomScreen() {
           viewPosition: 0.5,
         });
       } catch (error) {
-        console.log('Failed to scroll to match:', error);
+        // Scroll to match failed silently
       }
     }
   }, [messages]);
@@ -636,12 +620,12 @@ export default function ChatRoomScreen() {
 
         await loadMessages(false, false);
       } else {
-        console.error("Failed to send message:", result.message);
+        console.error("❌ [GroupRoom] Send failed:", result.message);
         Alert.alert('发送失败', result.message || '消息发送失败，请重试');
         setInputText(messageText);
       }
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("❌ [GroupRoom] Send error");
       Alert.alert('发送失败', '网络错误，请重试');
       setInputText(messageText);
     }
@@ -743,18 +727,18 @@ export default function ChatRoomScreen() {
 
             await loadMessages(false, false);
           } else {
-            console.error("❌ [Pick Image] Failed to send image:", apiResult.message);
+            console.error("❌ [GroupRoom] Image send failed");
             Alert.alert('发送失败', apiResult.message || '图片发送失败，请重试');
           }
         } catch (error: any) {
-          console.error('Failed to send image', error);
+          console.error('❌ [GroupRoom] Image error');
           Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
           setIsUploadingImage(false);
         }
       }
     } catch (error) {
-      console.error('选择图片错误:', error);
+      console.error('❌ [GroupRoom] Pick image error');
       Alert.alert('选择失败', '选择图片时出错');
     }
   };
@@ -826,14 +810,14 @@ export default function ChatRoomScreen() {
             Alert.alert('发送失败', apiResult.message || '视频发送失败，请重试');
           }
         } catch (error: any) {
-          console.error('Video upload error:', error);
+          console.error('❌ [GroupRoom] Video upload error');
           Alert.alert('发送失败', error.message || '网络错误，请重试');
         } finally {
           setIsUploadingImage(false);
         }
       }
     } catch (error) {
-      console.error('Video picker error:', error);
+      console.error('❌ [GroupRoom] Video picker error');
       Alert.alert('选择失败', '选择视频时出错');
     }
   };
@@ -898,40 +882,23 @@ export default function ChatRoomScreen() {
 
   // ✅ CRITICAL FIX: Define handleGoBack BEFORE any conditional returns
   const handleGoBack = useCallback(() => {
-    console.log('🔙 [Back] Button clicked');
-
-    // 🔑 检查导航堆栈
     const state = navigation.getState();
-    console.log('🔙 [Back] Navigation Stack:');
-    state.routes.forEach((route: any, index: number) => {
-      console.log(`  [${index}] ${route.name} ${index === state.index ? '← CURRENT' : ''}`);
-    });
-
     const currentRouteName = state.routes[state.index].name;
     const currentIndex = state.index;
 
-    // 🔑 关键修复：如果下一个屏幕也是 ChatRoom，连续 pop 两次
     if (currentIndex > 0) {
       const previousRoute = state.routes[currentIndex - 1];
-      console.log(`🔙 [Back] Previous route: ${previousRoute.name}`);
-
       if (previousRoute.name === currentRouteName) {
-        // 下一个也是相同的屏幕，pop 两次直接回到 ChatList
-        console.log('🔙 [Back] ⚠️ Duplicate route detected! Popping twice...');
-        navigation.pop(2); // 一次性 pop 两个屏幕
+        navigation.pop(2);
       } else {
-        console.log('🔙 [Back] Normal pop');
         navigation.pop();
       }
     } else {
-      console.log('🔙 [Back] At top, navigating to ChatList');
       navigation.navigate('ChatList');
     }
   }, [navigation]);
 
-  // ✅ CRITICAL FIX: Wrap disableSearch to ensure state cleanup
   const handleDisableSearch = useCallback(() => {
-    console.log('❌ [Search] Disabling search mode');
     disableSearch();
     setSearchQuery('');
   }, [disableSearch, setSearchQuery]);
@@ -979,7 +946,7 @@ export default function ChatRoomScreen() {
             Alert.alert('发送失败', result.message || '名片发送失败，请重试');
           }
         } catch (error) {
-          console.error('Error sending contact card:', error);
+          console.error('❌ [GroupRoom] Contact card error');
           Alert.alert('发送失败', '网络错误，请重试');
         }
       },

@@ -154,7 +154,7 @@ export default function GroupCallScreen() {
           playThroughEarpieceAndroid: true, // 默认使用听筒
           staysActiveInBackground: true,
         });
-        console.log('🔊 [GroupCall] 音频模式初始化成功');
+        // 收到通话结束信号
         
         setLoadingStatus('正在获取麦克风权限...');
         

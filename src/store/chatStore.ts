@@ -169,11 +169,7 @@ export const useChatStore = create<ChatStore>()(
             ...processedChat, // Use processedChat here
           };
 
-          console.log(`📌 [chatStore] addChat - updating "${processedChat.name}":`, {
-            oldTimestamp: updatedChatList[existingIndex].timestamp,
-            newTimestamp: processedChat.timestamp,
-            isGroup: processedChat.isGroup,
-          });
+          // Chat updated
 
           // ✅ Move updated chat to top of list
           const [movedChat] = updatedChatList.splice(existingIndex, 1);
@@ -182,7 +178,7 @@ export const useChatStore = create<ChatStore>()(
           set({ chatList: updatedChatList });
         } else {
           // Add new chat to the top of the list
-          console.log(`➕ [chatStore] addChat - adding new "${processedChat.name}"`);
+          // New chat added
           set({
             chatList: [processedChat, ...currentChatList], // Use processedChat here
           });
@@ -198,11 +194,7 @@ export const useChatStore = create<ChatStore>()(
           return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
         });
 
-        console.log('📊 [chatStore] setChats - sorted order:', sortedChats.map(c => ({
-          name: c.name,
-          timestamp: c.timestamp,
-          isGroup: c.isGroup,
-        })));
+        // Chats sorted and set
 
         set({ chatList: sortedChats });
       },
