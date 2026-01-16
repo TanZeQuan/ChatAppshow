@@ -855,6 +855,20 @@ export default function GroupSettingScreen() {
 
     // Leave group
     const handleLeaveGroup = useCallback(() => {
+        // ✅ 检查当前用户是否是管理员
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        
+        // ✅ 如果是管理员且是最后一位管理员，阻止退出
+        if (isAdmin && adminIds.length === 1) {
+            Alert.alert(
+                '无法退出',
+                '你是群里唯一的管理员，请先将其他成员设为管理员后再退出群聊。',
+                [{ text: '确定', style: 'default' }]
+            );
+            return;
+        }
+        
         Alert.alert(
             '退出群聊',
             `确定要退出群聊 "${chatName}" 吗？`,
@@ -904,7 +918,7 @@ export default function GroupSettingScreen() {
                 },
             ]
         );
-    }, [chatName, chatId, currentUserId, removeChat, navigation]);
+    }, [chatName, chatId, currentUserId, removeChat, navigation, groupChat?.adminIds]);
 
     // Dismiss group
     const handleDismissGroup = useCallback(() => {
