@@ -403,6 +403,20 @@ export default function CallScreen() {
     }
 
     const initCall = async () => {
+      // 🔊 初始化音频模式 - 确保音频可以正常播放
+      // 这一步对于 Android 和 iOS 都非常重要，必须在通话开始前设置
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,           // iOS: 允许录音
+          playsInSilentModeIOS: true,         // iOS: 静音模式下也能播放
+          playThroughEarpieceAndroid: true,   // Android: 使用听筒播放
+          staysActiveInBackground: true,      // 保持后台音频活跃
+        });
+        console.log('🔊 [CallScreen] 音频模式初始化成功');
+      } catch (audioError) {
+        console.warn('⚠️ [CallScreen] 音频模式初始化失败:', audioError);
+      }
+
       if (!isIncoming) {
         // =====================================================
         // 主叫方 (Caller) 流程
@@ -632,10 +646,14 @@ export default function CallScreen() {
         }
       }
 
-      // WebRTC 应答
-      WebSocketManager.callService?.answerCall();
-      // 发送信令给对方，告诉他我接了
-      sendCallSignal('answer');
+      // WebRTC 应答 - answerCall() 内部会：
+      // 1. 初始化本地音频流
+      // 2. 创建 PeerConnection 并添加音频轨道
+      // 3. 设置 remote description (来电的 offer)
+      // 4. 创建并发送 answer (包含 SDP)
+      // ⚠️ 注意：不要再调用 sendCallSignal('answer')，因为 answerCall 内部已经发送了带 SDP 的 answer
+      // 重复发送会导致主叫方收到一个空的 answer，覆盖正确的 SDP，导致无法建立音频连接
+      await WebSocketManager.callService?.answerCall();
 
       // 注意：这里不直接 startTimer，而是等待 'Connected' 事件触发 startTimer
     } catch (e) {
@@ -878,7 +896,8 @@ export default function CallScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#202020' },
-  hiddenAudioView: { width: 0, height: 0, position: 'absolute' },
+  // 🔊 RTCView 必须有尺寸才能激活音频播放，width/height 为 0 会导致没声音
+  hiddenAudioView: { width: 1, height: 1, position: 'absolute', opacity: 0 },
   contentContainer: { flex: 1, justifyContent: 'space-between' },
   topSection: { alignItems: 'center', marginTop: 100 },
   avatar: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#4A4A4A', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },

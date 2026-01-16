@@ -769,9 +769,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#202020', 
   },
   // 🔊 隐藏的 RTCView - 用于激活远程音频流播放（必须渲染才能有声音）
+  // ⚠️ 重要：width/height 必须至少为 1，设为 0 会导致音频流不被激活！
   hiddenAudioView: {
-    width: 0,
-    height: 0,
+    width: 1,
+    height: 1,
     position: 'absolute',
     opacity: 0,
   },

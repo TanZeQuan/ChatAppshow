@@ -442,7 +442,7 @@ export interface GroupMemberParams {
   chat_id: string;
   user_id: string;  // Admin's ID (or user's own ID for 'leave')
   action: "add" | "remove" | "permission" | "leave";
-  target_id?: string;  // Required for add/remove/permission
+  target_id?: string | string[];  // Required for add/remove/permission - MUST be an ARRAY!
   permission?: 1 | 2;  // Required for 'permission' action: 1 = Member, 2 = Admin
 }
 
@@ -467,9 +467,20 @@ export const manageGroupMember = async (params: GroupMemberParams) => {
       user_id: params.user_id,
     };
 
-    // Add target_id for add/remove/permission actions
-    if (params.target_id) {
-      dataPayload.target_id = params.target_id;
+    // Add target_id for add/remove/permission actions (REQUIRED for these actions)
+    // ⚠️ IMPORTANT: target_id MUST be an ARRAY, even for single user operations!
+    if (params.action === 'add' || params.action === 'remove' || params.action === 'permission') {
+      if (!params.target_id) {
+        console.error("❌ manageGroupMember: target_id is REQUIRED for action:", params.action);
+        return {
+          success: false,
+          message: `target_id is required for ${params.action} action`,
+        };
+      }
+      // ✅ Convert to array if it's a single string
+      const targetIdArray = Array.isArray(params.target_id) ? params.target_id : [params.target_id];
+      dataPayload.target_id = targetIdArray;
+      console.log("✅ target_id converted to array:", targetIdArray);
     }
 
     // Add permission for 'permission' action
@@ -481,6 +492,7 @@ export const manageGroupMember = async (params: GroupMemberParams) => {
       endpoint: "/chats/group/member",
       payload: dataPayload,
       action: params.action,
+      target_id: dataPayload.target_id,  // ✅ Explicitly log target_id
     });
 
     formData.append("data", JSON.stringify(dataPayload));
@@ -531,7 +543,7 @@ export interface UpdateGroupParams {
   chat_id: string;
   user_id: string;
   action: "add" | "remove" | "leave";
-  target_id?: string;
+  target_id?: string | string[];  // ✅ Can be string or array - will be converted to array
 }
 
 /**

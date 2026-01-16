@@ -206,6 +206,12 @@ export class UnifiedCallService {
     // answer 优先 TCP，备用 WebSocket
     this.sendSignal('answer', { sdp: answer }, this.targetUserId);
     console.log('✅ [UnifiedCall] Answer 已发送');
+
+    // 🔊 被叫方发送 answer 后，立即更新状态为 Connected
+    // 这样 UI 可以开始计时，远程音频流会在 ontrack 事件中接收
+    if (this.mode === 'single') {
+      this.onStatusChange('Connected');
+    }
   }
 
   /**

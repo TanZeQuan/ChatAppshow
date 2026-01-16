@@ -278,7 +278,16 @@ export default function GroupMemberList() {
                                 user_id: currentUserId,
                                 action: 'remove',
                                 target_id: memberId,
+                                memberId_type: typeof memberId,
+                                memberId_length: memberId?.length,
                             });
+
+                            // ✅ Validate memberId before calling API
+                            if (!memberId || memberId.trim() === '') {
+                                console.error('❌ [GroupMemberList KickMember] memberId is empty!');
+                                Alert.alert('错误', '无法获取成员ID，请重试');
+                                return;
+                            }
 
                             // Call backend API
                             const result = await updateGroup({
