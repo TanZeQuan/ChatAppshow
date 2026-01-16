@@ -226,7 +226,17 @@ export const useChatStore = create<ChatStore>()(
             case 5: // Video
               formattedLastMessage = '[视频]';
               break;
-            default: // Text message or unknown type
+            default:
+              // ✅ 检测名片消息（即使 type 不是 4，也通过内容识别）
+              if (message.text && message.text.startsWith('{') && message.text.includes('userId') && message.text.includes('userName')) {
+                try {
+                  const parsed = JSON.parse(message.text);
+                  if (parsed.userId && parsed.userName) {
+                    formattedLastMessage = '[个人名片]';
+                    break;
+                  }
+                } catch (e) {}
+              }
               formattedLastMessage = message.text || '新消息';
           }
 

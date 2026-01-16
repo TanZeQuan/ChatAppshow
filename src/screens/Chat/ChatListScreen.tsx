@@ -40,6 +40,7 @@ const scaleHeight = (size: number) => (Dimensions.get("window").height / 812) * 
 const formatLastMessagePreview = (message: string, type: number | undefined): string => {
   if (!message && type === undefined) return '开始聊天吧~';
   if (message && typeof message === 'string') {
+    // 检测语音/视频通话
     if (message.includes('SINGLE_VOICE_CALL') || message.includes('GROUP_VOICE_CALL')) return '[语音通话]';
     if (message.startsWith('{') && message.includes('type')) {
       try {
@@ -47,6 +48,15 @@ const formatLastMessagePreview = (message: string, type: number | undefined): st
         if (parsed.type) {
           if (parsed.type.includes('VOICE_CALL')) return '[语音通话]';
           if (parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
+        }
+      } catch (e) {}
+    }
+    // ✅ 检测名片消息（即使 type 不是 4，也通过内容识别）
+    if (message.startsWith('{') && message.includes('userId') && message.includes('userName')) {
+      try {
+        const parsed = JSON.parse(message);
+        if (parsed.userId && parsed.userName) {
+          return '[个人名片]';
         }
       } catch (e) {}
     }
@@ -286,6 +296,17 @@ export default function ChatListScreen() {
             }
             const lastMessageText = lastMsgObj?.message || chat.last_message || '';
             const lastMessageType = lastMsgObj?.type || chat.last_message_type;
+            
+            // ✅ 调试：检查名片消息的 type
+            if (lastMessageType === 4 || (lastMessageText && lastMessageText.includes('userId'))) {
+              console.log('🎴 [ChatList] 检测到可能的名片消息:', {
+                chatName: chat.name,
+                lastMessageText: lastMessageText?.substring(0, 50),
+                lastMessageType,
+                lastMsgObjType: lastMsgObj?.type,
+                chatLastMessageType: chat.last_message_type,
+              });
+            }
 
             // ✅ 完全依赖 API 返回的时间，优先使用 message.created_at
             const messageTimestamp = lastMsgObj?.created_at;
