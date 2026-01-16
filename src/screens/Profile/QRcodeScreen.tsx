@@ -127,11 +127,46 @@ END:VCARD`;
         if (!permission) return <View style={styles.container}><Text style={styles.loadingText}>正在请求相机权限...</Text></View>;
         if (!permission.granted) {
             return (
-                <View style={[styles.container, styles.permissionContainer]}>
-                    <Text style={styles.permissionText}>需要相机权限才能扫描二维码</Text>
-                    <Button onPress={requestPermission} title="授予权限" />
-                    <Button onPress={() => setShowScanner(false)} title="返回" color="#ff5555" />
-                </View>
+                <LinearGradient colors={['#4a5568', '#2d3748']} style={styles.container}>
+                    <StatusBar barStyle="light-content" />
+                    <SafeAreaView style={styles.safeArea}>
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <TouchableOpacity style={styles.backButton} onPress={() => setShowScanner(false)}>
+                                <Ionicons name="arrow-back" size={24} color="white" />
+                            </TouchableOpacity>
+                            <Text style={styles.title}>扫码二维码</Text>
+                            <View style={styles.placeholder} />
+                        </View>
+                        
+                        {/* Permission Content */}
+                        <View style={styles.permissionContent}>
+                            <View style={styles.permissionIconContainer}>
+                                <Ionicons name="camera-outline" size={64} color="#fbbf24" />
+                            </View>
+                            <Text style={styles.permissionTitle}>需要相机权限</Text>
+                            <Text style={styles.permissionDescription}>
+                                扫描二维码需要使用您的相机，{'\n'}请授予相机访问权限
+                            </Text>
+                            
+                            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+                                <LinearGradient 
+                                    colors={['#fcd34d', '#fbbf24']} 
+                                    style={styles.permissionButtonGradient}
+                                >
+                                    <Text style={styles.permissionButtonText}>授予权限</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={styles.permissionSecondaryButton} 
+                                onPress={() => setShowScanner(false)}
+                            >
+                                <Text style={styles.permissionSecondaryText}>返回</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </SafeAreaView>
+                </LinearGradient>
             );
         }
 
@@ -264,7 +299,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     title: {
-        color: colors.text.black, // Used standard color
+        color: 'white', // ✅ 改为白色
         fontSize: typography.fontSize18,
         fontWeight: typography.fontWeight600,
     },
@@ -390,11 +425,55 @@ const styles = StyleSheet.create({
     },
     scannerActionText: { color: 'white', fontSize: 13 },
     loadingText: { color: 'white', textAlign: 'center', margin: 20 },
-    permissionContainer: {
+    // 新的权限页面样式
+    permissionContent: {
+        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#2d3748'
+        paddingHorizontal: 40,
     },
-    permissionText: { color: 'white', textAlign: 'center', marginBottom: 20 },
+    permissionIconContainer: {
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: 'rgba(251, 191, 36, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 32,
+    },
+    permissionTitle: {
+        color: 'white',
+        fontSize: 24,
+        fontWeight: '600',
+        marginBottom: 12,
+        textAlign: 'center',
+    },
+    permissionDescription: {
+        color: 'rgba(255, 255, 255, 0.7)',
+        fontSize: 15,
+        textAlign: 'center',
+        lineHeight: 22,
+        marginBottom: 40,
+    },
+    permissionButton: {
+        width: '100%',
+        marginBottom: 16,
+    },
+    permissionButtonGradient: {
+        paddingVertical: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    permissionButtonText: {
+        color: '#1F2937',
+        fontSize: 16,
+        fontWeight: '600',
+    },
+    permissionSecondaryButton: {
+        paddingVertical: 12,
+    },
+    permissionSecondaryText: {
+        color: 'rgba(255, 255, 255, 0.6)',
+        fontSize: 15,
+    },
 });

@@ -124,15 +124,46 @@ export default function ScanGroupScreen() {
 
   if (!permission.granted) {
     return (
-      <View style={styles.permissionContainer}>
-        <Text style={styles.permissionText}>需要相机权限来扫描二维码</Text>
-        <TouchableOpacity style={styles.btn} onPress={requestPermission}>
-          <Text style={styles.btnText}>授权相机</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, styles.btnCancel]} onPress={() => navigation.goBack()}>
-          <Text style={[styles.btnText, { color: '#ef4444' }]}>返回</Text>
-        </TouchableOpacity>
-      </View>
+      <LinearGradient colors={['#4a5568', '#2d3748']} style={styles.container}>
+        <StatusBar barStyle="light-content" />
+        <SafeAreaView style={styles.overlay}>
+          {/* Header */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.iconButton} onPress={() => navigation.goBack()}>
+              <Ionicons name="arrow-back" size={24} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.title}>扫描群二维码</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          
+          {/* Permission Content */}
+          <View style={styles.permissionContent}>
+            <View style={styles.permissionIconContainer}>
+              <Ionicons name="camera-outline" size={64} color="#fbbf24" />
+            </View>
+            <Text style={styles.permissionTitle}>需要相机权限</Text>
+            <Text style={styles.permissionDescription}>
+              扫描群二维码需要使用您的相机，{'\n'}请授予相机访问权限
+            </Text>
+            
+            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
+              <LinearGradient 
+                colors={['#fcd34d', '#fbbf24']} 
+                style={styles.permissionButtonGradient}
+              >
+                <Text style={styles.permissionButtonText}>授予权限</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={styles.permissionSecondaryButton} 
+              onPress={() => navigation.goBack()}
+            >
+              <Text style={styles.permissionSecondaryText}>返回</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
     );
   }
 
@@ -319,5 +350,56 @@ const styles = StyleSheet.create({
   actionText: {
     color: 'white',
     fontSize: 12,
+  },
+  // 新的权限页面样式
+  permissionContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  permissionIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: 'rgba(251, 191, 36, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  permissionTitle: {
+    color: 'white',
+    fontSize: 24,
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  permissionDescription: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 40,
+  },
+  permissionButton: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  permissionButtonGradient: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  permissionButtonText: {
+    color: '#1F2937',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  permissionSecondaryButton: {
+    paddingVertical: 12,
+  },
+  permissionSecondaryText: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 15,
   },
 });

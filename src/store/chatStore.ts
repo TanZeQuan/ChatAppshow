@@ -213,12 +213,21 @@ export const useChatStore = create<ChatStore>()(
           const chat = updatedChatList[chatIndex];
 
           let formattedLastMessage = '';
-          if (message.type === 2) { // Voice message
-            formattedLastMessage = '【语音】';
-          } else if (message.type === 3) { // Image/File message
-            formattedLastMessage = '【图片】';
-          } else { // Default to text message or if type is not recognized
-            formattedLastMessage = message.text;
+          switch (message.type) {
+            case 2: // Voice message
+              formattedLastMessage = '[语音消息]';
+              break;
+            case 3: // Image/File message
+              formattedLastMessage = '[图片]';
+              break;
+            case 4: // Contact card
+              formattedLastMessage = '[个人名片]';
+              break;
+            case 5: // Video
+              formattedLastMessage = '[视频]';
+              break;
+            default: // Text message or unknown type
+              formattedLastMessage = message.text || '新消息';
           }
 
           // Update chat
