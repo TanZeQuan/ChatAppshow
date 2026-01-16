@@ -370,6 +370,20 @@ export default function CallScreen() {
     }
 
     const initCall = async () => {
+      // 🔊 初始化音频模式 - 确保音频可以正常播放
+      // 这一步对于 Android 和 iOS 都非常重要，必须在通话开始前设置
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,           // iOS: 允许录音
+          playsInSilentModeIOS: true,         // iOS: 静音模式下也能播放
+          playThroughEarpieceAndroid: true,   // Android: 使用听筒播放
+          staysActiveInBackground: true,      // 保持后台音频活跃
+        });
+        console.log('🔊 [CallScreen] 音频模式初始化成功');
+      } catch (audioError) {
+        console.warn('⚠️ [CallScreen] 音频模式初始化失败:', audioError);
+      }
+
       if (!isIncoming) {
         // ... Caller Logic ...
         console.log('[CallScreen] 发起呼叫:', remoteUserId);

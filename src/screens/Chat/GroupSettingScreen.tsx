@@ -17,7 +17,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readChatMessages, updateGroup, updateGroupImage, updateGroupName, createPrivateChat} from '../../api/Chat';
+import { createPrivateChat, readChatMessages, updateGroup, updateGroupImage, updateGroupName } from '../../api/Chat';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
 import WebSocketManager from '../../services/WebSocketManager';
@@ -40,7 +40,6 @@ interface Member {
     name: string;
     avatar?: string;
     phone?: string;
-    isAdmin?: boolean; // true if isadmin === 2
 }
 
 export default function GroupSettingScreen() {
@@ -49,30 +48,50 @@ export default function GroupSettingScreen() {
     const params = route.params as RouteParams;
     const { chatId } = params;
 
-    const { removeChat, getChatById, addChat, clearChat } = useChatStore();
+    const { removeChat, getChatById, addChat, clearChat, chatList } = useChatStore();
     const { user: currentUser, onlineUsers } = useUserStore();
     const currentUserId = currentUser?.id || 'me';
 
-    const groupChat = getChatById(chatId);
+    // ✅ 使用本地 state 管理 groupChat，确保 API 更新后 UI 立即响应
+    const [groupChat, setGroupChat] = useState<any>(() => getChatById(chatId));
     const chatName = groupChat?.name || params.chatName || '';
 
-    // Memoized members list
+    // Memoized members list with sorting: 我 > 管理员 > ABC排序的普通成员
     const allMembers: Member[] = useMemo(() => {
-        const storeMembers = groupChat?.members || [];
+        let members = [...(groupChat?.members || [])];
         const storeMemberIds = groupChat?.memberIds || [];
+        const adminIds = groupChat?.adminIds || [];
 
+        // Include current user if not in members list
         if (currentUser && !storeMemberIds.includes(currentUserId)) {
-            return [
-                ...storeMembers,
-                {
-                    id: currentUserId,
-                    name: currentUser.name || '我',
-                    avatar: currentUser.avatar || '',
-                }
-            ];
+            members.push({
+                id: currentUserId,
+                name: currentUser.name || '我',
+                avatar: currentUser.avatar || '',
+            });
         }
-        return storeMembers;
-    }, [groupChat?.members, groupChat?.memberIds, currentUser, currentUserId]);
+        
+        // Sort members: 我 > 管理员 > ABC排序的普通成员
+        members.sort((a, b) => {
+            const aIsCurrentUser = a.id === currentUserId;
+            const bIsCurrentUser = b.id === currentUserId;
+            const aIsAdmin = adminIds.includes(a.id);
+            const bIsAdmin = adminIds.includes(b.id);
+            
+            // 1. 当前用户（我）排在最前面
+            if (aIsCurrentUser && !bIsCurrentUser) return -1;
+            if (!aIsCurrentUser && bIsCurrentUser) return 1;
+            
+            // 2. 管理员排在普通成员前面
+            if (aIsAdmin && !bIsAdmin) return -1;
+            if (!aIsAdmin && bIsAdmin) return 1;
+            
+            // 3. 同级别按名字 ABC 排序（不区分大小写）
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase(), 'zh-CN');
+        });
+        
+        return members;
+    }, [groupChat?.members, groupChat?.memberIds, groupChat?.adminIds, currentUser, currentUserId]);
 
     const allMemberIds = useMemo(() => allMembers.map(member => member.id), [allMembers]);
 
@@ -144,7 +163,7 @@ export default function GroupSettingScreen() {
         }
     }, [currentUserId]);
 
-    // ✅ Load group members from API - now includes name, image, and isadmin directly!
+    // ✅ Load group members from API
     const loadGroupMembers = useCallback(async () => {
         if (!currentUserId || !chatId) return;
 
@@ -159,13 +178,16 @@ export default function GroupSettingScreen() {
             });
 
             if (result.success && result.data?.group && Array.isArray(result.data.group)) {
-                const groupMembers = result.data.group; // Array with user_id, name, image, isadmin
+                const groupMembers = result.data.group;
                 console.log('📥 [GroupSetting] Got group members:', groupMembers);
+                
+                // ✅ 调试：打印每个成员的 isadmin 值
+                groupMembers.forEach((m: any, i: number) => {
+                    console.log(`📥 [GroupSetting] Member ${i}: user_id=${m.user_id}, name=${m.name}, isadmin=${m.isadmin}, type=${typeof m.isadmin}`);
+                });
 
-                // ✅ Build members array directly from API response - no additional API calls needed!
+                // ✅ Build members array directly from API response
                 const membersInfo: Member[] = groupMembers.map((member: any) => {
-                    const isAdmin = member.isadmin === 2; // isadmin: 2 means owner/admin, 1 means normal member
-
                     // ✅ Use ensureFullImageUrl to process avatar URL
                     const memberAvatar = member.image || '';
                     const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
@@ -174,25 +196,18 @@ export default function GroupSettingScreen() {
                         id: member.user_id,
                         name: member.name || '未知',
                         avatar: fullAvatarUrl,
-                        isAdmin: isAdmin,
                     };
                 });
 
-                // ✅ Extract owner ID (isadmin === 2)
-                const ownerMember = groupMembers.find((m: any) => m.isadmin === 2);
-                const ownerId = ownerMember?.user_id || '';
-
-                // ✅ Extract all admins (for now, only owner is admin, but could have multiple in future)
-                const adminIds = groupMembers
-                    .filter((m: any) => m.isadmin === 2)
-                    .map((m: any) => m.user_id);
+                // ✅ Extract admin IDs (isadmin === 2 means admin in backend)
+                // 支持字符串或数字类型的 isadmin
+                const adminMembers = groupMembers.filter((m: any) => m.isadmin === 2 || m.isadmin === '2');
+                const adminIds = adminMembers.map((m: any) => m.user_id);
 
                 console.log('✅ [GroupSetting] Processed member info:', {
                     total: membersInfo.length,
-                    admins: membersInfo.filter(m => m.isAdmin).length,
-                    members: membersInfo.filter(m => !m.isAdmin).length,
-                    ownerId: ownerId,
                     adminIds: adminIds,
+                    adminCount: adminIds.length,
                 });
 
                 // ✅ Get group info (name and image)
@@ -211,20 +226,36 @@ export default function GroupSettingScreen() {
                 // ✅ Save group image to state
                 setGroupImage(fullGroupImageUrl);
 
-                // ✅ Update chatStore with complete member info and group info
+                // ✅ 构建更新后的 chat 对象
                 const currentChat = getChatById(chatId);
-                if (currentChat) {
-                    addChat({
-                        ...currentChat,
-                        name: groupName,
-                        avatar: fullGroupImageUrl,
-                        members: membersInfo,
-                        memberIds: groupMembers.map((m: any) => m.user_id),
-                        ownerId: ownerId,  // ✅ Save owner ID
-                        admins: adminIds,  // ✅ Save admin IDs
-                    });
-                    console.log('✅ [GroupSetting] Saved members and group info to chatStore with ownerId:', ownerId);
-                }
+                const updatedChat = {
+                    type: currentChat?.type || 2,  // 2 = 群聊
+                    lastMessage: currentChat?.lastMessage || '',
+                    timestamp: currentChat?.timestamp || new Date().toISOString(),
+                    unreadCount: currentChat?.unreadCount || 0,
+                    online: currentChat?.online || false,
+                    ...(currentChat || {}),
+                    id: chatId,  // ✅ 确保 id 正确
+                    name: groupName,
+                    avatar: fullGroupImageUrl,
+                    members: membersInfo,
+                    memberIds: groupMembers.map((m: any) => m.user_id),
+                    adminIds: adminIds,  // 支持多管理员
+                    isGroup: true,
+                };
+                
+                console.log('🔍 [GroupSetting] updatedChat:', {
+                    id: updatedChat.id,
+                    adminIds: updatedChat.adminIds,
+                    adminCount: updatedChat.adminIds?.length,
+                });
+                
+                // ✅ 更新本地 state（立即响应 UI）
+                setGroupChat(updatedChat);
+                
+                // ✅ 更新 store（持久化）
+                addChat(updatedChat);
+                console.log('✅ [GroupSetting] Updated local state and store with adminIds:', adminIds);
             } else {
                 console.warn('⚠️ [GroupSetting] No group members in API response');
             }
@@ -338,30 +369,23 @@ export default function GroupSettingScreen() {
         );
     }, [chatId, chatName, clearChat]);
 
-    // Permission check
+    // Permission check - 只有管理员可以踢人
     const checkKickPermission = useCallback((targetMemberId: string) => {
-        const isOwner = groupChat?.ownerId === currentUserId;
-        const isAdmin = groupChat?.admins?.includes(currentUserId);
-        const isTargetOwner = groupChat?.ownerId === targetMemberId;
-        const isTargetAdmin = groupChat?.admins?.includes(targetMemberId);
-        if (isOwner) {
-            if (targetMemberId === currentUserId) {
-                return { hasPermission: false, message: '群主不能踢出自己' };
-            }
-            return { hasPermission: true, message: '' };
-        }
-
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        
         if (isAdmin) {
-            if (isTargetOwner || isTargetAdmin) {
-                return { hasPermission: false, message: '管理员不能踢出群主或其他管理员' };
-            }
             if (targetMemberId === currentUserId) {
-                return { hasPermission: false, message: '不能踢出自己' };
+                return { hasPermission: false, message: '管理员不能踢出自己' };
+            }
+            // 管理员不能踢其他管理员
+            if (adminIds.includes(targetMemberId)) {
+                return { hasPermission: false, message: '不能踢出其他管理员' };
             }
             return { hasPermission: true, message: '' };
         }
 
-        return { hasPermission: false, message: '只有群主或管理员可以踢人' };
+        return { hasPermission: false, message: '只有管理员可以踢人' };
     }, [groupChat, currentUserId]);
 
     // Kick member
@@ -384,6 +408,21 @@ export default function GroupSettingScreen() {
                     style: 'destructive',
                     onPress: async () => {
                         try {
+                            console.log('🔄 [GroupSetting KickMember] Calling updateGroup API with:', {
+                                chat_id: chatId,
+                                user_id: currentUserId,
+                                action: 'remove',
+                                target_id: memberId,
+                                memberId_type: typeof memberId,
+                                memberId_length: memberId?.length,
+                            });
+
+                            // ✅ Validate memberId before calling API
+                            if (!memberId || memberId.trim() === '') {
+                                console.error('❌ [GroupSetting KickMember] memberId is empty!');
+                                Alert.alert('错误', '无法获取成员ID，请重试');
+                                return;
+                            }
 
                             // Call backend API
                             const result = await updateGroup({
@@ -621,16 +660,17 @@ export default function GroupSettingScreen() {
 
     // Add members
     const handleAddMembers = useCallback(() => {
-        // ✅ Check if current user is owner
-        const isOwner = groupChat?.ownerId === currentUserId;
+        // ✅ Check if current user is admin
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
         console.log('🔐 [AddMembers] Permission check:', {
             currentUserId,
-            ownerId: groupChat?.ownerId,
-            isOwner,
+            adminIds: adminIds,
+            isAdmin,
         });
 
-        if (!isOwner) {
-            Alert.alert('权限不足', '只有群主才能添加成员');
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能添加成员');
             return;
         }
 
@@ -648,11 +688,12 @@ export default function GroupSettingScreen() {
             return;
         }
 
-        // ✅ Check if current user is owner
-        const isOwner = groupChat?.ownerId === currentUserId;
+        // ✅ Check if current user is admin
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
 
-        if (!isOwner) {
-            Alert.alert('权限不足', '只有群主才能修改群聊名称');
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能修改群聊名称');
             return;
         }
 
@@ -688,11 +729,12 @@ export default function GroupSettingScreen() {
 
     // Update group avatar
     const handleUpdateGroupAvatar = useCallback(async () => {
-        // ✅ Check if current user is owner
-        const isOwner = groupChat?.ownerId === currentUserId;
+        // ✅ Check if current user is admin
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
 
-        if (!isOwner) {
-            Alert.alert('权限不足', '只有群主才能修改群头像');
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能修改群头像');
             return;
         }
 
@@ -866,8 +908,10 @@ export default function GroupSettingScreen() {
 
     // Dismiss group
     const handleDismissGroup = useCallback(() => {
-        if (groupChat?.ownerId !== currentUserId) {
-            Alert.alert('权限不足', '只有群主才能解散群聊');
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能解散群聊');
             return;
         }
 
@@ -1011,11 +1055,13 @@ export default function GroupSettingScreen() {
                     </View>
                     <Text style={[styles.memberName, isCurrentUser && styles.currentUserName]} numberOfLines={1}>
                         {isCurrentUser ? '我' : member.name}
-                        {member.id === groupChat?.ownerId && <Text style={styles.ownerLabel}> (群主)</Text>}
-                        {member.isAdmin && member.id !== groupChat?.ownerId && (
-                            <Text style={styles.adminLabel}> (管理员)</Text>
-                        )}
                     </Text>
+                    {/* ✅ 管理员标签 - 显示在名字下面，与 GroupMemberList 样式一致 */}
+                    {(groupChat?.adminIds || []).includes(member.id) && (
+                        <View style={styles.adminTagSmall}>
+                            <Text style={styles.adminTagText}>管理员</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
                 {/* ✅ Kick button outside avatar container */}
                 {showKickBadge && (
@@ -1128,16 +1174,19 @@ export default function GroupSettingScreen() {
                             </TouchableOpacity>
                             <View style={styles.groupInfo}>
                                 <Text style={styles.groupName}>{chatName}</Text>
-                                <Text style={styles.groupMemberCount}>
-                                    {allMembers.length} 位成员
-                                    {allMembers.filter(m => m.isAdmin).length > 0 && (
-                                        <Text style={styles.adminInfo}>
-                                            {' • '}{allMembers.filter(m => m.isAdmin).length} 位管理员
-                                        </Text>
-                                    )}
-                                </Text>
+                                <View style={styles.groupInfoTags}>
+                                    <View style={styles.groupInfoTag}>
+                                        <Ionicons name="people-outline" size={16} color={colors.text.gray} />
+                                        <Text style={styles.groupInfoTagText}>{allMembers.length} 成员</Text>
+                                    </View>
+                                    <View style={styles.groupInfoTagDivider} />
+                                    <View style={styles.groupInfoTag}>
+                                        <Ionicons name="shield-outline" size={16} color={colors.functional.yellow} />
+                                        <Text style={styles.groupInfoTagText}>{(groupChat?.adminIds || []).length} 管理员</Text>
+                                    </View>
+                                </View>
                             </View>
-                            {groupChat?.ownerId === currentUserId && (
+                            {(groupChat?.adminIds || []).includes(currentUserId) && (
                                 <TouchableOpacity style={styles.editButton} onPress={() => setShowGroupNameModal(true)}>
                                     <Ionicons name="create-outline" size={20} color={colors.text.gray} />
                                 </TouchableOpacity>
@@ -1150,11 +1199,11 @@ export default function GroupSettingScreen() {
                     <Text style={styles.sectionTitle}>群成员</Text>
                     <View style={styles.card}>
                         <View style={styles.gridContainer}>
-                            {/* ✅ Show max 7 members (to make room for add button if owner) or 8 members - 2 rows only */}
-                            {allMembers.slice(0, groupChat?.ownerId === currentUserId ? 7 : 8).map((member, index) =>
+                            {/* ✅ Show max 7 members (to make room for add button if admin) or 8 members - 2 rows only */}
+                            {allMembers.slice(0, (groupChat?.adminIds || []).includes(currentUserId) ? 7 : 8).map((member, index) =>
                                 renderMemberItem(member, index)
                             )}
-                            {groupChat?.ownerId === currentUserId && renderAddMemberButton()}
+                            {(groupChat?.adminIds || []).includes(currentUserId) && renderAddMemberButton()}
                         </View>
                         <TouchableOpacity
                             style={styles.viewMoreBtn}
@@ -1269,7 +1318,7 @@ export default function GroupSettingScreen() {
                             <Text style={styles.dangerButtonText}>退出群聊</Text>
                         </TouchableOpacity>
 
-                        {groupChat?.ownerId === currentUserId && (
+                        {(groupChat?.adminIds || []).includes(currentUserId) && (
                             <TouchableOpacity
                                 style={styles.dangerButton1}
                                 onPress={handleDismissGroup}
@@ -1387,13 +1436,14 @@ const styles = StyleSheet.create({
     gridContainer: {
         flexDirection: "row",
         flexWrap: "wrap",
-        paddingHorizontal: 30,
-        paddingVertical: 24,
+        alignItems: "center",
+        justifyContent: "flex-start",
+        marginHorizontal: 30,
+        marginTop: 15,
     },
     gridItem: {
         width: (width - 48) / 4, // ✅ 4 items per row: (width - padding*2) / 4
         alignItems: "center",
-        marginBottom: 20,
         justifyContent: 'center',
     },
     avatarContainer: {
@@ -1427,16 +1477,17 @@ const styles = StyleSheet.create({
 
     // Specific to GroupSettingScreen member display
     memberItemWrapper: {
-        width: (width - 48) / 4, // ✅ Match gridContainer padding (24 * 2 = 48)
-        marginBottom: 20,
+        width: (width - 16) / 4, // ✅ Match gridContainer paddingHorizontal (8 * 2 = 16)
+        marginBottom: 16,
         position: 'relative',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
         alignItems: 'center',
+        minHeight: 100, // ✅ 固定最小高度，确保对齐
     },
     memberItem: {
         width: '100%',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: 'flex-start',
     },
     memberAvatarContainer: {
         position: 'relative',
@@ -1471,8 +1522,19 @@ const styles = StyleSheet.create({
     },
     memberAvatarKicking: { opacity: 0.5 },
     currentUserName: { fontWeight: typography.fontWeight600, color: colors.text.black },
-    ownerLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
-    adminLabel: { fontSize: typography.fontSize11, color: colors.functional.green },
+    adminLabel: { fontSize: typography.fontSize11, color: colors.functional.yellow },
+    adminTagSmall: {
+        backgroundColor: colors.background.yellowPale,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: borders.radius4,
+        marginTop: 4,
+    },
+    adminTagText: {
+        fontSize: 9,
+        color: colors.functional.yellow,
+        fontWeight: '500' as const,
+    },
 
     addMemberButton: {
         width: 56,
@@ -1646,8 +1708,27 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize14,
         color: colors.text.gray,
     },
-    ownerInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
-    adminInfo: { fontSize: typography.fontSize12, color: colors.functional.green },
+    groupInfoTags: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 4,
+    },
+    groupInfoTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    groupInfoTagText: {
+        fontSize: typography.fontSize12,
+        color: colors.text.gray,
+    },
+    groupInfoTagDivider: {
+        width: 1,
+        height: 12,
+        backgroundColor: colors.border.light,
+        marginHorizontal: 10,
+    },
+    adminInfo: { fontSize: typography.fontSize12, color: colors.functional.yellow },
     editButton: { padding: 8 },
 
     // --- Setting Item (used for general settings) ---

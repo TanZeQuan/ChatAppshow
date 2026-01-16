@@ -13,7 +13,7 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { readChatMessages, updateGroup } from '../../api/Chat';
+import { readChatMessages, updateGroup, changeGroupMemberPermission } from '../../api/Chat';
 import { readFriends, createFriendRequest } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
 import { useChatStore } from '../../store/chatStore';
@@ -28,7 +28,6 @@ interface Member {
     name: string;
     avatar?: string;
     phone?: string;
-    isAdmin?: boolean; // true if isadmin === 2
 }
 
 export default function GroupMemberList() {
@@ -46,6 +45,7 @@ export default function GroupMemberList() {
     
     // ✅ 新增：好友列表和添加好友状态
     const [friendIds, setFriendIds] = useState<string[]>([]);
+    const [friendsLoaded, setFriendsLoaded] = useState(false);  // 追踪好友列表是否加载完成
     const [addingFriendId, setAddingFriendId] = useState<string | null>(null);
 
     useEffect(() => {
@@ -71,6 +71,8 @@ export default function GroupMemberList() {
             }
         } catch (error) {
             console.error('❌ [GroupMemberList] 加载好友列表失败:', error);
+        } finally {
+            setFriendsLoaded(true);  // 无论成功失败都标记为已加载
         }
     }, []);
 
@@ -129,7 +131,6 @@ export default function GroupMemberList() {
 
                 // Build members array from API response
                 const membersInfo: Member[] = groupMembers.map((member: any) => {
-                    const isAdmin = member.isadmin === 2;
                     const memberAvatar = member.image || '';
                     const fullAvatarUrl = ensureFullImageUrl(memberAvatar);
 
@@ -137,16 +138,13 @@ export default function GroupMemberList() {
                         id: member.user_id,
                         name: member.name || '未知',
                         avatar: fullAvatarUrl,
-                        isAdmin: isAdmin,
                     };
                 });
 
-                // Extract owner ID and admin IDs
-                const ownerMember = groupMembers.find((m: any) => m.isadmin === 2);
-                const ownerId = ownerMember?.user_id || '';
-                const adminIds = groupMembers
-                    .filter((m: any) => m.isadmin === 2)
-                    .map((m: any) => m.user_id);
+                // Extract admin IDs (isadmin === 2 means admin in backend)
+                // 支持字符串或数字类型的 isadmin
+                const adminMembers = groupMembers.filter((m: any) => m.isadmin === 2 || m.isadmin === '2');
+                const adminIds = adminMembers.map((m: any) => m.user_id);
 
                 // Get group info
                 const groupInfo = result.data.info || {};
@@ -156,7 +154,6 @@ export default function GroupMemberList() {
 
                 console.log('✅ [GroupMemberList] Processed member info:', {
                     total: membersInfo.length,
-                    ownerId: ownerId,
                     adminIds: adminIds,
                 });
 
@@ -169,12 +166,11 @@ export default function GroupMemberList() {
                         avatar: fullGroupImageUrl,
                         members: membersInfo,
                         memberIds: groupMembers.map((m: any) => m.user_id),
-                        ownerId: ownerId,
-                        admins: adminIds,
+                        adminIds: adminIds,  // 支持多管理员
                     };
                     addChat(updatedChat);
                     setGroupChat(updatedChat);
-                    console.log('✅ [GroupMemberList] Updated chat store');
+                    console.log('✅ [GroupMemberList] Updated chat store with adminIds:', adminIds);
                 }
             } else {
                 console.warn('⚠️ [GroupMemberList] No group members in API response');
@@ -193,58 +189,67 @@ export default function GroupMemberList() {
         }, [loadGroupMembers, loadFriendList])
     );
 
-    // Memoized members list
+    // Memoized members list with sorting: 我 > 管理员 > ABC排序的普通成员
     const allMembers: Member[] = useMemo(() => {
         if (!groupChat) return [];
         
-        const storeMembers = groupChat?.members || [];
+        let members = [...(groupChat?.members || [])];
         const storeMemberIds = groupChat?.memberIds || [];
+        const adminIds = groupChat?.adminIds || [];
         
         // Include current user if they are part of the chat but not explicitly in members list
-        // This logic is copied from GroupSettingScreen for consistency
         if (currentUserId && !storeMemberIds.includes(currentUserId)) {
-            const currentUser = useUserStore.getState().user; // Get current user from store
+            const currentUser = useUserStore.getState().user;
             if (currentUser) {
-                return [
-                    ...storeMembers,
-                    {
-                        id: currentUserId,
-                        name: currentUser.name || '我',
-                        avatar: currentUser.avatar || '',
-                    }
-                ];
+                members.push({
+                    id: currentUserId,
+                    name: currentUser.name || '我',
+                    avatar: currentUser.avatar || '',
+                });
             }
         }
-        return storeMembers;
+        
+        // Sort members: 我 > 管理员 > ABC排序的普通成员
+        members.sort((a, b) => {
+            const aIsCurrentUser = a.id === currentUserId;
+            const bIsCurrentUser = b.id === currentUserId;
+            const aIsAdmin = adminIds.includes(a.id);
+            const bIsAdmin = adminIds.includes(b.id);
+            
+            // 1. 当前用户（我）排在最前面
+            if (aIsCurrentUser && !bIsCurrentUser) return -1;
+            if (!aIsCurrentUser && bIsCurrentUser) return 1;
+            
+            // 2. 管理员排在普通成员前面
+            if (aIsAdmin && !bIsAdmin) return -1;
+            if (!aIsAdmin && bIsAdmin) return 1;
+            
+            // 3. 同级别按名字 ABC 排序（不区分大小写）
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase(), 'zh-CN');
+        });
+        
+        return members;
     }, [groupChat, currentUserId]);
 
     const allMemberIds = useMemo(() => allMembers.map(member => member.id), [allMembers]);
 
-    // Permission check (copied from GroupSettingScreen for consistency)
+    // Permission check - 只有管理员可以踢人
     const checkKickPermission = useCallback((targetMemberId: string) => {
-        const isOwner = groupChat?.ownerId === currentUserId;
-        const isAdmin = groupChat?.admins?.includes(currentUserId);
-        const isTargetOwner = groupChat?.ownerId === targetMemberId;
-        const isTargetAdmin = groupChat?.admins?.includes(targetMemberId);
-        
-        if (isOwner) {
-            if (targetMemberId === currentUserId) {
-                return { hasPermission: false, message: '群主不能踢出自己' };
-            }
-            return { hasPermission: true, message: '' };
-        }
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
         
         if (isAdmin) {
-            if (isTargetOwner || isTargetAdmin) {
-                return { hasPermission: false, message: '管理员不能踢出群主或其他管理员' };
-            }
             if (targetMemberId === currentUserId) {
-                return { hasPermission: false, message: '不能踢出自己' };
+                return { hasPermission: false, message: '管理员不能踢出自己' };
+            }
+            // 管理员不能踢其他管理员
+            if (adminIds.includes(targetMemberId)) {
+                return { hasPermission: false, message: '不能踢出其他管理员' };
             }
             return { hasPermission: true, message: '' };
         }
         
-        return { hasPermission: false, message: '只有群主或管理员可以踢人' };
+        return { hasPermission: false, message: '只有管理员可以踢人' };
     }, [groupChat, currentUserId]);
 
 
@@ -278,7 +283,16 @@ export default function GroupMemberList() {
                                 user_id: currentUserId,
                                 action: 'remove',
                                 target_id: memberId,
+                                memberId_type: typeof memberId,
+                                memberId_length: memberId?.length,
                             });
+
+                            // ✅ Validate memberId before calling API
+                            if (!memberId || memberId.trim() === '') {
+                                console.error('❌ [GroupMemberList KickMember] memberId is empty!');
+                                Alert.alert('错误', '无法获取成员ID，请重试');
+                                return;
+                            }
 
                             // Call backend API
                             const result = await updateGroup({
@@ -310,6 +324,133 @@ export default function GroupMemberList() {
         );
     }, [checkKickPermission, groupId, currentUserId, loadGroupMembers]);
 
+    // ✅ 设为管理员的处理函数
+    const handleSetAdmin = useCallback(async (memberId: string, memberName: string) => {
+        // 只有管理员可以设置其他管理员
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能设置其他管理员');
+            return;
+        }
+
+        // 不能设置自己
+        if (memberId === currentUserId) {
+            Alert.alert('提示', '你已经是管理员了');
+            return;
+        }
+
+        // 检查目标是否已经是管理员
+        if (adminIds.includes(memberId)) {
+            Alert.alert('提示', `${memberName} 已经是管理员了`);
+            return;
+        }
+
+        Alert.alert(
+            '设为管理员',
+            `确定要将 ${memberName} 设为管理员吗？`,
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '确定',
+                    onPress: async () => {
+                        try {
+                            console.log('🔄 [GroupMemberList] 设为管理员:', {
+                                chat_id: groupId,
+                                admin_id: currentUserId,
+                                target_id: memberId,
+                            });
+
+                            // 调用 API 将目标成员设为管理员 (permission: 2)
+                            const result = await changeGroupMemberPermission(
+                                groupId,
+                                currentUserId!,
+                                memberId,
+                                2  // 2 = 管理员
+                            );
+
+                            if (result.success) {
+                                // 重新加载群成员列表
+                                await loadGroupMembers();
+                                Alert.alert('成功', `已将 ${memberName} 设为管理员`);
+                            } else {
+                                console.error('❌ [GroupMemberList] 设为管理员失败:', result.message);
+                                Alert.alert('错误', result.message || '设为管理员失败，请重试');
+                            }
+                        } catch (error: any) {
+                            console.error('❌ [GroupMemberList] 设为管理员异常:', error);
+                            Alert.alert('错误', '设为管理员失败，请重试');
+                        }
+                    }
+                }
+            ]
+        );
+    }, [groupChat, currentUserId, groupId, loadGroupMembers]);
+
+    // ✅ 取消管理员的处理函数
+    const handleRemoveAdmin = useCallback(async (memberId: string, memberName: string) => {
+        // 只有管理员可以取消其他管理员
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);
+        if (!isAdmin) {
+            Alert.alert('权限不足', '只有管理员才能取消其他管理员');
+            return;
+        }
+
+        // 不能取消自己的管理员身份
+        if (memberId === currentUserId) {
+            Alert.alert('提示', '不能取消自己的管理员身份');
+            return;
+        }
+
+        // 检查目标是否是管理员
+        if (!adminIds.includes(memberId)) {
+            Alert.alert('提示', `${memberName} 不是管理员`);
+            return;
+        }
+
+        Alert.alert(
+            '取消管理员',
+            `确定要取消 ${memberName} 的管理员身份吗？`,
+            [
+                { text: '取消', style: 'cancel' },
+                {
+                    text: '确定',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            console.log('🔄 [GroupMemberList] 取消管理员:', {
+                                chat_id: groupId,
+                                admin_id: currentUserId,
+                                target_id: memberId,
+                            });
+
+                            // 调用 API 将目标成员设为普通成员 (permission: 1)
+                            const result = await changeGroupMemberPermission(
+                                groupId,
+                                currentUserId!,
+                                memberId,
+                                1  // 1 = 普通成员
+                            );
+
+                            if (result.success) {
+                                // 重新加载群成员列表
+                                await loadGroupMembers();
+                                Alert.alert('成功', `已取消 ${memberName} 的管理员身份`);
+                            } else {
+                                console.error('❌ [GroupMemberList] 取消管理员失败:', result.message);
+                                Alert.alert('错误', result.message || '取消管理员失败，请重试');
+                            }
+                        } catch (error: any) {
+                            console.error('❌ [GroupMemberList] 取消管理员异常:', error);
+                            Alert.alert('错误', '取消管理员失败，请重试');
+                        }
+                    }
+                }
+            ]
+        );
+    }, [groupChat, currentUserId, groupId, loadGroupMembers]);
+
     // Placeholder for add member functionality (will be fully implemented in Part 2)
     const handleAddMembers = useCallback(() => {
         navigation.navigate('AddGroupMembers', {
@@ -330,13 +471,51 @@ export default function GroupMemberList() {
         // ✅ 新增：判断是否是好友
         const isFriend = friendIds.includes(member.id);
         const isAddingThisFriend = addingFriendId === member.id;
-        const showAddFriendButton = !isCurrentUser && !isFriend;
+        // 只有好友列表加载完成后才显示添加按钮，避免闪现
+        const showAddFriendButton = friendsLoaded && !isCurrentUser && !isFriend;
+        
+        // ✅ 判断管理员身份
+        const adminIds = groupChat?.adminIds || [];
+        const isAdmin = adminIds.includes(currentUserId);  // 当前用户是否是管理员
+        const isTargetAdmin = adminIds.includes(member.id);  // 目标成员是否是管理员
 
         return (
             <View style={styles.memberItemWrapper}>
                 <TouchableOpacity
                     style={[styles.memberItem, index === allMembers.length -1 && styles.noBorderBottom]}
-                    onPress={() => Alert.alert(member.name, `ID: ${member.id}\n${isCurrentUser ? '你' : ''}`)}
+                    onPress={() => {
+                        // 构建 Alert 选项
+                        const options: any[] = [{ text: '取消', style: 'cancel' }];
+                        
+                        // 只有管理员可以管理权限，且不能管理自己
+                        if (isAdmin && !isCurrentUser) {
+                            if (isTargetAdmin) {
+                                // 目标是管理员，显示"取消管理员"选项
+                                options.push({
+                                    text: '取消管理员',
+                                    style: 'destructive',
+                                    onPress: () => handleRemoveAdmin(member.id, member.name),
+                                });
+                            } else {
+                                // 目标是普通成员，显示"设为管理员"选项
+                                options.push({
+                                    text: '设为管理员',
+                                    onPress: () => handleSetAdmin(member.id, member.name),
+                                });
+                            }
+                        }
+                        
+                        // 构建副标题
+                        let subtitle = `ID: ${member.id}`;
+                        if (isCurrentUser) {
+                            subtitle += '\n（你）';
+                        }
+                        if (isTargetAdmin) {
+                            subtitle += '\n管理员';
+                        }
+                        
+                        Alert.alert(member.name, subtitle, options);
+                    }}
                     disabled={isKicking}
                 >
                     <View style={styles.memberAvatarContainer}>
@@ -360,37 +539,53 @@ export default function GroupMemberList() {
                         <Text style={styles.memberId}>ID: {member.id}</Text>
                     </View>
                     
-                    {/* ✅ 新增：添加好友按钮 */}
-                    {showAddFriendButton && (
-                        <TouchableOpacity
-                            style={styles.addFriendButton}
-                            onPress={() => handleAddFriend(member.id, member.name)}
-                            disabled={isAddingThisFriend}
-                            activeOpacity={0.7}
-                        >
-                            {isAddingThisFriend ? (
-                                <ActivityIndicator size="small" color="#FFD860" />
-                            ) : (
-                                <>
-                                    <Ionicons name="person-add-outline" size={14} color="#FFD860" />
-                                    <Text style={styles.addFriendText}>添加</Text>
-                                </>
-                            )}
-                        </TouchableOpacity>
-                    )}
-                    
-                    {/* 已是好友标签 */}
-                    {!isCurrentUser && isFriend && (
-                        <View style={styles.friendLabel}>
-                            <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
-                            <Text style={styles.friendLabelText}>好友</Text>
-                        </View>
-                    )}
-                    
-                    {groupChat?.ownerId === member.id && <Text style={styles.ownerLabel}>群主</Text>}
-                    {groupChat?.admins?.includes(member.id) && member.id !== groupChat?.ownerId && (
-                        <Text style={styles.adminLabel}>管理员</Text>
-                    )}
+                    {/* 标签容器 - 垂直排列：管理员在上，好友在下 */}
+                    <View style={styles.labelsContainer}>
+                        {/* 管理员标签 */}
+                        {isTargetAdmin && <Text style={styles.adminLabel}>管理员</Text>}
+                        
+                        {/* 好友相关的标签/按钮 - 所有成员都显示 */}
+                        {!isCurrentUser && (
+                            <>
+                                {/* 加载中显示 Loading */}
+                                {!friendsLoaded && (
+                                    <ActivityIndicator size="small" color="#FFD860" />
+                                )}
+                                
+                                {/* 加载完成后显示好友状态 */}
+                                {friendsLoaded && (
+                                    <>
+                                        {/* 已是好友标签 */}
+                                        {isFriend && (
+                                            <View style={styles.friendLabel}>
+                                                <Ionicons name="checkmark-circle" size={14} color="#4CAF50" />
+                                                <Text style={styles.friendLabelText}>好友</Text>
+                                            </View>
+                                        )}
+                                        
+                                        {/* 添加好友按钮 - 非好友才显示 */}
+                                        {!isFriend && (
+                                            <TouchableOpacity
+                                                style={styles.addFriendButton}
+                                                onPress={() => handleAddFriend(member.id, member.name)}
+                                                disabled={isAddingThisFriend}
+                                                activeOpacity={0.7}
+                                            >
+                                                {isAddingThisFriend ? (
+                                                    <ActivityIndicator size="small" color="#FFD860" />
+                                                ) : (
+                                                    <>
+                                                        <Ionicons name="person-add-outline" size={14} color="#FFD860" />
+                                                        <Text style={styles.addFriendText}>添加</Text>
+                                                    </>
+                                                )}
+                                            </TouchableOpacity>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </View>
                     <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
                 </TouchableOpacity>
                 {/* Kick button outside avatar - top left corner */}
@@ -594,51 +789,46 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize12,
         color: colors.text.gray,
     },
-    ownerLabel: {
-        fontSize: typography.fontSize11,
-        color: colors.functional.yellow,
-        backgroundColor: colors.background.yellowPale,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
-        borderRadius: borders.radius4,
-        marginLeft: 8,
+    labelsContainer: {
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        marginLeft: 'auto',
+        marginRight: 8,
+        gap: 4,
     },
     adminLabel: {
         fontSize: typography.fontSize11,
-        color: colors.functional.green,
-        backgroundColor: colors.functional.greenLight, // Corrected from background.greenLight
-        paddingHorizontal: 6,
-        paddingVertical: 2,
+        color: colors.functional.yellow,
+        backgroundColor: colors.background.yellowPale,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
         borderRadius: borders.radius4,
-        marginLeft: 8,
     },
-    // ✅ 新增：添加好友按钮样式
+    // ✅ 添加好友按钮样式 - 与其他标签统一大小
     addFriendButton: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(255, 216, 96, 0.15)',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: 16,
-        marginRight: 8,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: borders.radius4,
         borderWidth: 1,
         borderColor: '#FFD860',
     },
     addFriendText: {
-        fontSize: typography.fontSize12,
+        fontSize: typography.fontSize11,
         color: '#E5A800',
-        fontWeight: '600' as const,
-        marginLeft: 4,
+        fontWeight: '500' as const,
+        marginLeft: 3,
     },
-    // ✅ 新增：好友标签样式
+    // ✅ 好友标签样式 - 与其他标签统一大小
     friendLabel: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: 'rgba(76, 175, 80, 0.1)',
         paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 12,
-        marginRight: 8,
+        paddingVertical: 3,
+        borderRadius: borders.radius4,
     },
     friendLabelText: {
         fontSize: typography.fontSize11,
