@@ -748,6 +748,11 @@ export const startCall = async (params: StartCallParams): Promise<StartCallRespo
     }
 
     console.log("[startCall] call_id:", callId || "无");
+    
+    if (!callId) {
+      return { success: false, message: "No call_id returned from server" };
+    }
+    
     return { success: true, data: { call_id: callId }, message: responseData.message };
   } catch (error: any) {
     console.error("[startCall] 失败:", error.message);
