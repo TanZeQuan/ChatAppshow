@@ -42,9 +42,10 @@ interface DisplayMessage {
   senderId: string;
   senderName: string;
   text: string;
-  type?: number; // 1=text, 2=voice, 3=images
+  type?: number; // 1=text, 2=voice, 3=images, 5=video
   imageUrls?: string[]; // For type 3 messages
   voiceUrl?: string; // For type 2 messages
+  videoUrl?: string; // ✅ 新增：视频消息 URL (type 5)
   createdAt: string;
   sender: 'me' | 'other';
   username?: string;
@@ -209,6 +210,7 @@ export default function ChatRoomScreen() {
             let messageType = 1;
             let imageUrls: string[] = [];
             let voiceUrl: string = '';
+            let videoUrl: string = ''; // ✅ 新增：视频 URL
 
             try {
               let parsedMessage: any;
@@ -232,18 +234,39 @@ export default function ChatRoomScreen() {
               }
 
               if (messageType === 3) {
+                // ✅ 先提取 URL 列表
+                let mediaUrls: string[] = [];
                 if (Array.isArray(parsedMessage)) {
-                  imageUrls = parsedMessage.map((url: string) => ensureFullImageUrl(url));
+                  mediaUrls = parsedMessage;
                 }
                 else if (parsedMessage.message && Array.isArray(parsedMessage.message)) {
-                  imageUrls = parsedMessage.message.map((url: string) => ensureFullImageUrl(url));
+                  mediaUrls = parsedMessage.message;
                 }
                 else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
-                  const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
-                  imageUrls = urls.map((url: string) => ensureFullImageUrl(url));
+                  mediaUrls = parsedMessage.message.split(',').map((url: string) => url.trim());
                 }
 
-                messageText = `[${imageUrls.length}张图片]`;
+                // ✅ 检测是否是视频文件（通过路径或扩展名判断）
+                const isVideoFile = (url: string) => {
+                  const lowerUrl = url.toLowerCase();
+                  return lowerUrl.includes('/video/') || 
+                         lowerUrl.endsWith('.mp4') || 
+                         lowerUrl.endsWith('.mov') || 
+                         lowerUrl.endsWith('.avi') ||
+                         lowerUrl.endsWith('.webm');
+                };
+
+                // ✅ 如果第一个 URL 是视频，按视频处理
+                if (mediaUrls.length > 0 && isVideoFile(mediaUrls[0])) {
+                  videoUrl = ensureFullImageUrl(mediaUrls[0]);
+                  messageType = 5; // 强制改为视频类型
+                  messageText = '[视频]';
+                  console.log('🎬 [Video] 检测到视频文件 (type=3 但路径是视频):', videoUrl);
+                } else {
+                  // 正常图片处理
+                  imageUrls = mediaUrls.map((url: string) => ensureFullImageUrl(url));
+                  messageText = `[${imageUrls.length}张图片]`;
+                }
               }
               else if (messageType === 2) {
                 if (typeof parsedMessage === 'string') {
@@ -263,6 +286,37 @@ export default function ChatRoomScreen() {
                     messageText = '[语音消息]';
                   }
                 }
+              }
+              // ✅ 新增：处理视频消息 (type === 5) - 和图片处理方式一致
+              else if (messageType === 5) {
+                console.log('🎬 [Video] 解析视频消息:', { 
+                  rawMessage: msg.message,
+                  parsedMessage,
+                  msgType: msg.type 
+                });
+                
+                // 情况1: parsedMessage 直接是 URL 字符串
+                if (typeof parsedMessage === 'string') {
+                  videoUrl = ensureFullImageUrl(parsedMessage);
+                }
+                // 情况2: parsedMessage 是数组 ["/uploads/video.mp4"]
+                else if (Array.isArray(parsedMessage) && parsedMessage.length > 0) {
+                  videoUrl = ensureFullImageUrl(parsedMessage[0]);
+                }
+                // 情况3: parsedMessage.message 是数组
+                else if (parsedMessage.message && Array.isArray(parsedMessage.message) && parsedMessage.message.length > 0) {
+                  videoUrl = ensureFullImageUrl(parsedMessage.message[0]);
+                }
+                // 情况4: parsedMessage.message 是逗号分隔的字符串
+                else if (parsedMessage.message && typeof parsedMessage.message === 'string') {
+                  const urls = parsedMessage.message.split(',').map((url: string) => url.trim());
+                  if (urls.length > 0) {
+                    videoUrl = ensureFullImageUrl(urls[0]);
+                  }
+                }
+                
+                messageText = '[视频]';
+                console.log('🎬 [Video] 最终视频 URL:', videoUrl);
               }
               else {
                 if (typeof parsedMessage === 'string') {
@@ -290,6 +344,7 @@ export default function ChatRoomScreen() {
               type: messageType,
               imageUrls: imageUrls,
               voiceUrl: voiceUrl,
+              videoUrl: videoUrl, // ✅ 新增：视频 URL
               createdAt: msg.created_at,
               senderId: msg.sender,
               name: senderInfo.name,
@@ -704,6 +759,85 @@ export default function ChatRoomScreen() {
     }
   };
 
+  // ✅ 选择并发送视频
+  const pickVideo = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('权限被拒绝', '需要相册权限才能选择视频');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['videos'],
+        allowsEditing: false,
+        quality: 0.8,
+        videoMaxDuration: 60, // 限制60秒
+      });
+
+      if (!result.canceled && result.assets.length > 0) {
+        const videoAsset = result.assets[0];
+        const fileName = videoAsset.fileName || 'video.mp4';
+        const extension = fileName.split('.').pop()?.toLowerCase();
+        
+        // 检查视频格式
+        if (extension !== 'mp4') {
+          Alert.alert(
+            '格式不支持',
+            `当前视频格式为 ${extension?.toUpperCase()}，仅支持 MP4 格式。\n\n请选择 MP4 格式的视频，或使用其他工具转换后再上传。`,
+            [{ text: '确定', style: 'default' }]
+          );
+          return;
+        }
+
+        setIsUploadingImage(true);
+        try {
+          const receiver = chatMembers.filter(id => id !== currentUserId);
+          const videoFile = {
+            uri: videoAsset.uri,
+            name: fileName,
+            type: 'video/mp4',
+          };
+
+          const apiResult = await sendChatMessage({
+            sender: currentUserId,
+            isreceive: receiver,
+            chat_id: chatId,
+            files: [videoFile],
+            type: 5, // type 5 = video
+          });
+
+          if (apiResult.success && apiResult.data) {
+            const actualReceivers = (apiResult.data.isreceive && apiResult.data.isreceive.length > 0)
+              ? apiResult.data.isreceive : receiver;
+
+            if (actualReceivers.length > 0) {
+              WebSocketManager.sendForwardMessage({
+                type: apiResult.data.type || 5,
+                message: apiResult.data.message,
+                message_id: apiResult.data.message_id,
+                sender: currentUserId,
+                receiver: actualReceivers,
+                chat_id: chatId
+              });
+            }
+            await loadMessages(false, false);
+          } else {
+            Alert.alert('发送失败', apiResult.message || '视频发送失败，请重试');
+          }
+        } catch (error: any) {
+          console.error('Video upload error:', error);
+          Alert.alert('发送失败', error.message || '网络错误，请重试');
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+    } catch (error) {
+      console.error('Video picker error:', error);
+      Alert.alert('选择失败', '选择视频时出错');
+    }
+  };
+
   const toggleToolbar = () => {
     setShowToolbar(!showToolbar);
     if (isEmojiPickerOpen) setIsEmojiPickerOpen(false);
@@ -856,7 +990,7 @@ export default function ChatRoomScreen() {
   const toolbarButtons = {
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
-      { icon: 'play-circle-outline', label: '视频', onPress: pickImage },
+      { icon: 'videocam-outline', label: '视频', onPress: pickVideo },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
        { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
        { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },

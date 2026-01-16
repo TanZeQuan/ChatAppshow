@@ -1,5 +1,6 @@
 ﻿import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { ResizeMode, Video } from 'expo-av';
 import React, { useState } from 'react';
 import {
   Alert,
@@ -26,9 +27,10 @@ interface DisplayMessage {
   senderId: string;
   senderName: string;
   text: string;
-  type?: number;
+  type?: number; // 1=text, 2=voice, 3=images, 4=call/card, 5=video
   imageUrls?: string[];
   voiceUrl?: string;
+  videoUrl?: string; // ✅ 新增：视频消息 URL
   cardData?: {
     userId: string;
     userName: string;
@@ -400,15 +402,79 @@ const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
                 </View>
               )}
 
-              {item.type === 3 && (
-                <View style={roomStyles.imageGridContainer}>
-                  {item.imageUrls?.map((url, idx) => (
-                    <TouchableOpacity key={idx} activeOpacity={0.9} onPress={() => openImageViewer(idx)}>
-                      <Image source={{ uri: url }} style={roomStyles.messageImage} resizeMode="cover" />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+              {/* ✅ 智能检测：根据 URL 路径判断是图片还是视频 */}
+              {(() => {
+                // 检测是否是视频文件
+                const isVideoFile = (url: string) => {
+                  const lowerUrl = url.toLowerCase();
+                  return lowerUrl.includes('/video/') || 
+                         lowerUrl.endsWith('.mp4') || 
+                         lowerUrl.endsWith('.mov') || 
+                         lowerUrl.endsWith('.avi') ||
+                         lowerUrl.endsWith('.webm');
+                };
+
+                // 优先检查 videoUrl
+                if (item.videoUrl && isVideoFile(item.videoUrl)) {
+                  return (
+                    <View style={styles.videoContainer}>
+                      <Video
+                        source={{ uri: item.videoUrl }}
+                        style={styles.videoPlayer}
+                        useNativeControls
+                        resizeMode={ResizeMode.CONTAIN}
+                        isLooping={false}
+                      />
+                    </View>
+                  );
+                }
+
+                // 检查 imageUrls 中是否有视频（兼容旧数据 type=3 但实际是视频）
+                if (item.imageUrls && item.imageUrls.length > 0) {
+                  const firstUrl = item.imageUrls[0];
+                  if (isVideoFile(firstUrl)) {
+                    return (
+                      <View style={styles.videoContainer}>
+                        <Video
+                          source={{ uri: firstUrl }}
+                          style={styles.videoPlayer}
+                          useNativeControls
+                          resizeMode={ResizeMode.CONTAIN}
+                          isLooping={false}
+                        />
+                      </View>
+                    );
+                  }
+                  
+                  // 正常图片渲染
+                  return (
+                    <View style={roomStyles.imageGridContainer}>
+                      {item.imageUrls.map((url, idx) => (
+                        <TouchableOpacity key={idx} activeOpacity={0.9} onPress={() => openImageViewer(idx)}>
+                          <Image source={{ uri: url }} style={roomStyles.messageImage} resizeMode="cover" />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  );
+                }
+
+                // type === 5 但没有 videoUrl（备用）
+                if (item.type === 5 && item.videoUrl) {
+                  return (
+                    <View style={styles.videoContainer}>
+                      <Video
+                        source={{ uri: item.videoUrl }}
+                        style={styles.videoPlayer}
+                        useNativeControls
+                        resizeMode={ResizeMode.CONTAIN}
+                        isLooping={false}
+                      />
+                    </View>
+                  );
+                }
+
+                return null;
+              })()}
             </>
           )}
 
@@ -488,6 +554,21 @@ const styles = StyleSheet.create({
   imageContainer: { width: width, height: height, justifyContent: 'center', alignItems: 'center' },
   fullScreenImage: { width: width, height: height * 0.85 },
   bubbleFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+
+  // ✅ 新增：视频消息样式
+  videoContainer: {
+    width: scaleWidth(180),
+    height: scaleWidth(150),
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  videoPlayer: {
+    width: '100%',
+    height: '100%',
+  },
 
   // Call Card
   callCardContainer: {

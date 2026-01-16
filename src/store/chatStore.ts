@@ -9,9 +9,10 @@ type Message = {
   id: string;
   text: string;
   createdAt: string;
-  type?: number; // 1: text, 2: voice, 3: image/files
+  type?: number; // 1: text, 2: voice, 3: image/files, 5: video
   imageUrls?: string[]; // For type 3 messages
   voiceUrl?: string; // For type 2 messages
+  videoUrl?: string; // ✅ 新增：For type 5 video messages
 
   // Sender info
   senderId: string;
@@ -90,6 +91,9 @@ export const useChatStore = create<ChatStore>()(
           text: messageData.text || '',
           createdAt: messageData.createdAt || new Date().toISOString(),
           type: messageData.type, // Add type here
+          imageUrls: messageData.imageUrls, // ✅ 图片 URLs
+          voiceUrl: messageData.voiceUrl,   // ✅ 语音 URL
+          videoUrl: messageData.videoUrl,   // ✅ 视频 URL
           senderId: messageData.senderId || user.id,
           name: messageData.name || user.name,
           avatar: messageData.avatar || user.avatar,

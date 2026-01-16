@@ -39,18 +39,49 @@ const scaleHeight = (size: number) => (Dimensions.get("window").height / 812) * 
 
 const formatLastMessagePreview = (message: string, type: number | undefined): string => {
   if (!message && type === undefined) return '开始聊天吧~';
+  
+  // ✅ 检测是否是视频文件的辅助函数
+  const checkVideoUrl = (url: string) => {
+    if (!url || typeof url !== 'string') return false;
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.includes('/video/') || 
+           lowerUrl.endsWith('.mp4') || 
+           lowerUrl.endsWith('.mov') || 
+           lowerUrl.endsWith('.avi') ||
+           lowerUrl.endsWith('.webm');
+  };
+  
   if (message && typeof message === 'string') {
     // 检测语音/视频通话
     if (message.includes('SINGLE_VOICE_CALL') || message.includes('GROUP_VOICE_CALL')) return '[语音通话]';
+    
+    // ✅ 直接检测 message 字符串是否包含视频路径（兼容各种格式）
+    if (checkVideoUrl(message)) return '[视频]';
+    
     if (message.startsWith('{') && message.includes('type')) {
       try {
         const parsed = JSON.parse(message);
         if (parsed.type) {
-          if (parsed.type.includes('VOICE_CALL')) return '[语音通话]';
-          if (parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
+          if (typeof parsed.type === 'string' && parsed.type.includes('VOICE_CALL')) return '[语音通话]';
+          if (typeof parsed.type === 'string' && parsed.type.includes('VIDEO_CALL')) return '[视频通话]';
+        }
+        
+        // ✅ 检测视频文件（即使 type 是 3，也通过路径识别）
+        if (parsed.message) {
+          if (Array.isArray(parsed.message) && parsed.message.length > 0) {
+            if (checkVideoUrl(parsed.message[0])) return '[视频]';
+          } else if (typeof parsed.message === 'string' && checkVideoUrl(parsed.message)) {
+            return '[视频]';
+          }
         }
       } catch (e) {}
     }
+    
+    // ✅ 检测 message 是数组字符串格式 "["/content/uploads/video/xxx.mp4"]"
+    if (message.startsWith('[') && message.includes('/video/')) {
+      return '[视频]';
+    }
+    
     // ✅ 检测名片消息（即使 type 不是 4，也通过内容识别）
     if (message.startsWith('{') && message.includes('userId') && message.includes('userName')) {
       try {
