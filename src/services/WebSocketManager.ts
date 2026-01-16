@@ -129,17 +129,6 @@ class WebSocketManager {
         this.cleanupLoginPromise();
         if (event.code !== 1000 && this.userId) this.attemptReconnect();
       };
-
-      this.ws.onerror = (error) => {
-        // ✅ 修复 2: 提供更有用的错误信息，并触发重连机制
-        console.error("❌ WebSocket error. Please check: 1. Server is running? 2. URL correct? 3. VPN/Firewall?", error);
-        // 在错误发生时，通常也会触发 onclose，所以重连逻辑交给 onclose 处理即可
-        // 但如果是在连接阶段就错了，可能需要手动拒绝 Promise
-        if (!this.isConnected && this.loginRejecter) {
-          // 这种情况通常是 URL 连不上
-          // 不 reject，让它自动进入重连尝试，或者你可以选择 reject
-        }
-      };
     });
   }
 

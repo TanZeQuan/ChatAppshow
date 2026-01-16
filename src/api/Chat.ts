@@ -13,11 +13,6 @@ export const createPrivateChat = async ({
 }) => {
     try {
         // 🔍 Diagnostic: Log what we're sending to backend
-        console.log('🌐 [API/createPrivateChat] Sending to backend:');
-        console.log('  - user_id:', user_id);
-        console.log('  - chat_with:', chat_with);
-        console.log('  - name:', name);
-
         const formData = new FormData();
 
         const dataPayload = {
@@ -328,10 +323,6 @@ export const sendChatMessage = async (payload: MessagePayload) => {
         } as any);
       });
     }
-
-    console.log("📤 [sendChatMessage] dataPayload:", JSON.stringify(dataPayload, null, 2));
-    console.log("📤 [sendChatMessage] Sending to:", "/chats/message/new");
-    console.log("📤 [sendChatMessage] Full URL:", api.defaults.baseURL + "/chats/message/new");
 
     // Add request interceptor logging for this specific request
     console.log("📤 [sendChatMessage] Request config:", {
