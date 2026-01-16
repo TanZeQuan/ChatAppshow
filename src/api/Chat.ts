@@ -552,6 +552,234 @@ export const updateGroupName = async (chatId: string, userId: string, newName: s
   }
 };
 
+// ✅ Start Call API - 发起通话，获取 call_id
+export interface StartCallParams {
+  user_id: string;       // 发起人 ID
+  callees: string[];     // 被呼叫者 ID 数组
+  istype: number;        // 通话类型: 0=语音, 1=视频
+}
+
+export interface StartCallResponse {
+  success: boolean;
+  data?: {
+    call_id: string;     // 通话房间 ID，如 "IM_CALL_123"
+    [key: string]: any;
+  };
+  message?: string;
+}
+
+export const startCall = async (params: StartCallParams): Promise<StartCallResponse> => {
+  console.log("[startCall] user:", params.user_id, "callees:", params.callees.length);
+
+  try {
+    const formData = new FormData();
+    formData.append("data", JSON.stringify({
+      user_id: params.user_id,
+      callees: params.callees,
+      istype: params.istype,
+    }));
+
+    const response = await api.post("/chats/call/start", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          responseData = JSON.parse(responseData.substring(jsonStartIndex));
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      return { success: false, message: responseData.message || "Start call failed" };
+    }
+
+    // 提取 call_id
+    let callId: string | undefined;
+    if (typeof responseData?.response === 'string' && responseData.response.length > 0) {
+      callId = responseData.response;
+    } else if (responseData?.response?.call_id) {
+      callId = responseData.response.call_id;
+    } else if (responseData?.call_id) {
+      callId = responseData.call_id;
+    }
+
+    console.log("[startCall] call_id:", callId || "无");
+    return { success: true, data: { call_id: callId }, message: responseData.message };
+  } catch (error: any) {
+    console.error("[startCall] 失败:", error.message);
+    return { success: false, message: error.response?.data?.message || error.message };
+  }
+};
+
+// ✅ Call Room API - 管理通话房间 (join, leave, end, add)
+export interface CallRoomParams {
+  call_id: string;        // 通话房间 ID
+  callees?: string[];     // 被呼叫者 ID 数组 (用于 add)
+  action: 'join' | 'leave' | 'end' | 'add';  // 操作类型
+  user_id?: string;       // 用户 ID (可选)
+}
+
+export interface CallRoomResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+}
+
+export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse> => {
+  console.log("🔵 [callRoom] ====================================");
+  console.log("🔵 [callRoom] 管理通话房间");
+  console.log("🔵 [callRoom] call_id:", params.call_id);
+  console.log("🔵 [callRoom] action:", params.action);
+  console.log("🔵 [callRoom] ====================================");
+
+  try {
+    const formData = new FormData();
+
+    // 只发送 call_id 和 action（最简化版本）
+    // 如果后端还是报错，需要确认后端期望的确切格式
+    const dataPayload: any = {
+      call_id: params.call_id,
+      action: params.action,
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("🔵 [callRoom] 发送请求到: /chats/call/room");
+    console.log("🔵 [callRoom] payload:", JSON.stringify(dataPayload));
+
+    const response = await api.post("/chats/call/room", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("🔵 [callRoom] ====================================");
+    console.log("🔵 [callRoom] 收到后端响应");
+    console.log("🔵 [callRoom] 原始响应:", JSON.stringify(response.data, null, 2));
+    console.log("🔵 [callRoom] ====================================");
+
+    // 处理后端返回 HTML 警告的情况
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          const jsonString = responseData.substring(jsonStartIndex);
+          responseData = JSON.parse(jsonString);
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        console.error("🔵 [callRoom] ❌ 解析响应失败:", e);
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      // 静默处理错误，不影响通话功能（TCP Socket 是主要通道）
+      console.log("🔵 [callRoom] ⚠️ 后端返回错误 (忽略):", responseData.message);
+      return { success: false, message: responseData.message };
+    }
+
+    console.log("🔵 [callRoom] ✅ 成功!");
+    return {
+      success: true,
+      data: responseData?.response || responseData,
+      message: responseData.message,
+    };
+  } catch (error: any) {
+    // 静默处理异常，不影响通话功能
+    console.log("🔵 [callRoom] ⚠️ API 异常 (忽略):", error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
+// ✅ Call Fail API - 报告通话失败
+export interface CallFailParams {
+  call_id: string;  // 通话房间 ID
+}
+
+export interface CallFailResponse {
+  success: boolean;
+  data?: any;
+  message?: string;
+}
+
+export const callFail = async (params: CallFailParams): Promise<CallFailResponse> => {
+  console.log("🔴 [callFail] ====================================");
+  console.log("🔴 [callFail] 报告通话失败");
+  console.log("🔴 [callFail] call_id:", params.call_id);
+  console.log("🔴 [callFail] ====================================");
+
+  try {
+    const formData = new FormData();
+
+    const dataPayload = {
+      call_id: params.call_id,
+    };
+
+    formData.append("data", JSON.stringify(dataPayload));
+
+    console.log("🔴 [callFail] 发送请求到: /chats/call/fail");
+
+    const response = await api.post("/chats/call/fail", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+      timeout: 30000,
+    });
+
+    console.log("🔴 [callFail] ====================================");
+    console.log("🔴 [callFail] 收到后端响应");
+    console.log("🔴 [callFail] 原始响应:", JSON.stringify(response.data, null, 2));
+    console.log("🔴 [callFail] ====================================");
+
+    // 处理后端返回 HTML 警告的情况
+    let responseData = response.data;
+    if (typeof responseData === 'string') {
+      try {
+        const jsonStartIndex = responseData.indexOf('{');
+        if (jsonStartIndex !== -1) {
+          const jsonString = responseData.substring(jsonStartIndex);
+          responseData = JSON.parse(jsonString);
+        } else {
+          throw new Error("Invalid response format");
+        }
+      } catch (e) {
+        console.error("🔴 [callFail] ❌ 解析响应失败:", e);
+        return { success: false, message: "Failed to parse response" };
+      }
+    }
+
+    if (responseData?.error === true) {
+      console.error("🔴 [callFail] ❌ 后端返回错误:", responseData.message);
+      return { success: false, message: responseData.message };
+    }
+
+    console.log("🔴 [callFail] ✅ 报告成功!");
+    return {
+      success: true,
+      data: responseData?.response || responseData,
+      message: responseData.message,
+    };
+  } catch (error: any) {
+    console.error("🔴 [callFail] ❌ API 异常:", error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || error.message,
+    };
+  }
+};
+
 // ✅ Update group image only (no action field)
 export const updateGroupImage = async (
   chatId: string,

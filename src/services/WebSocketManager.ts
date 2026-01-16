@@ -1,4 +1,4 @@
-import { WebRTCCallService } from "./CallService";
+import { UnifiedCallService } from "./UnifiedCallService";
 import { Emitter } from "./EventEmitter";
 
 const WS_URL = "wss://ws.ngrok-free.dev"; // ⚠️ 请确保这个地址是有效的，ngrok 每次重启都会变
@@ -14,7 +14,7 @@ class WebSocketManager {
   private static instance: WebSocketManager;
 
   public ws: WebSocket | null = null;
-  public callService: WebRTCCallService | null = null;
+  public callService: UnifiedCallService | null = null;
   private userId: string | null = null;
   private isConnected = false;
   private reconnectAttempts = 0;
@@ -143,11 +143,11 @@ class WebSocketManager {
     });
   }
 
-  // ✅ 确保 WebRTCCallService 总是使用最新的 WebSocket 连接
+  // ✅ 确保 UnifiedCallService 总是使用最新的 WebSocket 连接
   private initializeServices() {
     if (this.ws && this.userId) {
       if (!this.callService) {
-        this.callService = new WebRTCCallService(this.ws, this.userId);
+        this.callService = new UnifiedCallService(this.ws, this.userId);
       } else {
         this.callService.ws = this.ws;
         this.callService.currentUserId = this.userId;
@@ -160,10 +160,11 @@ class WebSocketManager {
     targetUserId: string,
     userName: string,
     avatar: string,
-    chatId?: string  // ✅ 新增 chatId 参数
+    chatId?: string,
+    callId?: string  // 新增 call_id 参数 (TCP 房间 ID)
   ) {
     if (this.callService) {
-      this.callService.startCall(targetUserId, userName, avatar, chatId);
+      this.callService.startCall(targetUserId, userName, avatar, chatId, callId);
     } else {
       console.warn("⚠️ CallService not initialized, cannot start call");
     }

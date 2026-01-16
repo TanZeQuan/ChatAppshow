@@ -9,9 +9,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 // API & Service
 import { readUsers } from '../../api/User';
-import { createPrivateChat, sendChatMessage } from '../../api/Chat';
+import { createPrivateChat, sendChatMessage, startCall, callRoom } from '../../api/Chat';
 import { Emitter } from '../../services/EventEmitter';
 import WebSocketManager from '../../services/WebSocketManager';
+import TcpSocketService, { TcpServerMessage } from '../../services/TcpSocketService';
 import { useContactStore } from '../../store/contactStore';
 import { useUserStore } from '../../store/userStore';
 
@@ -94,25 +95,24 @@ export default function CallScreen() {
       // 2. 对方拒绝了 (Reject)
       // --------------------------
       else if (data.type === 'reject') {
-        console.log('❌ 对方已拒绝，准备退出页面...');
-        setStatus('Rejected'); // 更新 UI 显示 "对方已拒绝"
+        // 防止重复处理
+        if (isEndedRef.current) return;
+        isEndedRef.current = true;
+        
+        console.log('❌ 对方已拒绝');
+        setStatus('Rejected');
         stopTimer();
+        TcpSocketService.disconnect();  // 断开 TCP
 
-        // ⏱️ 延迟 1秒，让用户看清提示后再退
         setTimeout(() => {
-          // 策略 A: 如果有 ChatID，跳转进聊天室 (体验最好)
           if (activeChatIdRef.current) {
             navigation.replace('ChatRoom', {
               chatId: activeChatIdRef.current,
               chatName: displayName,
             });
-          }
-          // 策略 B: 如果能返回，直接返回
-          else if (navigation.canGoBack()) {
+          } else if (navigation.canGoBack()) {
             navigation.goBack();
-          }
-          // 策略 C: 兜底，重置回主页 (防止卡死)
-          else {
+          } else {
             navigation.reset({
               index: 0,
               routes: [{ name: 'MainTabs' }],
@@ -125,9 +125,15 @@ export default function CallScreen() {
       // 3. 对方挂断了 (End) - 通话中挂断
       // --------------------------
       else if (data.type === 'end') {
+        // 防止重复处理
+        if (isEndedRef.current) return;
+        isEndedRef.current = true;
+        
         console.log('🛑 对方已挂断');
         setStatus('Ended');
         stopTimer();
+        TcpSocketService.disconnect();  // 断开 TCP
+        
         setTimeout(() => {
           if (activeChatIdRef.current) {
             navigation.replace('ChatRoom', {
@@ -178,14 +184,22 @@ export default function CallScreen() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const activeChatIdRef = useRef<string | null>(initialChatId || null);
   const isProcessingRef = useRef(false);
+  const callIdRef = useRef<string | null>(null);
+  const isEndedRef = useRef(false);  // 防止重复处理挂断
+
+  // Loading 状态
+  const [isLoading, setIsLoading] = useState(!isIncoming); // 主叫方需要 loading，被叫方不需要
+  const [loadingStatus, setLoadingStatus] = useState('正在连接...');
 
   // 🔊 监听远程音频流 - 当通话连接成功时激活音频
   useEffect(() => {
     if (status === 'Connected' || status === '通话中') {
       const checkRemoteStream = () => {
         const callService = WebSocketManager.callService;
-        if (callService?.remoteStream) {
-          const url = callService.remoteStream.toURL();
+        // 使用 UnifiedCallService 的 remoteStream getter
+        const stream = callService?.remoteStream;
+        if (stream) {
+          const url = (stream as any).toURL();
           console.log('🔊 [CallScreen] 获取到远程音频流 URL:', url);
           setRemoteStreamUrl(url);
         } else {
@@ -288,9 +302,10 @@ export default function CallScreen() {
   // ---------------------------------------------------------
   const toggleMute = () => {
     const callService = WebSocketManager.callService;
-    if (callService?.localStream) {
+    const localStream = callService?.getLocalStream;
+    if (localStream) {
       const newMutedState = !isMicMuted;
-      callService.localStream.getAudioTracks().forEach((track: any) => {
+      localStream.getAudioTracks().forEach((track: any) => {
         track.enabled = !newMutedState; // 静音时 enabled=false，非静音时 enabled=true
       });
       setIsMicMuted(newMutedState);
@@ -383,24 +398,98 @@ export default function CallScreen() {
   // ---------------------------------------------------------
   useEffect(() => {
     if (!remoteUserId) {
-      console.error('❌ [CallScreen] 错误: 缺少 remoteUserId');
+      console.error('[CallScreen] 错误: 缺少 remoteUserId');
       return;
     }
 
-    if (!isIncoming) {
-      console.log('📞 [CallScreen] 发起呼叫:', remoteUserId, 'chatId:', activeChatIdRef.current);
-      WebSocketManager.startCall(
-        remoteUserId,
-        paramName || displayName,
-        paramAvatar || displayAvatar,
-        activeChatIdRef.current || undefined  // ✅ 传递 chatId
-      );
-      // 注意：这里不发 invite 消息了，按你的要求只在结束时发
-      fetchUserInfo(remoteUserId);
-    } else {
-      console.log('📞 [CallScreen] 收到来电:', remoteUserId);
-      fetchUserInfo(remoteUserId);
-    }
+    const initCall = async () => {
+      if (!isIncoming) {
+        // =====================================================
+        // 主叫方 (Caller) 流程
+        // =====================================================
+        console.log('[CallScreen] 发起呼叫:', remoteUserId);
+        
+        try {
+          // 第1步：调用 API 获取 call_id
+          setLoadingStatus('正在创建通话...');
+          console.log('[CallScreen-Caller] 1. 调用 startCall API...');
+          
+          const callResult = await startCall({
+            user_id: currentUserId,
+            callees: [remoteUserId],
+            istype: 0, // 0 = 语音通话
+          });
+
+          if (callResult.success && callResult.data?.call_id) {
+            callIdRef.current = callResult.data.call_id;
+            console.log('[CallScreen-Caller] ✅ 获取 call_id:', callIdRef.current);
+
+            // 第2步：连接 TCP Socket
+            setLoadingStatus('正在连接服务器...');
+            console.log('[CallScreen-Caller] 2. 连接 TCP Socket...');
+            
+            try {
+              await TcpSocketService.connect(currentUserId, callIdRef.current);
+              console.log('[CallScreen-Caller] ✅ TCP 连接成功');
+
+              // 第3步：发送 call 命令占领房间
+              console.log('[CallScreen-Caller] 3. 发送 call 命令');
+              TcpSocketService.sendCall(currentUserId, callIdRef.current);
+              
+              setLoadingStatus('正在呼叫对方...');
+
+              // 第4步：发起 WebRTC 通话 + 通过 WebSocket 通知对方
+              console.log('[CallScreen-Caller] 4. 发送 offer 信令');
+              WebSocketManager.startCall(
+                remoteUserId,
+                paramName || displayName,
+                paramAvatar || displayAvatar,
+                activeChatIdRef.current || undefined,
+                callIdRef.current // 传递 call_id
+              );
+              
+              // 完成初始化
+              setIsLoading(false);
+
+            } catch (tcpError) {
+              console.warn('[CallScreen-Caller] TCP 连接失败，使用 WebSocket 备用');
+              // TCP 失败时仍发起通话，但走 WebSocket
+              WebSocketManager.startCall(
+                remoteUserId,
+                paramName || displayName,
+                paramAvatar || displayAvatar,
+                activeChatIdRef.current || undefined
+              );
+              setIsLoading(false);
+            }
+
+          } else {
+            console.warn('[CallScreen-Caller] startCall API 失败:', callResult.message);
+            // API 失败时仍发起通话（无 call_id）
+            WebSocketManager.startCall(
+              remoteUserId,
+              paramName || displayName,
+              paramAvatar || displayAvatar,
+              activeChatIdRef.current || undefined
+            );
+            setIsLoading(false);
+          }
+        } catch (error) {
+          console.error('[CallScreen-Caller] 初始化失败:', error);
+          setIsLoading(false);
+        }
+        
+        fetchUserInfo(remoteUserId);
+      } else {
+        // =====================================================
+        // 被叫方 (Callee) 流程 - 来电时不需要 loading
+        // =====================================================
+        console.log('[CallScreen] 收到来电:', remoteUserId);
+        fetchUserInfo(remoteUserId);
+      }
+    };
+
+    initCall();
 
     // ✅ 监听状态变化：接通时自动开始计时
     const handleCallStatus = (newStatus: string) => {
@@ -415,11 +504,16 @@ export default function CallScreen() {
 
     // 对方挂断处理
     const handleEndCall = () => {
+      // 防止重复处理
+      if (isEndedRef.current) return;
+      isEndedRef.current = true;
+      
       console.log('📞 [Passive End] 收到对方挂断信号');
       stopTimer();
       setStatus('Ended');
+      TcpSocketService.disconnect();  // 断开 TCP
+      
       setTimeout(() => {
-        // ✅ 对方挂断后返回聊天室，而不是 goBack
         if (activeChatIdRef.current) {
           navigation.replace('ChatRoom', {
             chatId: activeChatIdRef.current,
@@ -431,6 +525,64 @@ export default function CallScreen() {
       }, 800);
     };
 
+    // ✅ 监听 TCP Socket 消息 - 处理通过 TCP 收到的 WebRTC 信令
+    const handleTcpMessage = (data: TcpServerMessage) => {
+      console.log('📡 [CallScreen-TCP] 收到 TCP 消息:', data.msg, data.type);
+
+      // 处理 WebRTC 信令
+      if (data.msg === 'signal' && data.type) {
+        const callService = WebSocketManager.callService;
+        if (!callService) {
+          console.warn('[CallScreen-TCP] CallService 未初始化');
+          return;
+        }
+
+        // 转换为 CallService 可以处理的格式
+        const signalData = {
+          type: data.type,
+          user_id: data.user_id,
+          sender: data.user_id,
+          payload: data.payload || {},
+          call_id: data.room_id,
+        };
+
+        console.log('📡 [CallScreen-TCP] 转发信令到 CallService:', data.type);
+        callService.handleSignal(signalData);
+      }
+
+      // 处理用户加入房间通知
+      if (data.msg === 'user_joined') {
+        console.log('✅ [CallScreen-TCP] 对方已加入房间:', data.user_id);
+        // 对方加入后，主叫方会收到这个消息
+        // WebRTC offer 应该已经在 startCall 时发送了
+      }
+
+      // 处理通话结束通知
+      if (data.msg === 'end' || data.msg === 'user_left') {
+        console.log('🛑 [CallScreen-TCP] 收到结束/离开通知');
+        if (!isEndedRef.current) {
+          isEndedRef.current = true;
+          stopTimer();
+          setStatus('Ended');
+          TcpSocketService.disconnect();
+          
+          setTimeout(() => {
+            if (activeChatIdRef.current) {
+              navigation.replace('ChatRoom', {
+                chatId: activeChatIdRef.current,
+                chatName: displayName,
+              });
+            } else if (navigation.canGoBack()) {
+              navigation.goBack();
+            }
+          }, 800);
+        }
+      }
+    };
+
+    // 注册 TCP 消息监听
+    TcpSocketService.addMessageCallback(handleTcpMessage);
+
     Emitter.on('callStatus', handleCallStatus);
     Emitter.on('endCall', handleEndCall);
 
@@ -438,7 +590,7 @@ export default function CallScreen() {
       stopTimer();
       Emitter.off('callStatus', handleCallStatus);
       Emitter.off('endCall', handleEndCall);
-
+      TcpSocketService.removeMessageCallback(handleTcpMessage);
     };
   }, [remoteUserId, isIncoming]);
 
@@ -452,13 +604,40 @@ export default function CallScreen() {
     try {
       setStatus('Connecting...'); // 先显示连接中
 
-      // 1. WebSocket 应答
+      // 获取来电的 call_id (从 UnifiedCallService 中获取)
+      const incomingCallId = WebSocketManager.callService?.currentCallId;
+      
+      if (incomingCallId) {
+        callIdRef.current = incomingCallId;
+        console.log('[CallScreen-Callee] 收到 call_id:', incomingCallId);
+
+        // 第5步：调用 API 告诉服务器「我接听了」
+        try {
+          await callRoom({ call_id: incomingCallId, action: 'join', user_id: currentUserId });
+        } catch (apiError) {
+          console.log('[CallScreen-Callee] callRoom API 失败 (不影响通话)');
+        }
+
+        // 第6步：连接 TCP Socket
+        console.log('[CallScreen-Callee] 连接 TCP Socket...');
+        try {
+          await TcpSocketService.connect(currentUserId, incomingCallId);
+          console.log('[CallScreen-Callee] ✅ TCP 连接成功');
+
+          // 第7步：发送 accept 命令加入房间
+          TcpSocketService.sendAccept(currentUserId, incomingCallId);
+
+        } catch (tcpError) {
+          console.warn('[CallScreen-Callee] TCP 连接失败，使用 WebSocket 备用');
+        }
+      }
+
+      // WebRTC 应答
       WebSocketManager.callService?.answerCall();
-      // 2. 发送信令给对方，告诉他我接了
+      // 发送信令给对方，告诉他我接了
       sendCallSignal('answer');
 
       // 注意：这里不直接 startTimer，而是等待 'Connected' 事件触发 startTimer
-      // 这样能确保网络真正连通了才开始算时间
     } catch (e) {
       console.warn(e);
     } finally {
@@ -513,33 +692,48 @@ export default function CallScreen() {
     // 2. 判断是否真正接通过 (有时间 或者 状态是Connected)
     const isCallConnected = durationRef.current > 0 || status === 'Connected' || status === '通话中';
 
-    console.log('🛑 [Hangup] 挂断, 时长:', finalDuration, '是否接通:', isCallConnected);
+    console.log('[CallScreen] 挂断, call_id:', callIdRef.current, '时长:', finalDuration);
 
     try {
-      // 3. 告诉对方挂断
+      // 第11步：通过 TCP Socket 发送 end 命令
+      if (callIdRef.current && TcpSocketService.isSocketConnected()) {
+        TcpSocketService.sendEnd(currentUserId, callIdRef.current);
+      }
+
+      // 第12步：调用 API 告诉服务器「通话结束」
+      if (callIdRef.current) {
+        try {
+          await callRoom({ call_id: callIdRef.current, action: 'end', user_id: currentUserId });
+        } catch (apiError) {
+          console.log('[CallScreen] callRoom API 失败 (不影响挂断)');
+        }
+      }
+
+      // 第13步：断开 TCP Socket 连接
+      TcpSocketService.disconnect();
+
+      // 告诉对方挂断
       sendCallSignal('end');
 
       let msgStatus: 'ended' | 'cancelled' | 'rejected' = 'ended';
       let displayMsg = '';
 
       if (isCallConnected) {
-        // A. 正常通话结束 -> 发送时长
         msgStatus = 'ended';
         displayMsg = `通话时长 ${finalDuration}`;
       } else if (!isIncoming) {
-        // B. 我拨打，没接通就挂了 -> 取消
         msgStatus = 'cancelled';
         displayMsg = '已取消';
       } else {
-        // C. 理论上被叫方未接听挂断算拒绝
         msgStatus = 'rejected';
         displayMsg = '通话结束';
       }
 
-      // 4. 发送最终记录
+      // 发送最终记录
       await sendCallRecord(msgStatus, displayMsg, isCallConnected ? finalDuration : '00:00');
 
-      WebSocketManager.callService?.cleanup();
+      // 清理资源，跳过事件触发（因为是主动挂断，UI 已经处理了）
+      WebSocketManager.callService?.cleanup(true, true);
 
       setTimeout(() => {
         // ✅ 挂断后返回聊天室，而不是 goBack
@@ -578,9 +772,30 @@ export default function CallScreen() {
   // 判断是否正在显示时间 (Connected状态)
   const isConnected = status === 'Connected' || status === '通话中';
 
+  // Loading 界面 (主叫方初始化时显示)
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFD966" />
+          <Text style={styles.loadingText}>{loadingStatus}</Text>
+          <TouchableOpacity 
+            style={styles.cancelButton} 
+            onPress={() => {
+              TcpSocketService.disconnect();
+              navigation.goBack();
+            }}
+          >
+            <Text style={styles.cancelButtonText}>取消</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* 🔊 隐藏的 RTCView 用于激活远程音频流播放 */}
+      {/* 隐藏的 RTCView 用于激活远程音频流播放 */}
       {remoteStreamUrl && (
         <RTCView
           streamURL={remoteStreamUrl}
@@ -725,5 +940,30 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 12,
     textAlign: 'center',
+  },
+  // Loading 样式
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 16,
+    marginTop: 20,
+    textAlign: 'center',
+  },
+  cancelButton: {
+    marginTop: 40,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 25,
+    borderWidth: 1,
+    borderColor: '#FF3B30',
+  },
+  cancelButtonText: {
+    color: '#FF3B30',
+    fontSize: 16,
   },
 });

@@ -90,9 +90,64 @@ export default function App() {
       if (!navigationRef.isReady()) return;
 
       const signalPayload = data.payload || {};
-      const callMode = signalPayload.call_mode || 'single';
-      if (callMode === 'group') return;
+      const callMode = signalPayload.call_mode || data.call_mode;
 
+      // =====================================================
+      // 群聊通话：处理 JOIN_CALL 信令 - 弹窗提示，不自动跳转
+      // =====================================================
+      if (callMode === 'group' || data.type === 'JOIN_CALL') {
+        if (data.type === 'JOIN_CALL') {
+          const callerName = signalPayload.userName || '未知用户';
+          const chatId = data.chat_id;
+          const callId = signalPayload.call_id || data.call_id;
+
+          console.log(`📞 App: 收到群聊通话邀请 from ${callerName}, chatId: ${chatId}, callId: ${callId}`);
+
+          // ✅ 检查当前是否已在 GroupCallScreen 中
+          // 如果已经在通话界面，不弹窗（让 GroupCallScreen 内部处理）
+          const currentRoute = navigationRef.getCurrentRoute();
+          if (currentRoute?.name === 'GroupCallScreen') {
+            console.log('[App] 已在 GroupCallScreen 中，跳过弹窗');
+            return;
+          }
+
+          // ✅ 检查 chatId 是否有效
+          if (!chatId) {
+            console.log('[App] chatId 无效，跳过弹窗');
+            return;
+          }
+
+          // 弹窗提示用户是否加入通话
+          Alert.alert(
+            '群聊语音通话',
+            `${callerName} 发起了群聊语音通话，是否加入？`,
+            [
+              {
+                text: '忽略',
+                style: 'cancel',
+                onPress: () => console.log('[App] 用户忽略群聊通话邀请'),
+              },
+              {
+                text: '加入',
+                onPress: () => {
+                  console.log('[App] 用户选择加入群聊通话');
+                  navigationRef.navigate('GroupCallScreen', {
+                    chatId: chatId,
+                    isHost: false,  // 被叫方不是主持人
+                    callId: callId,
+                  });
+                },
+              },
+            ],
+            { cancelable: true }
+          );
+        }
+        return;
+      }
+
+      // =====================================================
+      // 单聊通话：处理 offer 信令
+      // =====================================================
       if (data.type === 'offer') {
         const callerName = signalPayload.userName || '未知用户';
         const callerAvatar = signalPayload.avatar || '';

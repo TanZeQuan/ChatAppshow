@@ -742,28 +742,13 @@ export default function ChatRoomScreen() {
   // Inside ChatRoomScreen component
   const handleStartCall = useCallback(async () => {
     if (chat?.isGroup) {
-      // 群聊：发通话卡片
-      const callInviteData = JSON.stringify({
-        type: 'GROUP_VOICE_CALL',  // ✅ 修复：语音通话应该是 VOICE_CALL
-        roomId: chatId,
-        hostName: currentUserName,
-        startTime: new Date().toISOString()
+      // 群聊：直接跳转到 GroupCallScreen
+      // 通话卡片在 GroupCallScreen 获取到 call_id 后才发送
+      // 避免发送没有 call_id 的通话卡片（导致其他人无法加入）
+      navigation.navigate('GroupCallScreen', {
+        chatId,
+        isHost: true
       });
-
-      const result = await sendChatMessage({
-        sender: currentUserId,
-        isreceive: chatMembers.filter(id => id !== currentUserId),
-        chat_id: chatId,
-        message: callInviteData,
-        type: 4,
-      });
-
-      if (result.success) {
-        navigation.navigate('GroupCallScreen', {
-          chatId,
-          isHost: true
-        });
-      }
     } else {
       // 单聊：只跳转，不 startCall
       const otherUserId = chatMembers.find(id => id !== currentUserId);

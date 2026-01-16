@@ -60,7 +60,9 @@ interface MessageBubbleProps {
   totalMembers?: number;
 }
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({
+// ✅ 性能优化：使用 React.memo 包装组件，避免不必要的重渲染
+// 只有当 props 发生变化时才会重新渲染
+const MessageBubbleComponent: React.FC<MessageBubbleProps> = ({
   item,
   playingVoice,
   voiceDurations,
@@ -235,10 +237,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
 
     const handlePress = () => {
       if (!isInactive && callData.roomId) {
+        // 群聊通话：传递 chatId 和 callId (如果有)
+        // callId 可能在 callData.call_id 或 callData.callId 中
+        const callId = callData.call_id || callData.callId || null;
+        
+        console.log('[CallCard] 点击通话卡片:', {
+          type: callData.type,
+          roomId: callData.roomId,
+          call_id: callId,
+          status: callData.status,
+        });
+        
+        if (callData.type === 'SINGLE_VOICE_CALL') {
+          // 单聊通话卡片 - 通常是已结束的，不需要加入
+          // 如果需要回拨，可以在这里添加逻辑
+          return;
+        }
+        
+        if (!callId) {
+          Alert.alert('无法加入', '通话信息不完整，请等待新的邀请');
+          return;
+        }
+        
+        // 群聊通话
         navigation.navigate('GroupCallScreen', {
           chatId: callData.roomId,
           isHost: false,
-          isIncoming: false
+          callId: callId,  // ✅ 传递 callId (对应 GroupCallScreen 的 incomingCallId)
         });
       }
     };
@@ -452,6 +477,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
     </>
   );
 };
+
+// ✅ 使用 React.memo 包装并导出
+export const MessageBubble = React.memo(MessageBubbleComponent);
 
 // Styles
 const styles = StyleSheet.create({

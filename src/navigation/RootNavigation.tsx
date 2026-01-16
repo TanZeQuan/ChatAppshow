@@ -6,8 +6,9 @@ import LoginScreen from "../screens/Auth/LoginScreen";
 import RegisterScreen from "../screens/Auth/RegisterScreen";
 import ForgetPassword from "../screens/Auth/ForgetPassword";
 
-// ✅ 1. 引入 CallScreen
+// ✅ 1. 引入 CallScreen 和 GroupCallScreen
 import CallScreen from "../screens/Chat/CallScreen";
+import GroupCallScreen from "../screens/Chat/GroupCallScreen";
 import ScanGroupScreen from '../screens/Contacts/ScanGroup';
 const Stack = createNativeStackNavigator();
 
@@ -17,11 +18,11 @@ export default function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {isLoggedIn ? (
-        // ✅ 2. 登录状态：加载 MainTabs 和全局 CallScreen
+        // ✅ 2. 登录状态：加载 MainTabs 和全局通话界面
         <Stack.Group>
           <Stack.Screen name="MainTabs" component={MainTabs} />
           
-          {/* 🔥🔥🔥 核心修复：在这里注册 SingleCallScreen 🔥🔥🔥 */}
+          {/* 单聊通话界面 - 全局可访问 */}
           <Stack.Screen 
             name="SingleCallScreen" 
             component={CallScreen} 
@@ -31,6 +32,18 @@ export default function RootNavigator() {
               headerShown: false
             }}
           />
+          
+          {/* 群聊通话界面 - 全局可访问 (用于接收来电) */}
+          <Stack.Screen 
+            name="GroupCallScreen" 
+            component={GroupCallScreen} 
+            options={{
+              presentation: 'fullScreenModal', // 全屏模式
+              gestureEnabled: false,           // 禁止手势划走
+              headerShown: false
+            }}
+          />
+          
           <Stack.Screen 
             name="ScanGroupScreen" 
             component={ScanGroupScreen}
