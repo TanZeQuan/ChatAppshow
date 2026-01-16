@@ -369,10 +369,10 @@ export default function GroupCallScreen() {
             try {
               const joinResult = await callRoom({ call_id: joinCallId, action: 'join', user_id: currentUserId });
               if (!joinResult.success) {
-                console.log('[GroupCall-Callee] callRoom API 返回失败 (不影响通话):', joinResult.message);
+                // callRoom API failed (not affecting call)
               }
             } catch (apiError) {
-              console.log('[GroupCall-Callee] callRoom API 异常 (不影响通话)');
+              // callRoom API error (not affecting call)
             }
 
             setLoadingStatus('正在连接通话服务器...');

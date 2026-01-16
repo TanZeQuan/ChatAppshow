@@ -375,7 +375,7 @@ export default function ChatRoomScreen() {
         setIsLoading(false);
       }
     } catch (error) {
-      console.error("Error loading messages:", error);
+      console.error("❌ [GroupRoom] Load messages error");
       if (showLoading) {
         setIsLoading(false);
       }
@@ -453,7 +453,7 @@ export default function ChatRoomScreen() {
   const searchModeInitialized = useRef(false);
   useEffect(() => {
     if (params.searchMode === true && !searchModeInitialized.current) {
-      console.log('🔍 [GroupRoom] Search enabled');
+      // Search enabled
       enableSearch();
       searchModeInitialized.current = true;
     }

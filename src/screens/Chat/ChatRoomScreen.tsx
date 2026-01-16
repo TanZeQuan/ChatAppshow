@@ -658,7 +658,7 @@ export default function ChatRoomScreen() {
   // Reload data when screen gains focus
   useFocusEffect(
     useCallback(() => {
-      console.log('🔄 [ChatRoom] Screen focused, reloading messages...');
+      // Screen focused
       loadMessages(false, false);
 
       if (chatMembers && chatMembers.length > 0) {

@@ -629,7 +629,7 @@ export default function CallScreen() {
         try {
           await callRoom({ call_id: incomingCallId, action: 'join', user_id: currentUserId });
         } catch (apiError) {
-          // callRoom API 失败
+          // callRoom API failed
         }
 
         // 第6步：连接 TCP Socket
@@ -723,7 +723,7 @@ export default function CallScreen() {
         try {
           await callRoom({ call_id: callIdRef.current, action: 'end', user_id: currentUserId });
         } catch (apiError) {
-          console.log('[CallScreen] callRoom API 失败 (不影响挂断)');
+          // callRoom API failed (not affecting hangup)
         }
       }
 

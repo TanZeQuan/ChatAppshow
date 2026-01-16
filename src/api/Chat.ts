@@ -345,7 +345,7 @@ export const sendChatMessage = async (payload: MessagePayload) => {
       timeout: 60000, // 60 seconds for file uploads
     });
 
-    console.log("✅ [sendChatMessage] Success! Response:", response.data);
+    // sendChatMessage success
 
     if (response.data?.error === true) {
       return {
@@ -787,11 +787,6 @@ export interface CallRoomResponse {
 }
 
 export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse> => {
-  console.log("🔵 [callRoom] ====================================");
-  console.log("🔵 [callRoom] 管理通话房间");
-  console.log("🔵 [callRoom] call_id:", params.call_id);
-  console.log("🔵 [callRoom] action:", params.action);
-  console.log("🔵 [callRoom] ====================================");
 
   try {
     const formData = new FormData();
@@ -805,18 +800,14 @@ export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse
 
     formData.append("data", JSON.stringify(dataPayload));
 
-    console.log("🔵 [callRoom] 发送请求到: /chats/call/room");
-    console.log("🔵 [callRoom] payload:", JSON.stringify(dataPayload));
+    // callRoom request
 
     const response = await api.post("/chats/call/room", formData, {
       headers: { "Content-Type": "multipart/form-data" },
       timeout: 30000,
     });
 
-    console.log("🔵 [callRoom] ====================================");
-    console.log("🔵 [callRoom] 收到后端响应");
-    console.log("🔵 [callRoom] 原始响应:", JSON.stringify(response.data, null, 2));
-    console.log("🔵 [callRoom] ====================================");
+    // callRoom response received
 
     // 处理后端返回 HTML 警告的情况
     let responseData = response.data;
@@ -830,18 +821,18 @@ export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse
           throw new Error("Invalid response format");
         }
       } catch (e) {
-        console.error("🔵 [callRoom] ❌ 解析响应失败:", e);
+        console.error("❌ [callRoom] Parse response failed");
         return { success: false, message: "Failed to parse response" };
       }
     }
 
     if (responseData?.error === true) {
       // 静默处理错误，不影响通话功能（TCP Socket 是主要通道）
-      console.log("🔵 [callRoom] ⚠️ 后端返回错误 (忽略):", responseData.message);
+      // callRoom backend error (ignored)
       return { success: false, message: responseData.message };
     }
 
-    console.log("🔵 [callRoom] ✅ 成功!");
+    // callRoom success
     return {
       success: true,
       data: responseData?.response || responseData,
@@ -849,7 +840,7 @@ export const callRoom = async (params: CallRoomParams): Promise<CallRoomResponse
     };
   } catch (error: any) {
     // 静默处理异常，不影响通话功能
-    console.log("🔵 [callRoom] ⚠️ API 异常 (忽略):", error.message);
+    // callRoom API error (ignored)
     return {
       success: false,
       message: error.response?.data?.message || error.message,
