@@ -36,16 +36,15 @@ export type ChatListItem = {
   memberIds?: string[];
   lastMessage: string;
   timestamp: string;
-  ownerId?: string;
+  adminIds?: string[];  // 支持多管理员 (isadmin === 2)
   unreadCount: number;
   online: boolean; // ⚠️ Not currently used - can be removed if not needed
   rawData?: {
     push_notification?: boolean;
     top_notification?: boolean;
     show_nicknames?: boolean;
-    ownerId?: string;
+    adminIds?: string[];  // 支持多管理员
   };
-  admins?: string[];
 };
 
 type ChatStore = {
@@ -132,32 +131,25 @@ export const useChatStore = create<ChatStore>()(
 
         let processedChat = { ...chat };
 
-        // Process group members to determine ownerId and admins if it's a group and members exist
+        // Process group members to determine adminIds if it's a group and members exist
         if (processedChat.isGroup && processedChat.members && processedChat.members.length > 0) {
             let adminIds: string[] = [];
             
-            // Assuming the API sends GroupMember type here, where isadmin: 2 is admin/owner
+            // isadmin: 2 means admin in backend (支持字符串或数字类型)
             for (const member of processedChat.members) {
-                if (member.isadmin === 2) {
+                if (member.isadmin === 2 || member.isadmin === '2') {
                     adminIds.push(member.user_id);
-                    // For simplicity, let's assume the first isadmin:2 found is the owner if ownerId is not explicitly set
-                    if (!processedChat.ownerId) {
-                        processedChat.ownerId = member.user_id; // Assign first admin as owner if not specified
-                    }
                 }
             }
-            // If ownerId was not set, and there are admins, assign the first admin as owner (heuristic)
-            if (!processedChat.ownerId && adminIds.length > 0) {
-                processedChat.ownerId = adminIds[0];
-            }
-            // Filter out the owner from admins if ownerId is distinct
-            processedChat.admins = adminIds.filter(id => id !== processedChat.ownerId);
+            
+            // Store all admin IDs (supports multiple admins)
+            processedChat.adminIds = adminIds;
 
-            // Also ensure rawData.ownerId is set if it's a group
-            if (processedChat.isGroup && processedChat.ownerId && !processedChat.rawData?.ownerId) {
+            // Also ensure rawData.adminIds is set if it's a group
+            if (processedChat.isGroup && adminIds.length > 0) {
                 processedChat.rawData = {
                     ...processedChat.rawData,
-                    ownerId: processedChat.ownerId,
+                    adminIds: adminIds,
                 };
             }
         }

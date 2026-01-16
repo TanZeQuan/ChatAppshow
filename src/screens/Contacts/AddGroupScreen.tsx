@@ -220,8 +220,7 @@ export default function AddGroupScreen() {
           isGroup: true,
           members: membersWithInfo, // ✅ Full member info
           memberIds: groupMembers.map(m => m.user_id), // Member IDs
-          ownerId: user.id, // Creator is the owner
-          admins: [user.id], // Creator is admin
+          adminIds: [user.id], // Creator is admin (支持多管理员)
           lastMessage: "群聊已创建",
           timestamp: new Date().toISOString(),
           unreadCount: 0,
