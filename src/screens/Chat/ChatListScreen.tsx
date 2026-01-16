@@ -325,8 +325,44 @@ export default function ChatListScreen() {
                 lastMsgObj = chat.message;
               }
             }
-            const lastMessageText = lastMsgObj?.message || chat.last_message || '';
-            const lastMessageType = lastMsgObj?.type || chat.last_message_type;
+            
+            // ✅ 修复：lastMsgObj.message 可能是 JSON 字符串，需要解析
+            let lastMessageText = chat.last_message || '';
+            let lastMessageType = chat.last_message_type;
+            
+            if (lastMsgObj?.message) {
+              // 如果 message 是字符串，尝试解析
+              if (typeof lastMsgObj.message === 'string') {
+                try {
+                  const parsed = JSON.parse(lastMsgObj.message);
+                  lastMessageType = parsed.type || lastMessageType;
+                  // ✅ 检测视频：通过路径判断
+                  if (parsed.message) {
+                    const checkVideo = (url: string) => {
+                      if (!url) return false;
+                      const lower = url.toLowerCase();
+                      return lower.includes('/video/') || lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.webm');
+                    };
+                    
+                    if (Array.isArray(parsed.message) && parsed.message.length > 0 && checkVideo(parsed.message[0])) {
+                      lastMessageType = 5; // 强制设为视频类型
+                    } else if (typeof parsed.message === 'string' && checkVideo(parsed.message)) {
+                      lastMessageType = 5;
+                    }
+                  }
+                  lastMessageText = lastMsgObj.message; // 保留原始字符串给 formatLastMessagePreview
+                } catch (e) {
+                  lastMessageText = lastMsgObj.message;
+                }
+              } else {
+                // message 不是字符串（可能是数组），转成字符串
+                lastMessageText = JSON.stringify(lastMsgObj.message);
+              }
+            }
+            
+            if (!lastMessageType && lastMsgObj?.type) {
+              lastMessageType = lastMsgObj.type;
+            }
             
             // ✅ 调试：检查名片消息的 type
             if (lastMessageType === 4 || (lastMessageText && lastMessageText.includes('userId'))) {
