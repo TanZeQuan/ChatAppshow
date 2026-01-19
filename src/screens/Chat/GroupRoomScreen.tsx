@@ -64,10 +64,10 @@ export default function ChatRoomScreen() {
   const navigation = useNavigation<any>();
   const params = route.params as RouteParams;
   const { chatId, chatName } = params;
-  console.log('🆔 [GroupRoom] chatId:', chatId, '| userId:', currentUser?.id);
 
   // Get current user info from store
   const currentUser = useUserStore((state) => state.user);
+  console.log('🆔 [GroupRoom] chatId:', chatId, '| userId:', currentUser?.id);
   const currentUserId = currentUser?.id || 'me';
   const currentUserAvatar = currentUser?.avatar || '';
   const currentUserName = currentUser?.name || '我';
@@ -76,6 +76,7 @@ export default function ChatRoomScreen() {
 
   // Get chat metadata from store
   const chat = getChatById(chatId);
+  const currentChatName = chat?.name || chatName;
 
   // Use selector to subscribe to messages for this chat (reactive)
   const messagesFromStore = useChatStore((state) => state.chats[chatId]);
@@ -957,7 +958,7 @@ export default function ChatRoomScreen() {
   const toolbarButtons = {
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
-      { icon: 'videocam-outline', label: '视频', onPress: pickVideo },
+      { icon: 'play-circle-outline', label: '视频', onPress: pickVideo },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
        { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
        { icon: 'card-outline', label: '个人名片', onPress: handleSendContactCard },
@@ -979,7 +980,7 @@ export default function ChatRoomScreen() {
             <TouchableOpacity style={roomStyles.backButton} onPress={handleGoBack}>
               <Ionicons name="chevron-back" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
-            <Text style={roomStyles.headerTitle}>{chatName}</Text>
+            <Text style={roomStyles.headerTitle}>{currentChatName}</Text>
             <TouchableOpacity style={roomStyles.moreButton} onPress={handleOpenSettings}>
               <Ionicons name="ellipsis-horizontal" size={scaleWidth(24)} color="#333" />
             </TouchableOpacity>
@@ -1007,7 +1008,7 @@ export default function ChatRoomScreen() {
           currentMatchNumber={currentMatchNumber}
           handlePrevMatch={handlePrevMatch}
           handleNextMatch={handleNextMatch}
-          chatName={chatName}
+          chatName={currentChatName}
           onBack={handleGoBack}
           onOpenSettings={handleOpenSettings}
           roomStyles={roomStyles}

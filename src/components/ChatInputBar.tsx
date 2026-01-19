@@ -199,7 +199,7 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
           {isUploading ? (
             <ActivityIndicator color="#333" size={scaleWidth(20)} />
           ) : (
-            <Ionicons name="mic" size={scaleWidth(20)} color={showRecordingUI ? '#fff' : '#333'} />
+            <Ionicons name="mic" size={scaleWidth(25)} color={showRecordingUI ? '#fff' : '#333'} />
           )}
         </TouchableOpacity>
 
@@ -214,20 +214,20 @@ export const ChatInputBar: React.FC<ChatInputBarProps> = ({
         <TouchableOpacity style={roomStyles.iconButton} onPress={toggleEmojiPicker}>
           <Ionicons
             name={isEmojiPickerOpen ? "close-circle" : "happy-outline"}
-            size={scaleWidth(22)}
+            size={scaleWidth(25)}
             color="#333"
           />
         </TouchableOpacity>
 
         {inputText.trim() ? (
           <TouchableOpacity style={roomStyles.iconButton} onPress={onSend}>
-            <Ionicons name="send" size={scaleWidth(22)} color="#333" />
+            <Ionicons name="send" size={scaleWidth(23)} color="#333" />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={roomStyles.iconButton} onPress={toggleToolbar}>
             <Ionicons
               name={showToolbar ? 'close-circle-outline' : 'add-circle-outline'}
-              size={scaleWidth(22)}
+              size={scaleWidth(25)}
               color="#333"
             />
           </TouchableOpacity>

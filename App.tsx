@@ -16,14 +16,52 @@ export const navigationRef = createNavigationContainerRef<any>();
  * ✅ MUST: Global notification handler
  * Without this, notifications may NOT show while app is in foreground.
  */
+// App.tsx
+
+/**
+ * ✅ 全局通知处理器 (前台收到通知时触发)
+ */
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
+  handleNotification: async (notification) => {
+    // 1. 获取推送携带的数据 (Payload)
+    const data = notification.request.content.data || {};
+    
+    // 🔍 调试日志：看看后端到底传了什么过来
+    console.log('🔔 [Notification Handler] Data:', JSON.stringify(data, null, 2));
+
+    // 2. 尝试获取发送者 ID (兼容不同的字段名)
+    const senderId = data.senderId || data.sender_id || data.sender || data.userId;
+    
+    // 3. 获取当前登录用户
+    const currentUser = useUserStore.getState().user;
+
+    // 4. 关键修复：统一转成 String 再比较
+    if (currentUser && senderId) {
+      const isSelf = String(senderId) === String(currentUser.id);
+      
+      console.log(`🔔 比较结果: Sender(${senderId}) === Me(${currentUser.id}) ? ${isSelf}`);
+
+      if (isSelf) {
+        // 🚫 如果是自己发的消息，彻底屏蔽通知
+        return {
+          shouldShowAlert: false,
+          shouldPlaySound: false,
+          shouldSetBadge: false,
+          shouldShowBanner: false,
+          shouldShowList: false,
+        };
+      }
+    }
+
+    // ✅ 别人的消息，正常显示
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    };
+  },
 });
 
 export default function App() {

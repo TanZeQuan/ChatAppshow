@@ -1385,9 +1385,9 @@ export default function ChatRoomScreen() {
  const toolbarButtons = useMemo(() => ({
     row1: [
       { icon: 'image-outline', label: '图片', onPress: pickImage },
-      { icon: 'videocam-outline', label: '视频', onPress: pickVideoFromLibrary },
+      { icon: 'play-circle-outline', label: '视频', onPress: pickVideoFromLibrary },
       { icon: 'call-outline', label: '通话', onPress: handleStartCall },
-      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('提示', '即将推出') },
+      { icon: 'document-outline', label: '文件', onPress: () => Alert.alert('即将推出，文件分享功能尚未开放') },
       { icon: 'card-outline', label: '名片', onPress: handleSendContactCard },
     ], // 👈 必须加上这个数组
   }), [pickImage, pickVideoFromLibrary, handleStartCall, handleSendContactCard]);

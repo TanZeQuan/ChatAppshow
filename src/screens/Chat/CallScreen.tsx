@@ -91,17 +91,14 @@ export default function CallScreen() {
     }, [navigation, insets])
   );
 
-  useLayoutEffect(() => {
-    const parent = navigation.getParent();
-    if (parent) {
-      parent.setOptions({ tabBarStyle: { display: "none" } });
-    }
-    return () => {
-      if (parent) {
-        parent.setOptions({ tabBarStyle: { display: "flex" } });
-      }
-    };
-  }, [navigation]);
+ // 在 CallScreen.tsx 中
+useLayoutEffect(() => {
+  const parent = navigation.getParent();
+  if (parent) {
+    // 进页面：只管隐藏
+    parent.setOptions({ tabBarStyle: { display: "none" } });
+  }
+}, [navigation]);
 
   useEffect(() => {
     const handleRemoteSignal = (data: any) => {
@@ -186,18 +183,28 @@ export default function CallScreen() {
     }
   }, [status]);
 
+ // 🔄 修改：挂断后跳转逻辑
   const goBackOrToChat = () => {
+    // 停止所有计时器和音频服务（双重保险）
+    stopTimer();
+    TcpSocketService.disconnect();
+
     if (activeChatIdRef.current) {
-      navigation.replace('ChatRoom', {
+      console.log('🔙 [Nav] 返回聊天室 (隐藏 TabBar)');
+      // ⚠️ 关键修改：这里应该是 'ChatRoom' 而不是 'ChatList'
+      // ChatRoom 是详情页，通常会隐藏 TabBar
+      // ChatList 是列表页，通常会显示 TabBar
+      navigation.replace('ChatList', {
         chatId: activeChatIdRef.current,
         chatName: displayName,
       });
     } else if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
+      // 只有完全没有历史记录时，才回首页 (显示 TabBar)
       navigation.reset({
         index: 0,
-        routes: [{ name: 'MainTabs' }],
+        routes: [{ name: 'ChatList' }], 
       });
     }
   };
@@ -654,9 +661,8 @@ export default function CallScreen() {
               source={
                 !displayAvatar ||
                   displayAvatar.trim() === '' ||
-                  displayAvatar.includes('ngrok') ||
-                  displayAvatar.includes('null')
-                  ? require('../../assets/images/personal.png') // 默认头像
+                  displayAvatar.trim() === "https://balkingly-hemitropic-lelah.ngrok-free.dev"
+                  ? require('../../assets/images/personal.png')
                   : { uri: displayAvatar }
               }
               style={styles.avatarImage}

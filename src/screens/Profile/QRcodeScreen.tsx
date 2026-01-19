@@ -110,6 +110,7 @@ END:VCARD`;
     };
 
     // 🟢 核心扫码逻辑 (已修复好友检查 + API判断)
+    // 🟢 核心扫码逻辑 (已修复好友检查 + API判断)
     const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
         if (scanned) return;
         setScanned(true);
@@ -118,7 +119,7 @@ END:VCARD`;
         let scannedUserId = '';
         let contactName = 'Unknown';
 
-        // 解析数据
+        // 1. 解析数据，提取纯净的 User ID
         if (data.includes('BEGIN:VCARD')) {
             const nameMatch = data.match(/FN:(.*)/);
             const urlMatch = data.match(/URL:.*\/user\/(.*)/);
@@ -128,13 +129,19 @@ END:VCARD`;
             const parts = data.split('/user/');
             if (parts.length > 1) scannedUserId = parts[1];
         } else {
+            // 假设扫出来的是纯 ID
             scannedUserId = data;
         }
+
+        // 移除可能存在的空白字符
+        scannedUserId = scannedUserId.trim();
 
         if (scannedUserId) {
             // 🛑 检查 1: 不能添加自己
             if (scannedUserId === userId) {
-                Alert.alert('提示', '你不能添加自己为好友', [{ text: '确定', onPress: () => setScanned(false) }]);
+                Alert.alert('提示', '你不能添加自己为好友', [
+                    { text: '确定', onPress: () => setScanned(false) }
+                ]);
                 return;
             }
 
@@ -142,8 +149,10 @@ END:VCARD`;
             // ✅ 使用 contactStore 检查
             let isAlreadyFriend = false;
             try {
+                // 确保 getContactById 存在且可用
                 if (getContactById) {
                     const contact = getContactById(scannedUserId);
+                    // 只要 contact 不为 undefined/null，就说明是好友
                     if (contact) {
                         isAlreadyFriend = true;
                     }
@@ -179,7 +188,7 @@ END:VCARD`;
 
                                 if (isSuccess) {
                                     Alert.alert('成功', '好友请求已发送');
-                                    setShowScanner(false);
+                                    setShowScanner(false); // 成功后关闭扫码器
                                 } else {
                                     // 显示具体错误信息
                                     const errMsg = response?.message || '未知错误';
@@ -189,14 +198,15 @@ END:VCARD`;
                                 console.error(e);
                                 Alert.alert('错误', '网络请求失败');
                             } finally {
-                                setScanned(false);
+                                setScanned(false); // 允许再次扫码（如果还在扫码界面）
                             }
                         }
                     }
                 ]
             );
         } else {
-            Alert.alert('扫码结果', data, [{ text: '确定', onPress: () => setScanned(false) }]);
+            // 无法解析出 User ID
+            Alert.alert('扫码结果', `无法识别用户 ID: ${data}`, [{ text: '确定', onPress: () => setScanned(false) }]);
         }
     };
 
