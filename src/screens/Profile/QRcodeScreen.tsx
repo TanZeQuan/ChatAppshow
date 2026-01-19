@@ -34,7 +34,6 @@ import { createFriendRequest } from '../../api/Friend';
 
 // 👇 ✅ 1. 引入 ContactStore
 import { useContactStore } from '../../store/contactStore';
-import { typography } from '@/src/styles';
 
 const { width } = Dimensions.get('window');
 
@@ -110,7 +109,6 @@ END:VCARD`;
     };
 
     // 🟢 核心扫码逻辑 (已修复好友检查 + API判断)
-    // 🟢 核心扫码逻辑 (已修复好友检查 + API判断)
     const handleBarcodeScanned = async ({ type, data }: { type: string; data: string }) => {
         if (scanned) return;
         setScanned(true);
@@ -119,7 +117,7 @@ END:VCARD`;
         let scannedUserId = '';
         let contactName = 'Unknown';
 
-        // 1. 解析数据，提取纯净的 User ID
+        // 解析数据
         if (data.includes('BEGIN:VCARD')) {
             const nameMatch = data.match(/FN:(.*)/);
             const urlMatch = data.match(/URL:.*\/user\/(.*)/);
@@ -129,19 +127,13 @@ END:VCARD`;
             const parts = data.split('/user/');
             if (parts.length > 1) scannedUserId = parts[1];
         } else {
-            // 假设扫出来的是纯 ID
             scannedUserId = data;
         }
-
-        // 移除可能存在的空白字符
-        scannedUserId = scannedUserId.trim();
 
         if (scannedUserId) {
             // 🛑 检查 1: 不能添加自己
             if (scannedUserId === userId) {
-                Alert.alert('提示', '你不能添加自己为好友', [
-                    { text: '确定', onPress: () => setScanned(false) }
-                ]);
+                Alert.alert('提示', '你不能添加自己为好友', [{ text: '确定', onPress: () => setScanned(false) }]);
                 return;
             }
 
@@ -149,10 +141,8 @@ END:VCARD`;
             // ✅ 使用 contactStore 检查
             let isAlreadyFriend = false;
             try {
-                // 确保 getContactById 存在且可用
                 if (getContactById) {
                     const contact = getContactById(scannedUserId);
-                    // 只要 contact 不为 undefined/null，就说明是好友
                     if (contact) {
                         isAlreadyFriend = true;
                     }
@@ -188,7 +178,7 @@ END:VCARD`;
 
                                 if (isSuccess) {
                                     Alert.alert('成功', '好友请求已发送');
-                                    setShowScanner(false); // 成功后关闭扫码器
+                                    setShowScanner(false);
                                 } else {
                                     // 显示具体错误信息
                                     const errMsg = response?.message || '未知错误';
@@ -198,15 +188,14 @@ END:VCARD`;
                                 console.error(e);
                                 Alert.alert('错误', '网络请求失败');
                             } finally {
-                                setScanned(false); // 允许再次扫码（如果还在扫码界面）
+                                setScanned(false);
                             }
                         }
                     }
                 ]
             );
         } else {
-            // 无法解析出 User ID
-            Alert.alert('扫码结果', `无法识别用户 ID: ${data}`, [{ text: '确定', onPress: () => setScanned(false) }]);
+            Alert.alert('扫码结果', data, [{ text: '确定', onPress: () => setScanned(false) }]);
         }
     };
 
@@ -270,46 +259,11 @@ END:VCARD`;
         if (!permission) return <View style={styles.container} />;
         if (!permission.granted) {
             return (
-                <LinearGradient colors={['#4a5568', '#2d3748']} style={styles.container}>
-                    <StatusBar barStyle="light-content" />
-                    <SafeAreaView style={styles.safeArea}>
-                        {/* Header */}
-                        <View style={styles.header}>
-                            <TouchableOpacity style={styles.backButton} onPress={() => setShowScanner(false)}>
-                                <Ionicons name="arrow-back" size={24} color="white" />
-                            </TouchableOpacity>
-                            <Text style={styles.title}>扫码二维码</Text>
-                            <View style={styles.placeholder} />
-                        </View>
-                        
-                        {/* Permission Content */}
-                        <View style={styles.permissionContent}>
-                            <View style={styles.permissionIconContainer}>
-                                <Ionicons name="camera-outline" size={64} color="#fbbf24" />
-                            </View>
-                            <Text style={styles.permissionTitle}>需要相机权限</Text>
-                            <Text style={styles.permissionDescription}>
-                                扫描二维码需要使用您的相机，{'\n'}请授予相机访问权限
-                            </Text>
-                            
-                            <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
-                                <LinearGradient 
-                                    colors={['#fcd34d', '#fbbf24']} 
-                                    style={styles.permissionButtonGradient}
-                                >
-                                    <Text style={styles.permissionButtonText}>授予权限</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                            
-                            <TouchableOpacity 
-                                style={styles.permissionSecondaryButton} 
-                                onPress={() => setShowScanner(false)}
-                            >
-                                <Text style={styles.permissionSecondaryText}>返回</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </SafeAreaView>
-                </LinearGradient>
+                <View style={[styles.container, styles.permissionContainer]}>
+                    <Text style={styles.permissionText}>需要相机权限才能扫描二维码</Text>
+                    <Button onPress={requestPermission} title="授予权限" />
+                    <Button onPress={() => setShowScanner(false)} title="返回" color="#ff5555" />
+                </View>
             );
         }
 
@@ -430,11 +384,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    title: {
-        color: 'white', // ✅ 改为白色
-        fontSize: typography.fontSize18,
-        fontWeight: typography.fontWeight600,
-    },
+    title: { color: 'white', fontSize: 18, fontWeight: '600' },
+    titleScanner: { color: 'white', fontSize: 18, fontWeight: '600', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
     placeholder: { width: 40 },
     content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
     qrCard: { width: width * 0.85, maxWidth: 340, borderRadius: 24, padding: 24, alignItems: 'center' },
@@ -459,69 +410,8 @@ const styles = StyleSheet.create({
     loadingOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.7)', padding: 20, borderRadius: 10, alignItems: 'center' },
     scannerActions: { flexDirection: 'row', justifyContent: 'space-around', paddingBottom: 40, paddingHorizontal: 40, width: '100%' },
     scannerActionButton: { alignItems: 'center' },
-    scannerActionIconContainer: {
-        width: 60,
-        height: 60,
-        backgroundColor: '#4b5563',
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 8,
-    },
-    scannerActionText: { color: 'white', fontSize: 13 },
-    loadingText: { color: 'white', textAlign: 'center', margin: 20 },
-    // 新的权限页面样式
-    permissionContent: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        paddingHorizontal: 40,
-    },
-    titleScanner:{
-        color: 'white',
-    },
-    permissionIconContainer: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: 'rgba(251, 191, 36, 0.15)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginBottom: 32,
-    },
-    permissionTitle: {
-        color: 'white',
-        fontSize: 24,
-        fontWeight: '600',
-        marginBottom: 12,
-        textAlign: 'center',
-    },
-    permissionDescription: {
-        color: 'rgba(255, 255, 255, 0.7)',
-        fontSize: 15,
-        textAlign: 'center',
-        lineHeight: 22,
-        marginBottom: 40,
-    },
-    permissionButton: {
-        width: '100%',
-        marginBottom: 16,
-    },
-    permissionButtonGradient: {
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    permissionButtonText: {
-        color: '#1F2937',
-        fontSize: 16,
-        fontWeight: '600',
-    },
-    permissionSecondaryButton: {
-        paddingVertical: 12,
-    },
-    permissionSecondaryText: {
-        color: 'rgba(255, 255, 255, 0.6)',
-        fontSize: 15,
-    },
+    scannerActionIconContainer: { width: 50, height: 50, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 25, alignItems: 'center', justifyContent: 'center', marginBottom: 5 },
+    scannerActionText: { color: 'white', fontSize: 12 },
+    permissionContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a202c', gap: 20 },
+    permissionText: { color: 'white', fontSize: 16, marginBottom: 10 },
 });

@@ -1,10 +1,10 @@
 {
   "expo": {
     "name": "森通Chat",
-    "slug": "森通Chat",
+    "slug": "ChatApp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "森通Chat",
+    "scheme": "chatapp",
     "icon": "./src/assets/images/sentalk-logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
