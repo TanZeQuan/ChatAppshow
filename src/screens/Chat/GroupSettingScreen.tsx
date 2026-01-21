@@ -1,3 +1,4 @@
+import * as MediaLibrary from 'expo-media-library';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,15 +9,19 @@ import {
     Dimensions,
     Image,
     Modal,
+    Platform,
     RefreshControl,
     ScrollView,
+    Share,
     StyleSheet,
     Text,
     TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ViewShot from 'react-native-view-shot';
 import { createPrivateChat, readChatMessages, updateGroup, updateGroupImage, updateGroupName } from '../../api/Chat';
 import { blockUser, deleteFriend, readFriends } from '../../api/Friend';
 import { ensureFullImageUrl } from '../../api/service';
@@ -51,6 +56,9 @@ export default function GroupSettingScreen() {
     const { removeChat, getChatById, addChat, clearChat, chatList } = useChatStore();
     const { user: currentUser, onlineUsers } = useUserStore();
     const currentUserId = currentUser?.id || 'me';
+    const [showQRCodeModal, setShowQRCodeModal] = useState(false);
+    const viewShotRef = useRef<ViewShot>(null);
+
 
     // ✅ 使用本地 state 管理 groupChat，确保 API 更新后 UI 立即响应
     const [groupChat, setGroupChat] = useState<any>(() => getChatById(chatId));
@@ -819,7 +827,24 @@ export default function GroupSettingScreen() {
             ]
         );
     }, [chatId, currentUserId, groupChat, loadGroupMembers]);
+    const handleSaveQRCode = async () => {
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('权限不足', '我们需要访问相册权限才能保存图片。');
+            return;
+        }
 
+        if (viewShotRef.current && viewShotRef.current.capture) {
+            try {
+                const uri = await viewShotRef.current.capture();
+                await MediaLibrary.saveToLibraryAsync(uri);
+                Alert.alert('成功', '二维码已保存到你的相册');
+            } catch (error) {
+                console.error('Failed to save QR code:', error);
+                Alert.alert('错误', '保存失败，请重试');
+            }
+        }
+    };
     // Leave group
     const handleLeaveGroup = useCallback(() => {
         // ✅ 检查当前用户是否是管理员
@@ -1256,6 +1281,15 @@ export default function GroupSettingScreen() {
                             </View>
                             <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
                         </TouchableOpacity>
+                        <TouchableOpacity style={[styles.settingItem, styles.borderBottom]} onPress={() => setShowQRCodeModal(true)}>
+                            <View style={styles.iconContainer}>
+                                <Ionicons name="qr-code-outline" size={20} color={colors.text.white} />
+                            </View>
+                            <View style={styles.settingContent}>
+                                <Text style={styles.settingTitle}>群二维码</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={colors.text.grayLight} />
+                        </TouchableOpacity>
 
                         {/* <TouchableOpacity style={styles.settingItem} onPress={handleClearHistory}>
                             <View style={styles.iconContainer}>
@@ -1356,6 +1390,48 @@ export default function GroupSettingScreen() {
                                     </TouchableOpacity>
                                 </View>
                             </View>
+                        </View>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
+            <Modal
+                visible={showQRCodeModal}
+                transparent={true}
+                animationType="fade"
+                onRequestClose={() => setShowQRCodeModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <TouchableOpacity
+                        style={styles.modalBackground}
+                        activeOpacity={1}
+                        onPress={() => setShowQRCodeModal(false)}
+                    >
+                        <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+                            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 0.9 }}>
+                                <View style={styles.qrCodeModalContent}>
+                                    <View style={styles.qrCodeHeader}>
+                                        <Image source={groupImage ? { uri: groupImage } : require('../../assets/images/group.png')} style={styles.qrCodeGroupAvatar} />
+                                        <View>
+                                            <Text style={styles.qrCodeGroupName}>{chatName}</Text>
+                                            <Text style={styles.qrCodeGroupMembers}>{allMembers.length} members</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.qrCodeContainer}>
+                                        <QRCode
+                                            value={JSON.stringify({ groupId: chatId, groupName: chatName })}
+                                            size={scaleWidth(200)}
+                                            logoBackgroundColor='transparent'
+                                        />
+                                    </View>
+                                    <Text style={styles.qrCodeHint}>扫码加入群聊</Text>
+                                </View>
+                            </ViewShot>
+                            <TouchableOpacity
+                                style={[styles.modalButton, styles.confirmButton, { margin: 20 }]}
+                                onPress={handleSaveQRCode}
+                            >
+                                <Text style={styles.confirmButtonText}>保存到手机</Text>
+                            </TouchableOpacity>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -1845,5 +1921,37 @@ const styles = StyleSheet.create({
         fontSize: typography.fontSize16,
         fontWeight: typography.fontWeight600,
         color: colors.text.white, // Changed to white for contrast
+    },
+    qrCodeModalContent: {
+        backgroundColor: colors.background.white,
+        padding: 20,
+        borderRadius: borders.radius12,
+        alignItems: 'center',
+    },
+    qrCodeHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    qrCodeGroupAvatar: {
+        width: 50,
+        height: 50,
+        borderRadius: borders.radius8,
+        marginRight: 12,
+    },
+    qrCodeGroupName: {
+        fontSize: typography.fontSize18,
+        fontWeight: typography.fontWeight600,
+    },
+    qrCodeGroupMembers: {
+        fontSize: typography.fontSize14,
+        color: colors.text.gray,
+    },
+    qrCodeContainer: {
+        marginBottom: 20,
+    },
+    qrCodeHint: {
+        fontSize: typography.fontSize14,
+        color: colors.text.gray,
     },
 });
